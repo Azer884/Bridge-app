@@ -10,8 +10,8 @@
 | ---------------------- | ------------------------------------------- |
 | **Team Name**          |  HARISSA                                    |
 | **Team Domain**        |  Domain 2 *(choose one)*                    |
-| **SDG Track (1–17)**   |SDG 8 - Descent work and economic growth
-                      SDG 4 - Industry, Innovation and Infrastructure  |
+| **SDG Track (1–17)**   |SDG 8 - Descent work and economic growth     |
+| SDG 4 - Industry, Innovation and Infrastructure                      |
 | **Team Leader**        | Azer Hamdaoui                               |
 | **University**         |Xiamen University Malaysia                   |
 | **Number of Members**  | 5                                           |
@@ -20,7 +20,7 @@
 
 | Resource          | Link                                           |
 | ----------------- | ---------------------------------------------- |
-| GitHub Repository | https://github.com/your-username/your-project  |
+| GitHub Repository | (https://github.com/Azer884/Bridge-app/blob/main/README.md)  |
 | Replit Project    | https://replit.com/@your-username/your-project |
 | Live Demo         | https://your-project.replit.app                |
 | RunPod Endpoint   | https://api.runpod.ai/v2/your-endpoint-id      |
