@@ -1,6 +1,6 @@
-# Project Name
+# Gesir.AI
 
-> A one-sentence description of what your project does and who it is for.
+> A whatsapp-AI extension to answer customer's inquiry for a service provided by an SME.
 
 ---
 
@@ -8,12 +8,13 @@
 
 | Field                  | Details                                     |
 | ---------------------- | ------------------------------------------- |
-| **Team Name**          | Your Team Name                              |
-| **Team Domain**        | Domain 1 / Domain 2 *(choose one)*          |
-| **SDG Track (1–17)**   | e.g. SDG 11 — Sustainable Cities and Communities |
-| **Team Leader**        | Leader Name                                 |
-| **University**         | University Name(s)                          |
-| **Number of Members**  | e.g. 4                                      |
+| **Team Name**          |  HARISSA                                    |
+| **Team Domain**        |  Domain 2 *(choose one)*                    |
+| **SDG Track (1–17)**   |SDG 8 - Descent work and economic growth
+                      SDG 4 - Industry, Innovation and Infrastructure  |
+| **Team Leader**        | Azer Hamdaoui                               |
+| **University**         |Xiamen University Malaysia                   |
+| **Number of Members**  | 5                                           |
 
 ## Links
 
