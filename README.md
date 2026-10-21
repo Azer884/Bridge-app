@@ -10,8 +10,8 @@
 | ---------------------- | ------------------------------------------- |
 | **Team Name**          |  HARISSA                                    |
 | **Team Domain**        |  Domain 2 *(choose one)*                    |
-| **Main SDG **          |SDG 8 - Descent work and economic growth     |
-|   **Sub SDG **         |SDG 4 - Industry, Innovation and Infrastructure|
+| **Main SDG**           |SDG 8 - Descent work and economic growth     |
+|   **Sub SDG**          |SDG 9 - Industry, Innovation and Infrastructure|
 | **Team Leader**        | Azer Hamdaoui                               |
 | **University**         |Xiamen University Malaysia                   |
 | **Number of Members**  | 5                                           |
