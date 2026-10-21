@@ -4,8 +4,12 @@ __pycache__/
 venv/
 .venv/
 
-# Environment
+# Environment & Secrets
 .env
+*.env
+credentials.json
+token.json
+service_account.json
 
 # OS / Editor
 .DS_Store
