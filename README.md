@@ -9,7 +9,7 @@
 | Field                  | Details                                     |
 | ---------------------- | ------------------------------------------- |
 | **Team Name**          |  HARISSA                                    |
-| **Team Domain**        |  Domain 2 *(choose one)*                    |
+| **Team Domain**        |  Domain 2                                   |
 | **Main SDG**           |SDG 8 - Descent work and economic growth     |
 |   **Sub SDG**          |SDG 9 - Industry, Innovation and Infrastructure|
 | **Team Leader**        | Azer Hamdaoui                               |
@@ -32,18 +32,17 @@
 ## Overview
 
 ### Problem
-
-Describe the real-world problem you are solving in 2–4 sentences. Who is affected, and why does it matter?
+Many SMEs and startups face significant challenges in balancing operational demands with customer needs due to limited resources, capital, and workforce capacity. These constraints often overwhelm managers, forcing them to make difficult trade-offs between maintaining customer satisfaction and ensuring the smooth day-to-day running of the business.
 
 ### Solution
 
-Explain how your project uses AI to solve the problem and what makes it valuable.
+Introducing Giser.AI, an AI-powered solution that analyzes customer messages, voice notes, images, and service requests to generate job briefings with estimated costs, required materials, and available time slots based on the manager’s calendar. With a single click, managers can accept or decline jobs, reducing administrative workload while balancing customer satisfaction and daily business operations.
 
 ### Key Features
 
-- **Feature 1** — Short description.
-- **Feature 2** — Short description.
-- **Feature 3** — Short description.
+- **Feature 1** — AI-Powered Customer Request Analysis.
+- **Feature 2** — Automated Job Briefing & Cost Estimation.
+- **Feature 3** — Smart Scheduling & One-Click Decisions.
 
 ### Tech Stack
 
@@ -173,11 +172,13 @@ curl -X POST https://api.runpod.ai/v2/$RUNPOD_ENDPOINT_ID/runsync \
 
 ## Team
 
-| Name        | Role                | GitHub                                   |
-| ----------- | ------------------- | ---------------------------------------- |
-| Member Name | Team Lead / Backend | [@username](https://github.com/username) |
-| Member Name | Frontend            | [@username](https://github.com/username) |
-| Member Name | AI / RunPod         | [@username](https://github.com/username) |
+| Name            | Role                | GitHub                                   |
+| -----------     | ------------------- | ---------------------------------------- |
+| Azer Hamdaoui   | Team Lead / Backend | [@username](https://github.com/username) |
+|Tarek ben slimen | Frontend            | [@username](https://github.com/username) |
+| Omar Bouhlel    | AI / RunPod         | [@username](https://github.com/username) |
+| Ilyess Hassine  | AI / RunPod         | [@username](https://github.com/username) |
+| Moetez Soltani  | AI / RunPod         | [@username](https://github.com/username) |
 
 ---
 
