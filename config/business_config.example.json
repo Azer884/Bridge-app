@@ -1,0 +1,92 @@
+{
+  "_note": "DEMO DATA - fictional business. Pricing uses Malaysian market estimates (see pricing._note), not a real company's rate card.",
+  "business_name": "Example Painting Sdn Bhd (demo)",
+  "services": [
+    "interior wall painting",
+    "interior ceiling painting"
+  ],
+  "policies": [
+    "Quotations are prepared by the company after information is collected and reviewed.",
+    "Specialist work (mould, asbestos, lead paint, structural damage) requires an inspection."
+  ],
+  "required_fields": [
+    "address",
+    "surfaces",
+    "room_length_m",
+    "room_width_m",
+    "room_height_m",
+    "preferred_datetime"
+  ],
+  "inspection_keywords": [
+    "mould",
+    "mold",
+    "asbestos",
+    "lead paint",
+    "structural"
+  ],
+  "pricing": {
+    "_note": "Malaysian market ESTIMATES in MYR for the demo, checked against public listings in 2025-26; replace with the SME's real rate card. Labour-only painter rate roughly RM0.35-0.45 per sq ft per coat (1 m2 = 10.76 sq ft). Economy ~ Dulux Pentalite class (5L ~ RM164), standard ~ Nippon interior emulsion (5L ~ RM235), premium ~ washable/anti-mould range (price estimated, not sourced). Prep rate ~ RM176 per 8-hour painter day. Prices exclude any applicable tax.",
+    "currency": "MYR",
+    "coats": 2,
+    "labour_per_m2_per_coat": {
+      "walls": 4.2,
+      "ceiling": 5.0
+    },
+    "paint_tiers": {
+      "economy": {
+        "price_per_litre": 33.0,
+        "coverage_m2_per_litre": 10
+      },
+      "standard": {
+        "price_per_litre": 47.0,
+        "coverage_m2_per_litre": 10
+      },
+      "premium": {
+        "price_per_litre": 60.0,
+        "coverage_m2_per_litre": 11
+      }
+    },
+    "default_paint_tier": "standard",
+    "condition_levels": {
+      "good": {
+        "labour_multiplier": 1.0,
+        "prep_hours_per_10m2": 0
+      },
+      "minor": {
+        "labour_multiplier": 1.1,
+        "prep_hours_per_10m2": 0.25
+      },
+      "moderate": {
+        "labour_multiplier": 1.25,
+        "prep_hours_per_10m2": 0.75
+      },
+      "severe": {
+        "labour_multiplier": 1.5,
+        "prep_hours_per_10m2": 1.5
+      }
+    },
+    "unknown_condition_level": "minor",
+    "inspection_levels": [
+      "severe"
+    ],
+    "prep_hourly_rate": 22.0,
+    "height_surcharge": {
+      "above_m": 3.0,
+      "multiplier": 1.2
+    },
+    "complexity_multipliers": {
+      "intricate_trim": 1.1,
+      "stairwell": 1.2,
+      "furniture_clutter": 1.05
+    },
+    "max_complexity_multiplier": 1.4,
+    "extra_coat_flags": [
+      "dark_to_light"
+    ],
+    "markup_pct": 15,
+    "minimum_job_charge": 350.0,
+    "max_area_without_inspection_m2": 150,
+    "paint_wastage_pct": 5,
+    "sundries_pct_of_paint": 10
+  }
+}
