@@ -37,7 +37,7 @@ def main():
         mime = MIME.get(path.suffix.lower())
         if mime is None:
             sys.exit(f"unsupported image type {path.suffix}")
-        client = RunPodClient.from_env("RUNPOD_VISION_ENDPOINT_ID", sampling={"temperature": 0.1, "max_tokens": 300})
+        client = RunPodClient.from_env("RUNPOD_VISION_ENDPOINT_ID", key_var="RUNPOD_VISION_API_KEY", sampling={"temperature": 0.1, "max_tokens": 300})
         vision, _ = assess_image(client, path.read_bytes(), mime)
         if vision is None:
             sys.exit("vision model returned no usable assessment")

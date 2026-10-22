@@ -27,11 +27,13 @@ class RunPodClient:
         self.sampling = sampling or {"temperature": 0.2, "max_tokens": 400}
 
     @classmethod
-    def from_env(cls, endpoint_var="RUNPOD_ENDPOINT_ID", **kwargs):
+    def from_env(cls, endpoint_var="RUNPOD_ENDPOINT_ID", key_var="RUNPOD_API_KEY", **kwargs):
+        """key_var may name an endpoint-specific key; it falls back to RUNPOD_API_KEY."""
         load_dotenv()
-        key, endpoint = os.environ.get("RUNPOD_API_KEY"), os.environ.get(endpoint_var)
+        key = os.environ.get(key_var) or os.environ.get("RUNPOD_API_KEY")
+        endpoint = os.environ.get(endpoint_var)
         if not key or not endpoint:
-            raise RunPodError(f"RUNPOD_API_KEY and {endpoint_var} must be set")
+            raise RunPodError(f"{key_var} (or RUNPOD_API_KEY) and {endpoint_var} must be set")
         return cls(key, endpoint, **kwargs)
 
     def _call(self, url, payload=None):
@@ -44,12 +46,16 @@ class RunPodClient:
         except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as err:
             raise RunPodError(f"RunPod request failed: {err}") from err
 
-    def chat(self, messages):
+    def health(self):
+        """Job and worker counts for this endpoint (RunPod's /health)."""
+        return self._call(f"https://api.runpod.ai/v2/{self.endpoint_id}/health")
+
+    def chat(self, messages, sampling=None):
         """Return the assistant message text. runsync gives up after ~90s, so poll /status."""
         base = f"https://api.runpod.ai/v2/{self.endpoint_id}"
         start = time.time()
         body = self._call(f"{base}/runsync",
-                          {"input": {"messages": messages, "sampling_params": self.sampling}})
+                          {"input": {"messages": messages, "sampling_params": sampling or self.sampling}})
         while body.get("status") in ("IN_QUEUE", "IN_PROGRESS"):
             if time.time() - start > self.timeout_s:
                 raise RunPodError("RunPod job timed out (worker cold start?)")

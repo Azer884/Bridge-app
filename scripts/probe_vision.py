@@ -26,7 +26,7 @@ def main():
     if mime is None:
         sys.exit(f"unsupported file type {path.suffix}")
     image = path.read_bytes()
-    client = RunPodClient.from_env("RUNPOD_VISION_ENDPOINT_ID", sampling={"temperature": 0.1, "max_tokens": 300})
+    client = RunPodClient.from_env("RUNPOD_VISION_ENDPOINT_ID", key_var="RUNPOD_VISION_API_KEY", sampling={"temperature": 0.1, "max_tokens": 300})
 
     start = time.time()
     image_message(image, mime)  # fails early on bad size or type
