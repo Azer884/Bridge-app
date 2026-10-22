@@ -1,0 +1,66 @@
+{
+  "_note": "Fixed test rates used by tests/test_pricing.py. Do not edit: hand-computed expectations depend on them.",
+  "pricing": {
+    "_note": "SYNTHETIC TEST RATES - replace with the SME's real rate card. Not market prices.",
+    "currency": "USD",
+    "coats": 2,
+    "labour_per_m2_per_coat": {
+      "walls": 3.0,
+      "ceiling": 3.5
+    },
+    "paint_tiers": {
+      "economy": {
+        "price_per_litre": 9.0,
+        "coverage_m2_per_litre": 10
+      },
+      "standard": {
+        "price_per_litre": 14.0,
+        "coverage_m2_per_litre": 10
+      },
+      "premium": {
+        "price_per_litre": 22.0,
+        "coverage_m2_per_litre": 12
+      }
+    },
+    "default_paint_tier": "standard",
+    "condition_levels": {
+      "good": {
+        "labour_multiplier": 1.0,
+        "prep_hours_per_10m2": 0
+      },
+      "minor": {
+        "labour_multiplier": 1.1,
+        "prep_hours_per_10m2": 0.25
+      },
+      "moderate": {
+        "labour_multiplier": 1.25,
+        "prep_hours_per_10m2": 0.75
+      },
+      "severe": {
+        "labour_multiplier": 1.5,
+        "prep_hours_per_10m2": 1.5
+      }
+    },
+    "unknown_condition_level": "minor",
+    "inspection_levels": [
+      "severe"
+    ],
+    "prep_hourly_rate": 30.0,
+    "height_surcharge": {
+      "above_m": 3.0,
+      "multiplier": 1.2
+    },
+    "complexity_multipliers": {
+      "intricate_trim": 1.1,
+      "stairwell": 1.2,
+      "furniture_clutter": 1.05
+    },
+    "max_complexity_multiplier": 1.4,
+    "extra_coat_flags": [
+      "dark_to_light"
+    ],
+    "markup_pct": 15,
+    "minimum_job_charge": 150.0,
+    "max_area_without_inspection_m2": 150
+  }
+}
