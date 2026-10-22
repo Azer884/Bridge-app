@@ -8,7 +8,7 @@
 
 | Field                  | Details                                     |
 | ---------------------- | ------------------------------------------- |
-| **Team Name**          |  HARISSA                                    |
+| **Team Name**          |  HRISSA                                     |
 | **Team Domain**        |  Domain 2                                   |
 | **Main SDG**           |SDG 8 - Descent work and economic growth     |
 |   **Sub SDG**          |SDG 9 - Industry, Innovation and Infrastructure|
