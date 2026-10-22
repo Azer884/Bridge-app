@@ -1,6 +1,6 @@
-# Project Name
+# Gesir.AI
 
-> A one-sentence description of what your project does and who it is for.
+> A whatsapp-AI extension to answer customer's inquiry for a service provided by an SME.
 
 ---
 
@@ -8,21 +8,22 @@
 
 | Field                  | Details                                     |
 | ---------------------- | ------------------------------------------- |
-| **Team Name**          | Your Team Name                              |
-| **Team Domain**        | Domain 1 / Domain 2 *(choose one)*          |
-| **SDG Track (1–17)**   | e.g. SDG 11 — Sustainable Cities and Communities |
-| **Team Leader**        | Leader Name                                 |
-| **University**         | University Name(s)                          |
-| **Number of Members**  | e.g. 4                                      |
+| **Team Name**          |  HRISSA                                     |
+| **Team Domain**        |  Domain 2                                   |
+| **Main SDG**           |SDG 8 - Descent work and economic growth     |
+|   **Sub SDG**          |SDG 9 - Industry, Innovation and Infrastructure|
+| **Team Leader**        | Azer Hamdaoui                               |
+| **University**         |Xiamen University Malaysia                   |
+| **Number of Members**  | 5                                           |
 
 ## Links
 
 | Resource          | Link                                           |
 | ----------------- | ---------------------------------------------- |
-| GitHub Repository | https://github.com/your-username/your-project  |
+| GitHub Repository | (https://github.com/Azer884/Bridge-app)        |
 | Replit Project    | https://replit.com/@your-username/your-project |
 | Live Demo         | https://your-project.replit.app                |
-| RunPod Endpoint   | https://api.runpod.ai/v2/your-endpoint-id      |
+| RunPod Endpoint   | https://api.runpod.ai/v2/ose8agxpb9p1mr/runsync|
 | Slide Deck        | https://example.com/slides                     |
 | Demo Video        | https://example.com/demo-video                 |
 
@@ -31,18 +32,16 @@
 ## Overview
 
 ### Problem
-
-Describe the real-world problem you are solving in 2–4 sentences. Who is affected, and why does it matter?
+Many SMEs and startups lose valuable time to constant back-and-forth communication with clients to clarify requests, answer inquiries, and negotiate job details. This time-consuming process increases managers’ workloads, delays decision-making, and distracts them from essential business operations and customer satisfaction.
 
 ### Solution
 
-Explain how your project uses AI to solve the problem and what makes it valuable.
-
+Giser.AI uses AI to understand customer messages, voice notes, and images, automatically extracting key requirements and identifying missing information to minimize repetitive inquiries. It generates a complete job briefing with estimated costs, required materials, and available time slots, allowing managers to review and accept or decline jobs with a single click.
 ### Key Features
 
-- **Feature 1** — Short description.
-- **Feature 2** — Short description.
-- **Feature 3** — Short description.
+- **Feature 1** — AI-Powered Customer Request Analysis.
+- **Feature 2** — Automated Job Briefing & Cost Estimation.
+- **Feature 3** — Smart Scheduling & One-Click Decisions.
 
 ### Tech Stack
 
@@ -172,11 +171,13 @@ curl -X POST https://api.runpod.ai/v2/$RUNPOD_ENDPOINT_ID/runsync \
 
 ## Team
 
-| Name        | Role                | GitHub                                   |
-| ----------- | ------------------- | ---------------------------------------- |
-| Member Name | Team Lead / Backend | [@username](https://github.com/username) |
-| Member Name | Frontend            | [@username](https://github.com/username) |
-| Member Name | AI / RunPod         | [@username](https://github.com/username) |
+| Name            | Role                | GitHub                                   |
+| -----------     | ------------------- | ---------------------------------------- |
+| Azer Hamdaoui   | Team Lead / Backend | [@username](https://github.com/username) |
+|Tarek ben slimen | Frontend            | [@username](https://github.com/username) |
+| Omar Bouhlel    | AI / RunPod         | [@username](https://github.com/username) |
+| Ilyess Hassine  | AI / RunPod         | [@username](https://github.com/username) |
+| Moetez Soltani  | AI / RunPod         | [@username](https://github.com/username) |
 
 ---
 
