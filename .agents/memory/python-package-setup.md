@@ -9,8 +9,8 @@ In this imported Python environment, the package installer implicitly uses pip's
 
 **How to apply:** Try the supported package-install callback first. If this specific user-site failure recurs, the verified fallback is pip with explicit `--no-user --target .pythonlibs/lib/python3.12/site-packages -r requirements.txt`, retaining the configured package firewall. The active interpreter already searches that target. Verify imports before claiming success, and keep installed dependencies out of Git.
 
-The same user-site failure also occurs in publishing's automatic dependency install, before a custom build command runs.
+The same user-site failure also occurs in publishing's automatic dependency install, before a custom build command runs. The platform's pip configuration sets `user = yes`. Publishing still ran its automatic installer despite `packager.features.enabledForHosting = false`; do not assume that setting bypasses this stage.
 
 **Why:** Installing packages successfully in the development workspace does not fix the separate dependency-install stage used by publishing. A custom build alone cannot repair a stage that fails before reaching it.
 
-**How to apply:** When this exact publishing failure recurs, disable the automatic hosting package install and use the verified explicit dependency-install command as the publishing build. Preserve the existing deployment type and run command.
+**How to apply:** Override pip itself with shared `PIP_USER=false` and `PIP_TARGET=.pythonlibs/lib/python3.12/site-packages`, so even the automatic install command has a writable destination and does not require user-site support. The exact `pip install -r requirements.txt` command succeeds locally with these overrides; disabled-user-site behavior was also checked with `python -s -m pip install --dry-run`. A successful production publish still needs to confirm that the publishing installer receives these overrides.
