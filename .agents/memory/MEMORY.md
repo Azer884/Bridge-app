@@ -1,1 +1,1 @@
-- [Python dependency installation](python-package-setup.md) — the imported Python environment implicitly uses pip's user install mode; verify imports after installing.
+- [Python packaging with uv](python-package-setup.md) — the user chose uv after repeated automatic pip installation failures during publishing.
