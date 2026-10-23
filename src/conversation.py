@@ -15,7 +15,10 @@ class ConversationState:
     needs_human: bool = False
     pending_conflict: dict = None  # {"key", "old", "new"} awaiting the customer's choice
     channel: dict = field(default_factory=dict)  # trusted-by-channel {"name", "phone"} (WhatsApp)
-    stage: str = "job"             # job -> contact -> done
+    stage: str = "job"             # job -> contact -> wrapup -> done (wrapup only with a persona)
+    greeted: bool = False          # the persona's greeting has been sent
+    service_checked: bool = False  # the customer asked for a service we offer
+    contact_confirmed: bool = False  # name and phone confirmed once; not asked again after a correction
     contact_step: str = ""         # confirm | ask_name | ask_phone
     strikes: int = 0               # blocked or abusive messages
     photo_assessment: dict = None  # combined vision result of the customer's photos

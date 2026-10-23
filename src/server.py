@@ -7,6 +7,10 @@
   SME quotations (x-api-key; the dashboard will call these)
     GET  /api/quotes                        drafts waiting for approval, with the price breakdown
     POST /api/quotes/{user_id}/approve      optional {"total": n}; sends the customer the total only
+  Personas (x-api-key; the dashboard picks the character the assistant speaks as)
+    GET  /api/personas                      all characters and the active one
+    PUT  /api/personas/{id}                 create or edit a character
+    POST /api/personas/active               {"id": ...} switch character; applies to the next message
   Model APIs (one per model in .env; for the team and n8n, all need the x-api-key header)
     POST /api/text/chat    RUNPOD_ENDPOINT_ID         chat model, raw messages in, text out
     POST /api/vision/assess RUNPOD_VISION_ENDPOINT_ID vision model, one photo in, validated assessment out
@@ -32,6 +36,7 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
+from . import persona as persona_module
 from .events import from_flat, from_meta_payload
 from .runpod_client import RunPodClient, RunPodError, load_dotenv
 from .service import IncomingService
@@ -57,6 +62,10 @@ class TextRequest(BaseModel):
 class VisionRequest(BaseModel):
     image_base64: str
     mime: Literal["image/jpeg", "image/png", "image/webp"]
+
+
+class ActivePersona(BaseModel):
+    id: str
 
 
 class ApproveRequest(BaseModel):
@@ -201,6 +210,33 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         if not sent:
             raise HTTPException(502, "could not send the quotation to the customer")
         return {"approved": True}
+
+    @app.get("/api/personas")
+    def list_personas(request: Request):
+        require_key(request)
+        return {"personas": persona_module.all_personas(service.config, service.store),
+                "active": persona_module.active_id(service.config, service.store)}
+
+    @app.put("/api/personas/{persona_id}")
+    def save_persona(persona_id: str, body: dict, request: Request):
+        require_key(request)
+        if not persona_module.ID_PATTERN.match(persona_id):
+            raise HTTPException(422, "persona id must be 1 to 32 characters of a-z, 0-9, _ or -")
+        try:
+            persona = persona_module.clean(body)
+        except ValueError as err:
+            raise HTTPException(422, str(err))
+        saved = service.store.get_setting("personas") or {}
+        service.store.set_setting("personas", {**saved, persona_id: persona})
+        return {"saved": persona_id}
+
+    @app.post("/api/personas/active")
+    def choose_persona(body: ActivePersona, request: Request):
+        require_key(request)
+        if body.id not in persona_module.all_personas(service.config, service.store):
+            raise HTTPException(404, "unknown persona")
+        service.store.set_setting("active_persona", body.id)
+        return {"active": body.id}
 
     @app.get("/api/models/health")
     def models_health(request: Request):

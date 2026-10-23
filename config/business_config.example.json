@@ -15,6 +15,7 @@
     "room_length_m",
     "room_width_m",
     "room_height_m",
+    "surface_condition",
     "preferred_datetime"
   ],
   "inspection_keywords": [
@@ -88,5 +89,33 @@
     "max_area_without_inspection_m2": 150,
     "paint_wastage_pct": 5,
     "sundries_pct_of_paint": 10
+  },
+  "owner": {
+    "name": "Daniel Tan",
+    "title": "owner"
+  },
+  "active_persona": "aisha",
+  "personas": {
+    "aisha": {
+      "name": "Aisha",
+      "style": "warm, chatty and upbeat, like a friendly neighbour who happens to know paint; gentle humour, never pushy.",
+      "greeting": "Hi there, I'm {name} from {business}!",
+      "service_question": "What can we help you with today?",
+      "closing": "Wonderful, thank you! I've passed everything to {owner}, and your quotation will come right here once it's confirmed."
+    },
+    "ben": {
+      "name": "Ben",
+      "style": "calm, polite and professional; clear and efficient, with a light friendly touch.",
+      "greeting": "Good day, this is {name} from {business}.",
+      "service_question": "How may I help you today?",
+      "closing": "Thank you. I've handed your details to {owner}, who will confirm your quotation and send it here."
+    },
+    "mei": {
+      "name": "Mei",
+      "style": "cheerful and brief; short sentences, casual Malaysian-English warmth, no slang that could confuse.",
+      "greeting": "Hello! Mei here from {business}.",
+      "service_question": "What are you looking to paint?",
+      "closing": "Thanks so much! {owner} will check everything and your quotation will be sent here."
+    }
   }
 }

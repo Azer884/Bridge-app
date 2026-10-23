@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id TEXT NOT NULL, direction TEXT NOT NULL,
     text TEXT NOT NULL, media_id TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages (conversation_id, id);
+CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 """
 
 
@@ -66,6 +67,17 @@ class SqliteStore:
                 "INSERT INTO conversations VALUES (?,?,?) ON CONFLICT(conversation_id) "
                 "DO UPDATE SET state=excluded.state, updated_at=excluded.updated_at",
                 (state.conversation_id, json.dumps(asdict(state)), time.time()))
+
+    def get_setting(self, key, default=None):
+        """Dashboard-managed settings (personas, the active persona), stored as JSON."""
+        with self._conn() as conn:
+            row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+        return json.loads(row[0]) if row else default
+
+    def set_setting(self, key, value):
+        with self._conn() as conn:
+            conn.execute("INSERT INTO settings VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                         (key, json.dumps(value)))
 
     def conversations(self):
         with self._conn() as conn:

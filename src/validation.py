@@ -16,6 +16,7 @@ _BOOKING_CLAIM = re.compile(
 class ValidationResult:
     problems: list = field(default_factory=list)   # hard: data/contract violations
     soft_problems: list = field(default_factory=list)  # style: reply could be replaced by a template
+    ungrounded: list = field(default_factory=list)  # values the customer never stated (also in problems)
     reply: str = ""
     status: str = Status.COLLECTING.value
     accepted: dict = field(default_factory=dict)   # grounded, normalised new values
@@ -77,6 +78,7 @@ def validate_response(raw_text, state, message, config):
             if _repeats_verified(spec.kind, state.verified.get(key), value):
                 continue  # model echoed an earlier verified value; harmless
             result.problems.append(f"{key}: {err}")
+            result.ungrounded.append(f"{key}: {err}")
             continue
         old = state.verified.get(key)
         if old is not None and not _same(spec.kind, old, clean):

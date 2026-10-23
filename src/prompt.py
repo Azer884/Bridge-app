@@ -2,9 +2,20 @@
 import json
 from pathlib import Path
 
+from .persona import prompt_section
 from .schema import FIELDS
 
 PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "painting_assistant.txt"
+
+
+# With a persona and no history the model has no earlier JSON turn to imitate and sometimes
+# answers in plain text, so one neutral example turn shows the format.
+PRIMER = [
+    {"role": "user", "content": "Hi, we just moved in and the hallway looks tired."},
+    {"role": "assistant", "content": json.dumps({
+        "reply": "Congrats on the new place! Where is the property, so I can note the address?",
+        "extracted_fields": {}, "missing_fields": [], "status": "collecting_information"})},
+]
 
 
 def load_system_prompt(path=PROMPT_PATH):
@@ -16,6 +27,8 @@ def build_context(config, state):
     lines.append(f"Business: {config['business_name']}")
     lines.append("Services offered: " + ", ".join(config["services"]))
     lines += [f"Policy: {p}" for p in config["policies"]]
+    if config.get("persona"):
+        lines.append(prompt_section(config["persona"]))
     lines.append("Use these exact keys in extracted_fields:")
     for key in state.required_fields(config):
         spec = FIELDS[key]
@@ -35,6 +48,9 @@ def build_context(config, state):
         lines.append("All required information is collected: set status ready_for_estimate and ask no question.")
     lines.append('Set "missing_fields" to the missing list above. Extract values only from the '
                  "customer's LATEST message.")
+    if config.get("persona"):
+        lines.append('Reminder: reply with one JSON object containing all four keys: "reply", '
+                     '"extracted_fields", "missing_fields" and "status".')
     return "\n".join(lines)
 
 
@@ -42,7 +58,10 @@ def build_messages(config, state, latest_message, rejection=None, system_prompt=
     system = (system_prompt or load_system_prompt()) + "\n\n" + build_context(config, state)
     if rejection:
         system += ("\n\nYOUR PREVIOUS ANSWER WAS REJECTED. Problems:\n- " + "\n- ".join(rejection) +
-                   "\nReturn a corrected single JSON object.")
-    return ([{"role": "system", "content": system}]
+                   '\nReturn one corrected JSON object with exactly these four keys: "reply", '
+                   '"extracted_fields", "missing_fields", "status". Put in extracted_fields only '
+                   "values the customer wrote in their latest message.")
+    primer = PRIMER if config.get("persona") and not state.history else []
+    return ([{"role": "system", "content": system}] + primer
             + state.history_window()
             + [{"role": "user", "content": latest_message}])

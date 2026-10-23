@@ -3,6 +3,7 @@ import logging
 from dataclasses import asdict
 
 from .assessment import LOW_CONFIDENCE, combine, from_dict
+from . import persona as persona_module
 from .assistant import handle_message
 from .guard import clean_profile_name, clean_profile_phone
 from .pricing import PricingError, compute_quotation
@@ -32,6 +33,11 @@ class IncomingService:
         """photo_assessor(media_id) -> ConditionAssessment or None; it may raise."""
         self.store, self.config, self.client, self.handler = store, config, client, handler
         self.photo_assessor = photo_assessor
+
+    def _turn_config(self):
+        """The business config plus the persona the dashboard has selected right now."""
+        persona = persona_module.active(self.config, self.store)
+        return {**self.config, "persona": persona} if persona else self.config
 
     def _with_quote(self, state, reply):
         """When the job and contact details are complete, price once and keep the draft for the SME.
@@ -106,7 +112,7 @@ class IncomingService:
 
         if event.type == "text" and event.text.strip():
             self.store.log_message(event.user_id, "in", event.text)
-            reply = self._with_quote(state, self.handler(state, event.text, self.config, self.client).reply)
+            reply = self._with_quote(state, self.handler(state, event.text, self._turn_config(), self.client).reply)
         elif event.type == "image":
             self.store.log_message(event.user_id, "in", event.text, event.media_id)
             reply = self._photo_reply(state, event.media_id)

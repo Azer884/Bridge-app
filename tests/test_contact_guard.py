@@ -9,6 +9,8 @@ from src.guard import clean_profile_name, clean_profile_phone, reply_problem, sc
 from src.validation import validate_response
 
 CONFIG = json.loads((Path(__file__).resolve().parent.parent / "config" / "business_config.example.json").read_text())
+# these tests were written for the six-field list; the example config now also asks for the condition
+CONFIG["required_fields"] = [f for f in CONFIG["required_fields"] if f != "surface_condition"]
 JOB_DONE = dict(address="1 Main St", surfaces=["walls"], room_length_m=4.0, room_width_m=3.0,
                 room_height_m=2.5, preferred_datetime="Tuesday 10am")
 

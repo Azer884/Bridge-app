@@ -11,6 +11,8 @@ from src.runpod_client import RunPodError
 from src.validation import validate_response
 
 CONFIG = json.loads((Path(__file__).resolve().parent.parent / "config" / "business_config.example.json").read_text())
+# these tests were written for the six-field list; the example config now also asks for the condition
+CONFIG["required_fields"] = [f for f in CONFIG["required_fields"] if f != "surface_condition"]
 
 
 def reply(text="Thanks, noted.", fields=None, missing=None, status="collecting_information"):
@@ -198,15 +200,20 @@ class AssistantTests(unittest.TestCase):
         self.assertEqual(out.attempts, 2)
         self.assertIn("REJECTED", client.calls[1][0]["content"])
 
-    def test_retry_on_fabrication_then_fallback_needs_human(self):
+    def test_repeated_fabrication_is_dropped_and_the_backend_asks_the_next_question(self):
         s = ConversationState("t")
         bad = reply("What colour?", {"customer_name": "John Smith"})
         out, client = self.run_turn(s, "I want to paint my bedroom", bad, bad, bad)
         self.assertEqual(len(client.calls), 3)
-        self.assertEqual(out.reply, FALLBACK_REPLY)
-        self.assertEqual(out.status, "needs_human")
+        self.assertEqual(out.reply, "What is the address of the property?")   # not the model's text
+        self.assertFalse(s.needs_human)
+        self.assertNotIn("customer_name", s.verified)                         # the invented value is never stored
+
+    def test_other_hard_failures_still_escalate_after_retries(self):
+        s = ConversationState("t")
+        out, client = self.run_turn(s, "I want to paint my bedroom", "no json", "no json", "no json")
+        self.assertEqual((out.reply, out.status), (FALLBACK_REPLY, "needs_human"))
         self.assertTrue(s.needs_human)
-        self.assertNotIn("customer_name", s.verified)
 
     def test_style_only_failures_use_template_question_not_escalation(self):
         s = ConversationState("t")

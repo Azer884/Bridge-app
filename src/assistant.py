@@ -3,7 +3,8 @@ from dataclasses import dataclass, field
 
 import re
 
-from . import contact
+from . import contact, flow
+from .persona import greeting_line, render
 from .grounding import GroundingError, ground_field, ground_measurement, numbers_in
 from .guard import MAX_STRIKES, REFUSAL, clip_message, screen_input
 from .prompt import build_messages, load_system_prompt
@@ -32,14 +33,33 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
         return _refuse(state, message, config)
     if state.stage == "done":
         return _finish(state, message, contact.DONE_REPLY, Status.READY.value)
+    persona = config.get("persona")
     if state.stage == "contact":
         reply, finished = contact.handle_reply(state, message)
+        if finished and persona:
+            state.contact_confirmed, state.stage = True, "wrapup"
+            return _finish(state, message, flow.wrapup_reply(state, config), Status.COLLECTING.value)
         status = Status.READY.value if finished else Status.COLLECTING.value
         return _finish(state, message, reply, status)
+    if state.stage == "wrapup":
+        if flow.is_yes(message):
+            state.stage = "done"
+            return _finish(state, message, flow.closing_reply(config), Status.READY.value)
+        state.stage = "job"             # a correction: it goes through the normal flow below
 
     lowered = message.lower()
     if any(k in lowered for k in config.get("inspection_keywords", [])):
         return _finish(state, message, INSPECTION_REPLY, Status.HUMAN.value, human=True)
+
+    if persona and not state.service_checked:
+        service = flow.check_service(message)
+        if service == "unsupported":
+            return _finish(state, message, flow.decline_reply(config), Status.HUMAN.value, human=True)
+        if service == "unknown":
+            reply = _greet(state, config, render(persona["service_question"], persona, config))
+            # kept out of the history so the first real turn still gets the format primer
+            return _finish(state, message, reply, Status.COLLECTING.value, record=False)
+        state.service_checked = True
 
     _resolve_pending_conflict(state, message)
     _prefill_measurement(state, message, config)
@@ -58,12 +78,17 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
         problems = rejection = result.problems + result.soft_problems
         last = result
 
-    if last is not None and not last.problems:
-        # Only the reply's style was wrong (several questions): ask the next field ourselves.
+    if last is not None and set(last.problems) <= set(last.ungrounded):
+        # Only values the customer never stated were wrong (they are already dropped, never stored)
+        # or the reply's style was wrong (several questions). The model's reply may lean on the
+        # dropped values, so the backend asks the next question itself instead of escalating.
+        last.problems = []
         nxt = state.missing_required(config, extra=last.accepted)
         if nxt:
             last.reply = FIELDS[nxt[0]].ask
             last.soft_problems = []
+            return _accept(state, message, config, last, max_retries + 1)
+        if not last.soft_problems and not last.ungrounded:
             return _accept(state, message, config, last, max_retries + 1)
 
     # Failed turns stay out of the history so the model does not imitate them.
@@ -72,8 +97,18 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
     return out
 
 
+def _greet(state, config, reply):
+    """The persona says hello once, in front of the first reply."""
+    persona = config.get("persona")
+    if not persona or state.greeted:
+        return reply
+    state.greeted = True
+    return f"{greeting_line(persona, config)} {reply}"
+
+
 def _accept(state, message, config, result, attempt):
     state.merge(result.accepted)
+    result.reply = _greet(state, config, result.reply)
     if result.conflicts:
         key, old, new = result.conflicts[0]
         state.pending_conflict = {"key": key, "old": old, "new": new}
@@ -82,8 +117,14 @@ def _accept(state, message, config, result, attempt):
         out = _finish(state, message, reply, Status.CLARIFICATION.value, extracted=result.accepted)
     elif result.status != Status.HUMAN.value and not state.missing_required(config):
         # Job details complete: the backend (not the model) now confirms the booking contact.
-        out = _finish(state, message, contact.begin(state), Status.COLLECTING.value,
-                      extracted=result.accepted)
+        if config.get("persona") and state.contact_confirmed:
+            state.stage = "wrapup"      # contact already confirmed: recap again after a correction
+            reply = flow.wrapup_reply(state, config)
+        elif config.get("persona"):
+            reply = flow.contact_intro(state)
+        else:
+            reply = contact.begin(state)
+        out = _finish(state, message, reply, Status.COLLECTING.value, extracted=result.accepted)
     else:
         human = result.status == Status.HUMAN.value
         out = _finish(state, message, result.reply, result.status, human=human,
