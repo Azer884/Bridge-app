@@ -164,3 +164,32 @@ class GuardTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ScreenshotRegressionTests(unittest.TestCase):
+    def test_bare_number_is_metres(self):
+        from src.grounding import ground_measurement
+        self.assertEqual(ground_measurement(6, "6"), 6.0)
+        self.assertEqual(ground_measurement(6, "6m"), 6.0)
+
+    def test_abuse_is_not_taken_as_a_name(self):
+        from src.contact import handle_reply
+        state = ConversationState(conversation_id="u", channel={"name": "Azer", "phone": "+21656138490"})
+        state.stage, state.contact_step = "contact", "confirm"
+        reply, finished = handle_reply(state, "Fuck u")
+        self.assertFalse(finished)
+        self.assertNotIn("customer_name", state.verified)
+        self.assertIn("Azer", reply)
+
+
+class ChatterTests(unittest.TestCase):
+    def test_chatter_is_not_a_name_and_number_words_are_metres(self):
+        from src.contact import handle_reply
+        from src.grounding import ground_measurement
+        for text in ("stop", "hello", "lol", "Monday"):
+            state = ConversationState(conversation_id="u", channel={"name": "Azer", "phone": "+21656138490"})
+            state.stage, state.contact_step = "contact", "confirm"
+            _, finished = handle_reply(state, text)
+            self.assertFalse(finished, text)
+        self.assertEqual(ground_measurement(5, "five"), 5.0)
+        self.assertEqual(ground_measurement(4.5, "about 4.5"), 4.5)

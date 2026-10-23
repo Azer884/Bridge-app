@@ -55,6 +55,7 @@ class Quotation:
     inputs: dict = field(default_factory=dict)
     breakdown: dict = field(default_factory=dict)     # category -> amount, sums to total
     requires_sme_review: bool = True                  # a quotation is always a draft first
+    schedule: dict = field(default_factory=dict)      # estimated working hours, crew and days (for booking)
 
     def to_dict(self):
         return {
@@ -64,8 +65,25 @@ class Quotation:
             "subtotal": float(self.subtotal), "markup": float(self.markup), "total": float(self.total),
             "minimum_charge_applied": self.minimum_charge_applied, "flags": self.flags,
             "assumptions": self.assumptions, "inputs": self.inputs,
-            "requires_sme_review": self.requires_sme_review,
+            "requires_sme_review": self.requires_sme_review, "schedule": self.schedule,
         }
+
+
+def _schedule(area, coats, multiplier, prep_hours, pricing):
+    """Working-hour estimate for the calendar: deterministic, from the same inputs as the price.
+    Defaults are demo rates (a painter covers about 9 m2 per hour per coat, cutting in included)."""
+    if not area:
+        return {}
+    rate = _d(pricing.get("painting_m2_per_hour_per_painter", 9))
+    painting = area * coats / rate * multiplier
+    setup = _d(pricing.get("setup_cleanup_hours", 1))
+    hours = painting + prep_hours + setup
+    crew = max(1, int(pricing.get("crew_size", 2)))
+    day = _d(pricing.get("workday_hours", 8))
+    days = max(1, math.ceil(hours / crew / day))
+    return {"painting_hours": float(round(painting, 1)), "prep_hours": float(round(prep_hours, 1)),
+            "setup_cleanup_hours": float(setup), "total_labour_hours": float(round(hours, 1)),
+            "crew_size": crew, "hours_on_site": float(round(hours / crew, 1)), "working_days": days}
 
 
 def compute_quotation(verified, pricing, vision=None):
@@ -174,6 +192,8 @@ def compute_quotation(verified, pricing, vision=None):
         breakdown[MINIMUM] = minimum - total
         total = minimum
 
+    schedule = _schedule(area, coats, multiplier, prep_hours, pricing)
+
     # anything that needs a person before this can be sent
     if level in pricing["inspection_levels"]:
         flags.append(f"surface condition '{level}' requires an inspection")
@@ -186,7 +206,7 @@ def compute_quotation(verified, pricing, vision=None):
         status="needs_inspection" if flags else "draft_ready", currency=pricing["currency"],
         lines=lines, subtotal=subtotal, markup=markup, total=_money(total),
         minimum_charge_applied=minimum_applied, flags=flags, assumptions=assumptions,
-        breakdown=breakdown,
+        breakdown=breakdown, schedule=schedule,
         inputs={"wall_area_m2": float(wall_area), "ceiling_area_m2": float(ceiling_area),
                 "coats": coats, "paint_tier": tier, "condition_level": level,
                 "condition_issues": list(issues), "complexity_flags": list(complexity),

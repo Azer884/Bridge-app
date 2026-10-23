@@ -29,6 +29,10 @@
     "_note": "Malaysian market ESTIMATES in MYR for the demo, checked against public listings in 2025-26; replace with the SME's real rate card. Labour-only painter rate roughly RM0.35-0.45 per sq ft per coat (1 m2 = 10.76 sq ft). Economy ~ Dulux Pentalite class (5L ~ RM164), standard ~ Nippon interior emulsion (5L ~ RM235), premium ~ washable/anti-mould range (price estimated, not sourced). Prep rate ~ RM176 per 8-hour painter day. Prices exclude any applicable tax.",
     "currency": "MYR",
     "coats": 2,
+    "painting_m2_per_hour_per_painter": 9,
+    "setup_cleanup_hours": 1,
+    "crew_size": 2,
+    "workday_hours": 8,
     "labour_per_m2_per_coat": {
       "walls": 4.2,
       "ceiling": 5.0

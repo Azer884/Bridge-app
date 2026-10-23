@@ -74,3 +74,34 @@ def closing_reply(config):
     if persona:
         return render(persona["closing"], persona, config)
     return "Wonderful, thank you! Your quotation will come here once it's confirmed."
+
+
+_DATE_WORDS = re.compile(
+    r"\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|"
+    r"\b(today|tomorrow|tonight|weekend|weekday|morning|afternoon|evening|next week|next month)\b|"
+    r"\b\d{1,2}\s?(am|pm)\b|\b\d{1,2}[/.-]\d{1,2}\b", re.I)
+_DATE_QUESTION = re.compile(
+    r"\b(date|when|schedule|time|available|availability|come over|come by|book)\b", re.I)
+
+_AFTER = [
+    "Thanks! {owner} will be in touch here once your quotation is ready.",
+    "All noted. {owner} is reviewing your job and will message you here.",
+    "Got it, nothing more needed from you right now. {owner} will follow up on this chat.",
+    "Thank you! Your details are with {owner}, and you'll hear back here soon.",
+]
+
+
+def after_done_reply(state, message, config):
+    """Replies once the chat is complete. The SME confirms the date, so a new date from the customer
+    is recorded as their preference (their own words) and nothing is promised."""
+    owner = (config.get("owner") or {}).get("name") or "our team"
+    if _DATE_WORDS.search(message):
+        state.verified["preferred_datetime"] = message.strip()[:120]
+        return (f"Noted, I've passed \"{state.verified['preferred_datetime']}\" to {owner} as your preferred "
+                "time. The final date is confirmed by them after reviewing the job.")
+    if _DATE_QUESTION.search(message):
+        known = state.verified.get("preferred_datetime")
+        have = f"I have \"{known}\" as your preferred time. " if known else ""
+        return (f"{have}Which day and time suits you best? {owner} confirms the final date, so I'll pass "
+                "your preference on.")
+    return _AFTER[len(state.history) % len(_AFTER)].format(owner=owner)

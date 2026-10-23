@@ -55,6 +55,16 @@ def norm(text):
     return re.sub(r"[^a-z0-9@+ ]+", " ", str(text).lower()).split()
 
 
+_HEDGES = {"about", "around", "roughly", "approximately", "approx"}
+
+
+def _bare_number(message):
+    """The whole message is one number ("6", "five", "about 4.5") with no unit."""
+    tokens = [t for t in _TOKEN.findall(str(message).lower()) if t not in _HEDGES]
+    return bool(tokens) and all(t[0].isdigit() or t in ONES or t in TENS for t in tokens) \
+        and len(numbers_in(message)) == 1
+
+
 def ground_measurement(value, message):
     """Return metres, or raise GroundingError if unsupported or the unit is unclear."""
     if isinstance(value, bool) or value is None:
@@ -70,6 +80,8 @@ def ground_measurement(value, message):
         raise GroundingError(f"{value!r} was not stated by the customer")
     if not factors:
         factors = unit_factors_in(message)
+    if not factors and _bare_number(message):
+        factors = {1.0}         # a bare number answers a question that asked for metres
     if len(factors) != 1:
         raise GroundingError(f"unit unclear for {value!r}; ask the customer for the unit")
     metres = round(number * factors.pop(), 3)

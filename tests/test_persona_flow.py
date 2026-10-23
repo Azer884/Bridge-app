@@ -165,3 +165,42 @@ class PersonaApiTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AfterDoneTests(unittest.TestCase):
+    def setUp(self):
+        from src import flow
+        from src.conversation import ConversationState
+        self.flow, self.state = flow, ConversationState(conversation_id="u")
+        self.config = {"owner": {"name": "Daniel Tan"}}
+
+    def test_replies_vary(self):
+        seen = set()
+        for _ in range(4):
+            seen.add(self.flow.after_done_reply(self.state, "ok thanks", self.config))
+            self.state.history += [{"role": "user", "content": "x"}, {"role": "assistant", "content": "y"}]
+        self.assertGreater(len(seen), 1)
+
+    def test_date_question_asks_for_preference(self):
+        reply = self.flow.after_done_reply(self.state, "Give me a good date to come over", self.config)
+        self.assertIn("Which day and time", reply)
+        self.assertIn("Daniel Tan", reply)
+
+    def test_new_date_is_recorded_as_preference_not_confirmed(self):
+        reply = self.flow.after_done_reply(self.state, "Friday 3pm works", self.config)
+        self.assertEqual(self.state.verified["preferred_datetime"], "Friday 3pm works")
+        self.assertIn("confirmed by them", reply)
+
+
+class ScheduleEstimateTests(unittest.TestCase):
+    def test_quote_has_working_hours(self):
+        import json
+        from pathlib import Path
+        from src.pricing import compute_quotation
+        config = json.loads(Path("config/business_config.example.json").read_text(encoding="utf-8"))
+        verified = {"surfaces": ["walls"], "room_length_m": 4, "room_width_m": 3, "room_height_m": 2.5,
+                    "surface_condition": "good"}
+        schedule = compute_quotation(verified, config["pricing"]).to_dict()["schedule"]
+        self.assertGreater(schedule["total_labour_hours"], 5)
+        self.assertEqual(schedule["crew_size"], 2)
+        self.assertGreaterEqual(schedule["working_days"], 1)

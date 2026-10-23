@@ -10,6 +10,12 @@ AFFIRMATIVE = {"yes", "yeah", "yep", "yup", "ok", "okay", "sure", "correct", "ri
 NEGATIVE = {"no", "nope", "nah", "wrong", "different", "change"}
 _NOT_NAMES = AFFIRMATIVE | NEGATIVE | {"the", "same", "my", "it", "a", "an", "this", "that", "thanks",
                                        "thank", "you", "and", "number", "name", "phone"}
+_ABUSIVE = {"fuck", "fucking", "shit", "bitch", "asshole", "dick", "pussy", "cunt", "bastard", "idiot",
+            "stupid"}
+# words customers send that are not a name (greetings, commands, laughter)
+_CHATTER = {"hello", "hi", "hey", "stop", "cancel", "lol", "haha", "hahaha", "what", "why", "how", "when",
+            "where", "who", "help", "test", "testing", "baby", "bye", "hmm", "please", "later", "tomorrow",
+            "today", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
 _NAME_AFTER = re.compile(
     r"(?:under|name is|name's|call me|i am|i'm|this is|in the name of|use)\s+"
     r"([^\W\d_][\w'\-]*(?:\s+[^\W\d_][\w'\-]*){0,2})", re.I)
@@ -60,6 +66,8 @@ def find_name(message, allow_bare):
         return None
     words = candidate.split()
     if words[0].lower() in _NOT_NAMES or len(candidate) > 40:
+        return None
+    if (_ABUSIVE | _CHATTER) & set(_words(candidate)):
         return None
     return " ".join(w.capitalize() if w.islower() else w for w in words)
 

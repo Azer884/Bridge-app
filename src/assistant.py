@@ -32,7 +32,7 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
     if screen_input(message):
         return _refuse(state, message, config)
     if state.stage == "done":
-        return _finish(state, message, contact.DONE_REPLY, Status.READY.value)
+        return _finish(state, message, flow.after_done_reply(state, message, config), Status.READY.value)
     persona = config.get("persona")
     if state.stage == "contact":
         reply, finished = contact.handle_reply(state, message)
