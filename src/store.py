@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS messages (
     text TEXT NOT NULL, media_id TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages (conversation_id, id);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL);
 """
 
 
@@ -78,6 +79,18 @@ class SqliteStore:
         with self._conn() as conn:
             conn.execute("INSERT INTO settings VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                          (key, json.dumps(value)))
+
+    def log_event(self, kind, detail=""):
+        """Operational trail (webhook arrivals, send failures, handler errors), newest 500 kept.
+        It exists because the hosting platform's runtime logs were not readable."""
+        with self._conn() as conn:
+            conn.execute("INSERT INTO events (ts, kind, detail) VALUES (?,?,?)", (time.time(), kind, str(detail)[:600]))
+            conn.execute("DELETE FROM events WHERE id <= (SELECT MAX(id) FROM events) - 500")
+
+    def events(self, limit=50):
+        with self._conn() as conn:
+            rows = conn.execute("SELECT ts, kind, detail FROM events ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        return [{"ts": ts, "kind": kind, "detail": detail} for ts, kind, detail in rows]
 
     def conversations(self):
         with self._conn() as conn:

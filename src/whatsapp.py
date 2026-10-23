@@ -23,6 +23,7 @@ def valid_signature(raw_body, header, app_secret):
 class WhatsAppSender:
     def __init__(self, token, phone_number_id):
         self.token, self.phone_number_id = token, phone_number_id
+        self.last_error = ""
 
     @classmethod
     def from_env(cls, env):
@@ -62,8 +63,10 @@ class WhatsAppSender:
                 return True
         except urllib.error.HTTPError as err:
             # Graph puts the real reason (expired token, bad number id, recipient not allowed) in the body
-            log.error("WhatsApp send failed: HTTP %s %s", err.code, err.read()[:500].decode("utf-8", "replace"))
+            self.last_error = f"HTTP {err.code} {err.read()[:500].decode('utf-8', 'replace')}"
+            log.error("WhatsApp send failed: %s", self.last_error)
             return False
         except (urllib.error.URLError, TimeoutError) as err:
+            self.last_error = str(err)
             log.error("WhatsApp send failed: %s", err)
             return False

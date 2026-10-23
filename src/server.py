@@ -4,6 +4,7 @@
     GET  /webhook          Meta verification handshake (direct WhatsApp Cloud API)
     POST /webhook          Meta messages, HMAC-verified, answered in the background
     POST /incoming         flat JSON from n8n or any other front door -> {"replies": [...]}
+  GET  /api/events                        recent webhook, send and error events (x-api-key)
   SME quotations (x-api-key; the dashboard will call these)
     GET  /api/quotes                        drafts waiting for approval, with the price breakdown
     POST /api/quotes/{user_id}/approve      optional {"total": n}; sends the customer the total only
@@ -127,12 +128,17 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
     def process_and_send(event):
         try:
             replies = service.handle(event)
-        except Exception:
+        except Exception as err:
             log.exception("failed to handle message %s", event.message_id)
+            service.store.log_event("handler_error", f"{event.user_id}: {type(err).__name__}: {err}")
             return
         for reply in replies:
-            if sender is not None:
-                sender.send_text(event.user_id, reply)
+            if sender is None:
+                service.store.log_event("no_sender", "WHATSAPP_TOKEN or WHATSAPP_PHONE_NUMBER_ID is not set")
+            elif sender.send_text(event.user_id, reply):
+                service.store.log_event("sent", event.user_id)
+            else:
+                service.store.log_event("send_failed", f"{event.user_id}: {getattr(sender, 'last_error', '')}")
 
     @app.get("/health")
     def health():
@@ -151,12 +157,15 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
             raise HTTPException(503, "WHATSAPP_APP_SECRET is not configured")
         raw = await request.body()
         if not valid_signature(raw, request.headers.get("x-hub-signature-256"), env["WHATSAPP_APP_SECRET"]):
+            service.store.log_event("webhook_bad_signature", "check WHATSAPP_APP_SECRET against the Meta app secret")
             raise HTTPException(403, "bad signature")
         try:
             payload = json.loads(raw)
         except ValueError:
             raise HTTPException(400, "invalid JSON")
-        for event in from_meta_payload(payload):
+        events = from_meta_payload(payload)
+        service.store.log_event("webhook", f"{len(events)} message(s): " + ", ".join(e.type for e in events))
+        for event in events:
             background.add_task(process_and_send, event)
         return {"ok": True}                     # answer fast: Meta retries slow webhooks
 
@@ -191,6 +200,11 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         if assessment is None:
             raise HTTPException(502, "vision model returned no usable assessment")
         return dataclasses.asdict(assessment)
+
+    @app.get("/api/events")
+    def recent_events(request: Request, limit: int = Query(50, ge=1, le=200)):
+        require_key(request)
+        return {"events": service.store.events(limit)}
 
     @app.get("/api/quotes")
     def list_quotes(request: Request, status: str = "pending_approval"):

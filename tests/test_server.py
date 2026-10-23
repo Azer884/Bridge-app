@@ -46,12 +46,12 @@ def make_service(handler=echo_handler):
 
 
 class SentRecorder:
-    def __init__(self):
-        self.sent = []
+    def __init__(self, ok=True):
+        self.sent, self.ok, self.last_error = [], ok, "HTTP 401 expired token"
 
     def send_text(self, to, text):
         self.sent.append((to, text))
-        return True
+        return self.ok
 
 
 class EventTests(unittest.TestCase):
@@ -262,6 +262,22 @@ class ServerTests(unittest.TestCase):
         res = self.client.post("/webhook", content=raw, headers={"x-hub-signature-256": self.sign(raw)})
         self.assertEqual(res.status_code, 200)
         self.assertEqual(self.sender.sent, [("60123456789", "echo hello")])
+
+    def test_events_trail_shows_arrivals_sends_and_failures(self):
+        raw = json.dumps(meta_body("hello")).encode()
+        self.client.post("/webhook", content=raw, headers={"x-hub-signature-256": self.sign(raw)})
+        self.client.post("/webhook", content=raw, headers={"x-hub-signature-256": "sha256=00"})
+        kinds = [e["kind"] for e in self.client.get("/api/events", headers={"x-api-key": "key"}).json()["events"]]
+        self.assertEqual(kinds, ["webhook_bad_signature", "sent", "webhook"])      # newest first
+        self.assertEqual(self.client.get("/api/events").status_code, 401)
+
+    def test_a_failed_send_is_recorded_with_the_reason(self):
+        failing = TestClient(create_app(make_service(), SentRecorder(ok=False), ENV))
+        raw = json.dumps(meta_body("hello")).encode()
+        failing.post("/webhook", content=raw, headers={"x-hub-signature-256": self.sign(raw)})
+        events = failing.get("/api/events", headers={"x-api-key": "key"}).json()["events"]
+        self.assertEqual(events[0]["kind"], "send_failed")
+        self.assertIn("HTTP 401 expired token", events[0]["detail"])
 
     def test_unsigned_or_badly_signed_webhook_is_rejected(self):
         raw = json.dumps(meta_body()).encode()
