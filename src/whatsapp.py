@@ -40,6 +40,10 @@ class WhatsAppSender:
         try:
             with urllib.request.urlopen(req, timeout=20):
                 return True
+        except urllib.error.HTTPError as err:
+            # Graph puts the real reason (expired token, bad number id, recipient not allowed) in the body
+            log.error("WhatsApp send failed: HTTP %s %s", err.code, err.read()[:500].decode("utf-8", "replace"))
+            return False
         except (urllib.error.URLError, TimeoutError) as err:
             log.error("WhatsApp send failed: %s", err)
             return False
