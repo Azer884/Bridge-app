@@ -140,6 +140,7 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
             else:
                 service.store.log_event("send_failed", f"{event.user_id}: {getattr(sender, 'last_error', '')}")
 
+    @app.get("/", include_in_schema=False)
     @app.get("/health")
     def health():
         return {"ok": True}
