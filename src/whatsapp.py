@@ -8,6 +8,7 @@ import urllib.request
 
 GRAPH_VERSION = "v21.0"
 MAX_TEXT = 4096
+MAX_MEDIA = 5 * 1024 * 1024
 log = logging.getLogger("whatsapp")
 
 
@@ -27,6 +28,25 @@ class WhatsAppSender:
     def from_env(cls, env):
         token, number = env.get("WHATSAPP_TOKEN"), env.get("WHATSAPP_PHONE_NUMBER_ID")
         return cls(token, number) if token and number else None
+
+    def _get(self, url, limit):
+        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {self.token}"})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = resp.read(limit + 1)
+        if len(data) > limit:
+            raise ValueError("media is larger than the allowed size")
+        return data
+
+    def fetch_media(self, media_id):
+        """(image bytes, mime type) for a photo the customer sent. Raises on any failure; the
+        caller picks the fallback."""
+        if not media_id.isdigit():
+            raise ValueError("bad media id")
+        meta = json.loads(self._get(f"https://graph.facebook.com/{GRAPH_VERSION}/{media_id}", 64 * 1024))
+        url = meta.get("url", "")
+        if not url.startswith("https://"):
+            raise ValueError("media url is not https")
+        return self._get(url, MAX_MEDIA), meta.get("mime_type", "")
 
     def send_text(self, to, text):
         """Returns True on success. Failures are logged, never raised: a failed send must not

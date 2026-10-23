@@ -4,6 +4,9 @@
     GET  /webhook          Meta verification handshake (direct WhatsApp Cloud API)
     POST /webhook          Meta messages, HMAC-verified, answered in the background
     POST /incoming         flat JSON from n8n or any other front door -> {"replies": [...]}
+  SME quotations (x-api-key; the dashboard will call these)
+    GET  /api/quotes                        drafts waiting for approval, with the price breakdown
+    POST /api/quotes/{user_id}/approve      optional {"total": n}; sends the customer the total only
   Model APIs (one per model in .env; for the team and n8n, all need the x-api-key header)
     POST /api/text/chat    RUNPOD_ENDPOINT_ID         chat model, raw messages in, text out
     POST /api/vision/assess RUNPOD_VISION_ENDPOINT_ID vision model, one photo in, validated assessment out
@@ -56,6 +59,10 @@ class VisionRequest(BaseModel):
     mime: Literal["image/jpeg", "image/png", "image/webp"]
 
 
+class ApproveRequest(BaseModel):
+    total: float | None = Field(None, gt=0, le=1_000_000)   # the SME may override the computed total
+
+
 def _same(a, b):
     return bool(a) and bool(b) and hmac.compare_digest(a.encode(), b.encode())
 
@@ -66,24 +73,32 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         env = dict(os.environ)
     if text_client is None and service is None:
         text_client = RunPodClient.from_env()
-    if service is None:
-        config_path = env.get("BUSINESS_CONFIG") or ROOT / "config" / "business_config.example.json"
-        service = IncomingService(SqliteStore(env.get("DATABASE_PATH") or ROOT / "data" / "bridge.db"),
-                                  json.loads(Path(config_path).read_text(encoding="utf-8")), text_client)
     if sender is None:
         sender = WhatsAppSender.from_env(env)
-    clients = {"text": text_client or service.client, "vision": vision_client}
+    clients = {"text": text_client, "vision": vision_client}
 
     def model_client(name):
         """The vision client is built on first use, so the server starts without vision credentials."""
         if clients[name] is None:
             try:
                 clients[name] = RunPodClient.from_env(
-                    "RUNPOD_VISION_ENDPOINT_ID", key_var="RUNPOD_VISION_API_KEY",
-                    sampling={"temperature": 0.1, "max_tokens": 300})
+                    "RUNPOD_VISION_ENDPOINT_ID", key_var="RUNPOD_VISION_API_KEY", timeout_s=420,
+                    sampling={"temperature": 0.1, "max_tokens": 300})   # 420 s covers a cold start
             except RunPodError as err:
                 raise HTTPException(503, str(err))
         return clients[name]
+
+    def assess_photo(media_id):
+        image, mime = sender.fetch_media(media_id)
+        assessment, _ = assess_image(model_client("vision"), image, mime)
+        return assessment
+
+    if service is None:
+        config_path = env.get("BUSINESS_CONFIG") or ROOT / "config" / "business_config.example.json"
+        service = IncomingService(SqliteStore(env.get("DATABASE_PATH") or ROOT / "data" / "bridge.db"),
+                                  json.loads(Path(config_path).read_text(encoding="utf-8")), text_client,
+                                  photo_assessor=assess_photo if sender else None)
+    clients["text"] = clients["text"] or service.client
 
     def require_key(request):
         if not env.get("INCOMING_API_KEY"):
@@ -167,6 +182,25 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         if assessment is None:
             raise HTTPException(502, "vision model returned no usable assessment")
         return dataclasses.asdict(assessment)
+
+    @app.get("/api/quotes")
+    def list_quotes(request: Request, status: str = "pending_approval"):
+        require_key(request)
+        return {"quotes": service.quotes(status)}
+
+    @app.post("/api/quotes/{user_id}/approve")
+    def approve_quote(user_id: str, request: Request, body: ApproveRequest = None):
+        require_key(request)
+        if sender is None:
+            raise HTTPException(503, "WhatsApp sender is not configured")
+        try:
+            sent = service.approve_quote(user_id, lambda text: sender.send_text(user_id, text),
+                                         body.total if body else None)
+        except ValueError as err:
+            raise HTTPException(409, str(err))
+        if not sent:
+            raise HTTPException(502, "could not send the quotation to the customer")
+        return {"approved": True}
 
     @app.get("/api/models/health")
     def models_health(request: Request):

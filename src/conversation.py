@@ -18,6 +18,9 @@ class ConversationState:
     stage: str = "job"             # job -> contact -> done
     contact_step: str = ""         # confirm | ask_name | ask_phone
     strikes: int = 0               # blocked or abusive messages
+    photo_assessment: dict = None  # combined vision result of the customer's photos
+    quote: dict = None             # draft quotation with breakdown (Quotation.to_dict()), SME-only
+    quote_status: str = ""         # "" | pending_approval | approved | needs_inspection
 
     def required_fields(self, config):
         wanted = set(config["required_fields"])

@@ -1,6 +1,7 @@
 import base64
 import hashlib
 import hmac
+import io
 import json
 import tempfile
 import threading
@@ -8,14 +9,16 @@ import time
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 from fastapi.testclient import TestClient
 
+from src.assessment import ConditionAssessment
 from src.events import IncomingEvent, from_flat, from_meta_payload
 from src.server import create_app
 from src.service import IncomingService
 from src.store import SqliteStore
-from src.whatsapp import valid_signature
+from src.whatsapp import WhatsAppSender, valid_signature
 
 CONFIG = {"required_fields": ["address"]}
 SECRET = "app-secret"
@@ -103,6 +106,105 @@ class ServiceTests(unittest.TestCase):
         self.assertIn("text messages", service.handle(IncomingEvent("m2", "u", type="unsupported"))[0])
         self.assertEqual(service.handle(IncomingEvent("m3", "u", text="   ")), [])
 
+    def photo_service(self, assessor):
+        service = make_service()
+        service.photo_assessor = assessor
+        return service
+
+    def test_photo_is_assessed_summarised_and_stored(self):
+        seen = []
+        def assessor(media_id):
+            seen.append(media_id)
+            return ConditionAssessment("moderate", ("cracks", "water_damage"), (), 0.9, "vision")
+        service = self.photo_service(assessor)
+        reply = service.handle(IncomingEvent("m1", "u", type="image", media_id="55"))[0]
+        self.assertEqual(seen, ["55"])
+        self.assertIn("moderate wear or damage", reply)
+        self.assertIn("cracks, water damage", reply)
+        self.assertIn("address", reply.lower())            # the next question is still asked
+        self.assertEqual(service.store.load("u").photo_assessment["level"], "moderate")
+
+    def test_second_photo_keeps_the_worse_level(self):
+        results = iter([ConditionAssessment("severe", ("mould",), (), 0.9, "vision"),
+                        ConditionAssessment("good", (), (), 0.9, "vision")])
+        service = self.photo_service(lambda media_id: next(results))
+        service.handle(IncomingEvent("m1", "u", type="image", media_id="1"))
+        service.handle(IncomingEvent("m2", "u", type="image", media_id="2"))
+        saved = service.store.load("u").photo_assessment
+        self.assertEqual((saved["level"], saved["issues"]), ("severe", ["mould"]))
+
+    def test_photo_failure_or_low_confidence_falls_back_to_the_team_reply(self):
+        def broken(media_id):
+            raise RuntimeError("download failed")
+        for assessor in (broken, lambda m: None, lambda m: ConditionAssessment("good", (), (), 0.2, "vision")):
+            service = self.photo_service(assessor)
+            reply = service.handle(IncomingEvent("m1", "u", type="image", media_id="1"))[0]
+            self.assertIn("passed your photo to our team", reply)
+            self.assertIsNone(service.store.load("u").photo_assessment)
+
+    def quoting_service(self, photo=None):
+        config = json.loads((Path(__file__).resolve().parent.parent / "config"
+                             / "business_config.example.json").read_text(encoding="utf-8"))
+        calls = []
+        def finishing(state, text, config, client):
+            calls.append(text)
+            if len(calls) == 1:
+                state.verified.update({"room_length_m": 4.0, "room_width_m": 3.0, "room_height_m": 2.5,
+                                       "surfaces": ["walls", "ceiling"]})
+                state.stage = "done"
+            return SimpleNamespace(reply="Perfect.", status="ready_for_estimate")
+        directory = tempfile.TemporaryDirectory()
+        service = IncomingService(SqliteStore(Path(directory.name) / "q.db"), config, None, handler=finishing)
+        service._directory = directory
+        if photo:
+            state = service.store.load("u")
+            state.photo_assessment = photo
+            service.store.save(state)
+        return service
+
+    def test_finished_job_is_priced_for_the_sme_and_the_customer_sees_no_number(self):
+        service = self.quoting_service()
+        reply = service.handle(IncomingEvent("m1", "u", text="yes"))[0]
+        self.assertEqual(reply, "Perfect.")
+        state = service.store.load("u")
+        self.assertEqual(state.quote_status, "pending_approval")
+        self.assertAlmostEqual(sum(state.quote["breakdown"].values()), state.quote["total"], places=2)
+        self.assertEqual(service.handle(IncomingEvent("m2", "u", text="thanks")), ["Perfect."])   # priced once
+        (draft,) = service.quotes()
+        self.assertEqual(draft["user_id"], "u")
+        self.assertIn("Labour", draft["quote"]["breakdown"])
+
+    def test_approval_sends_only_the_total_and_marks_it_approved(self):
+        service = self.quoting_service()
+        service.handle(IncomingEvent("m1", "u", text="yes"))
+        total = service.store.load("u").quote["total"]
+        sent = []
+        self.assertTrue(service.approve_quote("u", lambda text: sent.append(text) or True))
+        self.assertIn(f"MYR {total:,.2f}", sent[0])
+        for word in ("Labour", "Materials", "breakdown", "profit"):
+            self.assertNotIn(word, sent[0])
+        self.assertEqual(service.store.load("u").quote_status, "approved")
+        with self.assertRaises(ValueError):
+            service.approve_quote("u", lambda text: True)               # cannot approve twice
+
+    def test_sme_can_override_the_total_and_a_failed_send_keeps_it_pending(self):
+        service = self.quoting_service()
+        service.handle(IncomingEvent("m1", "u", text="yes"))
+        self.assertFalse(service.approve_quote("u", lambda text: False, total=999.0))
+        self.assertEqual(service.store.load("u").quote_status, "pending_approval")
+        sent = []
+        service.approve_quote("u", lambda text: sent.append(text) or True, total=999.0)
+        self.assertIn("MYR 999.00", sent[0])
+
+    def test_severe_photo_gives_no_price_and_flags_a_human(self):
+        severe = {"level": "severe", "issues": ["mould"], "complexity_flags": [], "confidence": 0.9, "source": "vision"}
+        service = self.quoting_service(photo=severe)
+        reply = service.handle(IncomingEvent("m1", "u", text="yes"))[0]
+        self.assertIn("inspection", reply)
+        state = service.store.load("u")
+        self.assertEqual((state.quote_status, state.needs_human), ("needs_inspection", True))
+        self.assertEqual(service.quotes(), [])                          # nothing to approve
+
     def test_same_customer_messages_never_interleave_and_customers_run_in_parallel(self):
         service = make_service()
         threads = [threading.Thread(target=service.handle, args=(IncomingEvent(f"m{i}", "u1", text=f"t{i}"),))
@@ -116,6 +218,27 @@ class ServiceTests(unittest.TestCase):
         self.assertEqual(len(service.store.load("u1").history), 16)   # no lost updates
         self.assertEqual(len(service.store.messages("u1")), 16)
         self.assertTrue(all(len(service.store.load(f"other{i}").history) == 2 for i in range(8)))
+
+
+class FetchMediaTests(unittest.TestCase):
+    def fetch(self, media_id, responses):
+        def fake_urlopen(req, timeout=0):
+            return io.BytesIO(responses.pop(0))
+        with mock.patch("src.whatsapp.urllib.request.urlopen", fake_urlopen):
+            return WhatsAppSender("tok", "123").fetch_media(media_id)
+
+    def test_downloads_through_the_two_graph_steps(self):
+        meta = json.dumps({"url": "https://lookaside.example/img", "mime_type": "image/jpeg"}).encode()
+        self.assertEqual(self.fetch("42", [meta, b"jpeg bytes"]), (b"jpeg bytes", "image/jpeg"))
+
+    def test_rejects_bad_ids_non_https_urls_and_oversized_images(self):
+        with self.assertRaises(ValueError):
+            self.fetch("../x", [])
+        with self.assertRaises(ValueError):
+            self.fetch("42", [json.dumps({"url": "http://insecure/img"}).encode()])
+        meta = json.dumps({"url": "https://lookaside.example/img", "mime_type": "image/png"}).encode()
+        with self.assertRaises(ValueError):
+            self.fetch("42", [meta, b"x" * (5 * 1024 * 1024 + 1)])
 
 
 class ServerTests(unittest.TestCase):
@@ -166,6 +289,35 @@ class ServerTests(unittest.TestCase):
         self.assertTrue(valid_signature(raw, good, "s"))
         self.assertFalse(valid_signature(raw, good, ""))
         self.assertFalse(valid_signature(raw, None, "s"))
+
+
+class QuoteApiTests(unittest.TestCase):
+    def setUp(self):
+        self.sender = SentRecorder()
+        self.service = ServiceTests().quoting_service()
+        self.service.handle(IncomingEvent("m1", "60123456789", text="yes"))
+        self.api = TestClient(create_app(self.service, self.sender, ENV))
+
+    def test_requires_the_api_key(self):
+        self.assertEqual(self.api.get("/api/quotes").status_code, 401)
+        self.assertEqual(self.api.post("/api/quotes/60123456789/approve").status_code, 401)
+
+    def test_sme_lists_the_breakdown_then_approves_and_the_customer_gets_the_total_only(self):
+        (draft,) = self.api.get("/api/quotes", headers=KEY).json()["quotes"]
+        self.assertIn("Labour", draft["quote"]["breakdown"])
+        res = self.api.post("/api/quotes/60123456789/approve", headers=KEY, json={"total": 1200})
+        self.assertEqual(res.json(), {"approved": True})
+        ((to, text),) = self.sender.sent
+        self.assertEqual(to, "60123456789")
+        self.assertIn("MYR 1,200.00", text)
+        self.assertNotIn("Labour", text)
+        self.assertEqual(self.api.get("/api/quotes", headers=KEY).json()["quotes"], [])
+        self.assertEqual(self.api.post("/api/quotes/60123456789/approve", headers=KEY).status_code, 409)
+
+    def test_bad_total_and_missing_sender(self):
+        self.assertEqual(self.api.post("/api/quotes/60123456789/approve", headers=KEY, json={"total": -5}).status_code, 422)
+        bare = TestClient(create_app(self.service, None, ENV))
+        self.assertEqual(bare.post("/api/quotes/60123456789/approve", headers=KEY).status_code, 503)
 
 
 class FakeModel:

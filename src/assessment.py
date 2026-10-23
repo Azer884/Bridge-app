@@ -61,6 +61,12 @@ def from_vision_output(raw):
     return ConditionAssessment(raw["condition_level"], issues, flags, confidence, "vision")
 
 
+def from_dict(data):
+    """Rebuild an assessment saved in the conversation state (JSON turns tuples into lists)."""
+    return ConditionAssessment(data["level"], tuple(data["issues"]), tuple(data["complexity_flags"]),
+                               data["confidence"], data["source"])
+
+
 def combine(*assessments):
     """Conservative merge: worst level, all issues and flags, lowest confidence."""
     found = [a for a in assessments if a is not None]

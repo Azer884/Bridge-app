@@ -67,6 +67,11 @@ class SqliteStore:
                 "DO UPDATE SET state=excluded.state, updated_at=excluded.updated_at",
                 (state.conversation_id, json.dumps(asdict(state)), time.time()))
 
+    def conversations(self):
+        with self._conn() as conn:
+            rows = conn.execute("SELECT state FROM conversations").fetchall()
+        return [ConversationState(**json.loads(row[0])) for row in rows]
+
     def claim_message(self, message_id, conversation_id):
         """True the first time a message id is seen. WhatsApp retries webhooks, so repeats are dropped."""
         with self._conn() as conn:
