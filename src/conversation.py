@@ -46,6 +46,8 @@ class ConversationState:
     pending_sizes: dict = None     # sizes given without a unit that could be feet; waiting for "meters or feet?"
     last_photo_id: str = ""        # the customer's latest photo, kept to suggest a colour from it later
     awaiting_colour_photo: bool = False   # asked for a photo because the customer wanted a colour suggested
+    reasks: dict = field(default_factory=dict)   # times each question was asked again because it was not answered
+    unit_factor: float = 1.0       # metres per unit the customer measures in (0.3048 once they said feet)
     declined: bool = False         # the request was outside the services offered (exterior work, say)
 
     def required_fields(self, config):

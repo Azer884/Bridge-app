@@ -19,15 +19,19 @@ _ABUSIVE = {"fuck", "fucking", "shit", "bitch", "asshole", "dick", "pussy", "cun
             "stupid", "babi", "sial", "bodoh", "anjing", "pukimak", "puki", "celaka", "bangsat", "tolol",
             "kimak", "lancau", "keparat"}
 # words customers send that are not a name (greetings, commands, laughter)
-_CHATTER = {"hello", "hi", "hey", "stop", "cancel", "lol", "haha", "hahaha", "what", "why", "how", "when",
+_CHATTER = {"idk", "dunno", "skip", "whatever", "nothing", "none", "anything", "any", "order", "again", "wait", "hold",
+            "what's", "whats", "when's", "where's", "who's", "how's", "why's", "pass", "nope", "no", "yes", "okay", "ok",
+            "hello", "hi", "hey", "stop", "cancel", "lol", "haha", "hahaha", "what", "why", "how", "when",
             "where", "who", "help", "test", "testing", "baby", "bye", "hmm", "please", "later", "tomorrow",
             "today", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
             "helo", "hai", "apa", "kenapa", "bila", "mana", "siapa", "tolong", "esok", "lusa", "nanti",
             "isnin", "selasa", "rabu", "khamis", "jumaat", "sabtu", "ahad", "sayang", "selamat"}
 _NAME_AFTER = re.compile(
-    r"(?:under|name is|name's|call me|i am|i'm|this is|in the name of|use|atas nama|nama saya|nama aku|"
+    r"(?:under|name is|name's|call me|i am|i'm|this is|in the name of|use|atas nama|nama saya|nama aku|it's|its|it is|"
     r"panggil saya|saya ialah|guna)\s+"
     r"([^\W\d_][\w'\-]*(?:\s+[^\W\d_][\w'\-]*){0,2})", re.I)
+_PHONE_TALK = {"use", "instead", "change", "number", "phone", "new", "my", "is", "the", "call", "me", "at", "on",
+               "whatsapp", "contact", "reach", "text", "number:", "tel", "mobile", "hp"}
 _PHONE = re.compile(r"\+?\d[\d\s().\-]{5,}\d")
 
 DONE_REPLY = "Thanks! Our team has your details and will be in touch to confirm everything."
@@ -68,8 +72,14 @@ def find_name(message, allow_bare):
     match = _NAME_AFTER.search(message)
     candidate = match.group(1) if match else None
     if candidate is None and allow_bare:
-        if re.fullmatch(r"[^\W\d_][\w'\-]*(?:\s+[^\W\d_][\w'\-]*){0,3}", message.strip()):
-            candidate = message.strip()
+        bare = message.strip()
+        without_phone = re.sub(r"\+?\d[\d\s().\-]{5,}\d", " ", bare).strip(" ,.")
+        if without_phone != bare and set(_words(without_phone)) & _PHONE_TALK:
+            without_phone = ""                  # "use 555 123 4567 instead" has no name in it
+        if without_phone and without_phone != bare:
+            bare = without_phone                # "Siti 0123456789": the name is what is left
+        if re.fullmatch(r"[^\W\d_][\w'\-]*(?:\s+[^\W\d_][\w'\-]*){0,3}", bare):
+            candidate = bare
     if not candidate:
         return None
     words = candidate.split()
@@ -96,7 +106,7 @@ def handle_reply(state, message):
         return _prompt(state), False
 
     if step == "confirm" and words and words[0] in AFFIRMATIVE and len(words) <= 4 \
-            and not find_phone(message):
+            and not find_phone(message) and not find_name(message, False):
         return _finish(state, *known_contact(state)), True
 
     new_phone = find_phone(message) if step in ("confirm", "ask_phone") else None

@@ -27,9 +27,13 @@ load_dotenv()
 log = logging.getLogger("voice-agent")
 
 AGENT_NAME = os.environ.get("WHATSAPP_LIVEKIT_AGENT_NAME", "orbyte-whatsapp")
-GREETING = os.environ.get("VOICE_GREETING", "Hello, thanks for calling. How can I help you today?")
-FILLER = os.environ.get("VOICE_FILLER", "One moment please.")
-FILLER_AFTER = float(os.environ.get("VOICE_FILLER_AFTER_SECONDS", "4"))      # a slow answer gets a short "one moment"
+RECORDING_NOTICE = os.environ.get("VOICE_RECORDING_NOTICE", "This call will be recorded and transcribed.")
+GREETING = os.environ.get("VOICE_GREETING", f"Hello, thanks for calling. {RECORDING_NOTICE} How can I help you today?")
+FILLER = os.environ.get("VOICE_FILLER", "One moment please")             # no full stop: it can be read as "dot"
+FILLER_AGAIN = os.environ.get("VOICE_FILLER_AGAIN", "Still working on it, thank you for waiting")
+FILLER_AFTER = float(os.environ.get("VOICE_FILLER_AFTER_SECONDS", "1.5"))    # a slow answer gets a short "one moment"
+FILLER_EVERY = float(os.environ.get("VOICE_FILLER_EVERY_SECONDS", "20"))     # and a reminder now and then
+CHAT_POLL = float(os.environ.get("VOICE_CHAT_POLL_SECONDS", "2"))            # how often to look for chat messages/photos
 GIVE_UP_AFTER = float(os.environ.get("VOICE_GIVE_UP_AFTER_SECONDS", "90"))
 SORRY = os.environ.get("VOICE_SORRY", "Sorry, I am having trouble right now. A team member will get back to you.")
 
@@ -40,6 +44,25 @@ class PaintingAssistant(Agent):
     def __init__(self, backend):
         super().__init__(instructions="Relay the business's assistant. Its replies come from the backend.")
         self.backend = backend
+        self._heard, self._task = "", None
+
+    async def on_user_turn_completed(self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage) -> None:
+        """The caller finished a sentence: ask the assistant now, and if it is slow say "one moment" out loud while
+        it works. This is a speech of its own. Text yielded from llm_node would wait inside LiveKit's sentence
+        splitter (it holds back sentences under 20 characters) and only be heard together with the answer."""
+        heard = (new_message.text_content or "").strip()
+        if not heard:
+            return
+        started = time.monotonic()
+        log.info("caller said: %r", heard[:120])
+        self._heard, self._task = heard, asyncio.create_task(self.backend.ask(heard))
+        done, _ = await asyncio.wait({self._task}, timeout=FILLER_AFTER)
+        spoke = 0
+        while not done and time.monotonic() - started < GIVE_UP_AFTER:
+            log.info("the assistant is slow (%.1fs): saying a filler", time.monotonic() - started)
+            await self.session.say(FILLER if not spoke else FILLER_AGAIN, add_to_chat_ctx=False)
+            spoke += 1
+            done, _ = await asyncio.wait({self._task}, timeout=FILLER_EVERY if spoke else FILLER_AFTER)
 
     async def llm_node(self, chat_ctx: llm.ChatContext, tools: list[FunctionTool],
                        model_settings: ModelSettings) -> AsyncIterable[str]:
@@ -50,13 +73,10 @@ class PaintingAssistant(Agent):
                 break
         if not heard:
             return
+        task = self._task if self._task is not None and self._heard == heard else asyncio.create_task(
+            self.backend.ask(heard))
+        self._heard, self._task = "", None
         started = time.monotonic()
-        log.info("caller said: %r", heard[:120])
-        task = asyncio.create_task(self.backend.ask(heard))
-        done, _ = await asyncio.wait({task}, timeout=FILLER_AFTER)
-        if not done:
-            log.info("the assistant is slow (%.1fs): saying a filler", time.monotonic() - started)
-            yield FILLER
         try:
             reply = await asyncio.wait_for(task, timeout=GIVE_UP_AFTER)
         except Exception:
@@ -85,7 +105,8 @@ async def entrypoint(ctx: agents.JobContext):
                       meta.get("user_id") or f"call-{call_id}", call_id)
     persona = await backend.persona()                      # each character has its own voice and name
     voice = persona.get("voice") or os.environ["VOICE_TTS_VOICE"]
-    greeting = (f"Hello, this is {persona['name']}. How can I help you today?" if persona.get("name") else GREETING)
+    greeting = (f"Hello, this is {persona['name']}. {RECORDING_NOTICE} How can I help you today?"
+                if persona.get("name") else GREETING)
     log.info("call from %s, character %s", backend.user_id, persona.get("name") or "(default)")
     session = AgentSession(
         # One backend call per finished turn. Preemptive generation would send a message to the assistant for every
@@ -99,7 +120,8 @@ async def entrypoint(ctx: agents.JobContext):
                           extra_kwargs={"keyterm": keyterms()}),
         llm=inference.LLM(model=os.environ.get("VOICE_UNUSED_LLM", "openai/gpt-4.1-mini")),   # llm_node replaces it
         tts=inference.TTS(model=os.environ.get("VOICE_TTS_MODEL", "cartesia/sonic-3.5"),
-                          voice=voice, language="en"),
+                          voice=voice, language="en",
+                          extra_kwargs={"speed": float(os.environ.get("VOICE_TTS_SPEED", "0.95"))}),    # calm, not rushed
     )
     @session.on("agent_state_changed")
     def _agent_state(event):
@@ -113,7 +135,25 @@ async def entrypoint(ctx: agents.JobContext):
     def _session_error(event):
         log.error("session error: %s", getattr(event, "error", event))
 
+    async def relay_chat():
+        """Photos and messages the caller sends in the WhatsApp chat during the call are answered out loud."""
+        while True:
+            try:
+                for text in await backend.pending():
+                    log.info("telling the caller about their chat: %r", text[:100])
+                    await session.say(text)
+            except Exception:
+                log.exception("could not relay a chat answer to the call")
+            await asyncio.sleep(CHAT_POLL)
+
+    async def call_over():
+        relay.cancel()
+        await backend.pending(end=True)            # answers to the chat go back to WhatsApp
+
     await session.start(room=ctx.room, agent=PaintingAssistant(backend))
+    await backend.pending()                        # marks the call live: chat answers now come to the phone
+    relay = asyncio.create_task(relay_chat())
+    ctx.add_shutdown_callback(call_over)
     await asyncio.sleep(1.0)                       # let the caller's audio path settle before the greeting
     await session.say(greeting)
 

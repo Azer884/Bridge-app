@@ -48,7 +48,12 @@ def estimate_pdf(business, customer, job, quote):
     total = quote.get("approved_total") or quote["total"]
     surfaces = job.get("surfaces") or "-"
     size = (f"{job['room_length_m']:g} m long x {job['room_height_m']:g} m high" if job.get("room_width_m") is None
-            else f"{job['room_length_m']:g} x {job['room_width_m']:g} x {job['room_height_m']:g} m")
+             else f"{job['room_length_m']:g} x {job['room_width_m']:g} x {job['room_height_m']:g} m")
+    more = job.get("extra_rooms") or []
+    if more:
+        size += "".join(
+            f"; {e.get('name') or 'room'} {e['room_length_m']:g} x {e.get('room_width_m') or 0:g} x {e.get('room_height_m') or 0:g} m"
+            for e in more)
     lines = [(business, 20, True), ("Painting estimate", 14, True),
              (datetime.now(TZ).strftime("%d %b %Y"), 10, False), ("", 8, False),
              (f"Customer: {customer}", 11, False), (f"Address: {job.get('address') or '-'}", 11, False),

@@ -40,7 +40,8 @@ def job_view(state):
     v = state.verified
     return {"address": v.get("address"), "surfaces": ", ".join(v.get("surfaces") or []) or None,
             "room_length_m": v.get("room_length_m"), "room_width_m": v.get("room_width_m"),
-            "room_height_m": v.get("room_height_m"), "surface_condition": v.get("surface_condition"),
+            "room_height_m": v.get("room_height_m"), "extra_rooms": v.get("extra_rooms") or [],
+            "surface_condition": v.get("surface_condition"),
             "preferred_datetime": v.get("preferred_datetime"), "paint_tier": v.get("paint_tier"),
             "colour": v.get("colour"), "name": customer_name(state),
             "phone": v.get("phone") or state.channel.get("phone"), "location": location_view(v.get("location"))}

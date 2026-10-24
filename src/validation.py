@@ -2,6 +2,7 @@
 import re
 from dataclasses import dataclass, field
 
+from .answers import plausible
 from .guard import reply_problem
 from .i18n import language_problem
 from .grounding import GroundingError, ground_field, numbers_in
@@ -23,10 +24,14 @@ class ValidationResult:
     status: str = Status.COLLECTING.value
     accepted: dict = field(default_factory=dict)   # grounded, normalised new values
     conflicts: list = field(default_factory=list)  # (key, old, new)
+    dropped: list = field(default_factory=list)    # keys whose value cannot be the answer to that field (kept out)
 
     @property
     def ok(self):
         return not self.problems and not self.soft_problems
+
+
+_LATEST_WINS = {"surface_condition", "colour", "paint_tier", "preferred_datetime"}
 
 
 def validate_response(raw_text, state, message, config):
@@ -71,6 +76,10 @@ def validate_response(raw_text, state, message, config):
         result.problems.append("reply contains a price; the model must never quote prices")
     if _BOOKING_CLAIM.search(reply):
         result.problems.append("reply claims availability or a booking; it must not")
+    made_up = invented_rooms(reply, state, message)
+    if made_up:
+        result.soft_problems.append(
+            f"reply mentions {', '.join(made_up)} which the customer never said; only use what they told you")
     invented = invented_figures(reply, state, message)
     if invented:
         result.soft_problems.append(
@@ -89,8 +98,13 @@ def validate_response(raw_text, state, message, config):
             result.problems.append(f"{key}: {err}")
             result.ungrounded.append(f"{key}: {err}")
             continue
+        if not plausible(key, clean, message):
+            result.dropped.append(key)      # a date is not a condition, a question is not a name: keep it out
+            continue
         old = state.verified.get(key)
-        if old is not None and not _same(spec.kind, old, clean):
+        if old is not None and not _same(spec.kind, old, clean) and key in _LATEST_WINS:
+            result.accepted[key] = clean            # a changed condition, colour, paint or time: the newest is meant
+        elif old is not None and not _same(spec.kind, old, clean):
             result.conflicts.append((key, old, clean))
         else:
             result.accepted[key] = clean
@@ -114,6 +128,18 @@ def validate_response(raw_text, state, message, config):
 
     result.reply, result.status = reply, status
     return result
+
+
+_ROOMS = re.compile(r"\b(hallway|hall|corridor|living room|bedroom|master bedroom|kitchen|bathroom|toilet|office|"
+                    r"dining room|study|garage|balcony|attic|basement|staircase|stairs|nursery|shop|studio)\b", re.I)
+
+
+def invented_rooms(reply, state, message):
+    """Rooms the reply talks about that the customer never named ("great choice focusing on the hallway")."""
+    said = " ".join([message] + [t.get("content", "") for t in getattr(state, "history", []) if t.get("role") == "user"]).lower()
+    said += " " + " ".join(str(v) for v in state.verified.values()).lower()
+    found = {m.group(1).lower() for m in _ROOMS.finditer(reply)}
+    return sorted(room for room in found if room not in said and room.split()[-1] not in said)
 
 
 def invented_figures(reply, state, message):

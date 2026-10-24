@@ -7,6 +7,7 @@ import time
 from . import contact
 from .i18n import ISSUE_MS, t
 from .persona import text as persona_text
+from .rooms import all_rooms
 from .schema import single_wall
 
 _SUPPORTED = re.compile(
@@ -15,14 +16,24 @@ _SUPPORTED = re.compile(
     r"pangsapuri|pejabat|dapur|tandas|ruang tamu|sebut ?harga)\b", re.I)
 _UNSUPPORTED = re.compile(
     r"\b(exterior|outside|outdoors?|roofs?|fences?|gates?|garage|deck|pool|floors?|furniture|"
-    r"cars?|vehicles?|luar|bumbung|pagar|garaj|lantai|perabot|kereta|kolam|kenderaan)\b", re.I)
+    r"cars?(?! park)|vehicles?|cabinets?|cupboards?|wardrobes?|luar|bumbung|pagar|garaj|lantai|perabot|kereta|kolam|"
+    r"kenderaan|almari)\b", re.I)
+_PREP = re.compile(r"\b(move (my |the )?furniture|furniture (out|away)|cover(ing)? (the )?(floor|furniture)|not at home)\b", re.I)
+# other trades: declined unless the message is plainly about painting a wall or ceiling
+_OTHER_TRADE = re.compile(r"\b(plumb\w*|electric\w*|wallpaper(?:s|ing)?|tiles?|tiling|carpent\w*|aircond\w*|"
+                          r"pest control|cleaning|paip|elektrik|jubin)\b", re.I)
+_ROOM_PAINT = re.compile(r"\b(walls?|ceilings?|dinding|siling)\b", re.I)
 _INTERIOR = re.compile(r"\b(interior|inside|indoors?|dalam|dalaman)\b", re.I)
 _NO_WORDS = contact.NEGATIVE | {"not", "dont", "don't", "jangan"}
 
 
 def check_service(message):
     """supported | unsupported | unknown (greeting or a question with no job in it)."""
+    if _PREP.search(message):
+        return "unknown"
     if _UNSUPPORTED.search(message) and not _INTERIOR.search(message):
+        return "unsupported"
+    if _OTHER_TRADE.search(message) and not _ROOM_PAINT.search(message) and not re.search(r"\bpaint\w*|\bcat\b", message, re.I):
         return "unsupported"
     return "supported" if _SUPPORTED.search(message) else "unknown"
 
@@ -68,7 +79,8 @@ def decline_reply(state, config):
 def is_yes(message):
     words = contact._words(message)
     return (0 < len(words) <= 5 and not any(w in _NO_WORDS for w in words)
-            and any(w in contact.AFFIRMATIVE for w in words) and not re.search(r"\d", message))
+            and any(w in contact.AFFIRMATIVE for w in words) and not re.search(r"\d", message)
+            and not _SUPPORTED.search(message))
 
 
 def contact_intro(state):
@@ -105,6 +117,12 @@ def recap(state):
         parts.append(t("recap_wall", lang, l=dims[0], h=dims[2]) + _approx(state))
     elif all(d is not None for d in dims):
         parts.append(t("recap_room", lang, l=dims[0], w=dims[1], h=dims[2]) + _approx(state))
+    for number, (name, length, width, height) in enumerate(all_rooms(v)[1:], start=2):
+        label = f" ({name})" if name else ""
+        if single_wall(v.get("surfaces")) or width is None:
+            parts.append(t("recap_wall_n", lang, n=number, name=label, l=length or 0, h=height or 0))
+        else:
+            parts.append(t("recap_room_n", lang, n=number, name=label, l=length or 0, w=width, h=height or 0))
     for key, label in (("surface_condition", "recap_condition"), ("paint_tier", "recap_paint"),
                        ("colour", "recap_colour"), ("preferred_datetime", "recap_time")):
         if v.get(key):
@@ -137,7 +155,14 @@ _DATE_WORDS = re.compile(
     r"hari ini|hujung minggu)\b|"
     r"\b\d{1,2}(st|nd|rd|th)?\s+(januari|februari|mac|april|mei|jun|julai|ogos|september|oktober|november|"
     r"disember)\b|"
-    r"\b\d{1,2}\s?(am|pm)\b|\b\d{1,2}[/.-]\d{1,2}\b", re.I)
+    r"\b(lunch ?time|noon|midday|day after( tomorrow)?|next (mon|tues|wednes|thurs|fri|satur|sun)day|"
+    r"in \d+ (days?|weeks?)|\d+ (days?|weeks?) (later|from now)|tengah ?hari|minggu ini)\b|"
+    r"\b\d{1,2}\s?(am|pm)\b|\b\d{1,2}:\d{2}\b|\b\d{1,2}[/-]\d{1,2}\b", re.I)
+_DATE_FILLER = {"make", "it", "sorry", "actually", "wait", "nvm", "no", "ok", "okay", "change", "to", "on", "at", "la", "lah", "pls", "please", "then"}
+_NEGATED_DATE = re.compile(r"\b(except|not|bukan|kecuali|other than|besides|excluding|apart from)\b", re.I)
+_GOOD_GREETING = re.compile(r"\b(good|selamat)\s+(morning|afternoon|evening|night|pagi|petang|malam|tengah ?hari)\b", re.I)
+_PAST_DATE = re.compile(r"\b(yesterday|last (week|month|night)|semalam)\b", re.I)
+_DATE_NEEDS_DAY = re.compile(r"\bafter (raya|ramadan|cny|chinese new year|deepavali|christmas|the holidays?)\b", re.I)
 _DATE_QUESTION = re.compile(
     r"\b(date|when|schedule|time|available|availability|come over|come by|book|tarikh|bila|jadual|masa|"
     r"datang|tempah|kosong)\b", re.I)
@@ -148,7 +173,7 @@ _BARE_NO = re.compile(
     r"^\s*(no|nope|nah|none|nothing|not really|no issues?|no damage|no specific|tak|tidak|tiada|"
     r"tak ada|tiada masalah|tiada kerosakan|tak de|xde)[.! ]*$", re.I)
 NO_PREFERENCE = re.compile(
-    r"\b(no preference|any|anything|you choose|your choice|up to you|not sure|dont mind|don'?t mind|whatever|"
+    r"\b(no preference|any|anything|you choose|you pick|you select|your pick|your choice|up to you|not sure|dont mind|don'?t mind|whatever|"
     r"recommend\w*|surprise me|no idea|idk|you decide|terpulang|apa saja|apa-?apa|mana-?mana|tak kisah|"
     r"tiada pilihan|awak pilih|cadangkan|tak pasti|tidak pasti)\b", re.I)
 
@@ -157,14 +182,38 @@ def when_in(message, strict=False):
     """The customer's answer to "when would you like us to come": a date or time, or flexible. In a long message
     that says other things too, only the part about the time is kept. `strict` (a time said unprompted) only
     accepts real dates, times and "anytime", not "no preference" or "I don't know"."""
-    spans = [m.span() for pattern in (_DATE_WORDS, _ASAP_TIME if strict else _ASAP) for m in pattern.finditer(message)]
+    message = _GOOD_GREETING.sub(" ", message)              # "good morning" is a hello, not a time
+    spans = sorted(m.span() for pattern in (_DATE_WORDS, _ASAP_TIME if strict else _ASAP) for m in pattern.finditer(message))
     if spans:
         words = message.split()
         if len(words) <= 3:
-            return " ".join(words)[:120]
-        return " ".join(message[min(s for s, _ in spans):max(e for _, e in spans)].split())[:120]
-    if not strict and (_BARE_NO.match(message) or NO_PREFERENCE.search(message) or _DONT_KNOW.search(message)):
+            kept = [w for w in words if w.lower().strip(",.!") not in _DATE_FILLER]
+            return " ".join(kept or words)[:120]
+        if _NEGATED_DATE.search(message):                   # "any day except Monday": keep what they said
+            return " ".join(message.split())[:120]
+        cluster = [spans[0]]
+        for span in spans[1:]:
+            if span[0] - cluster[-1][1] <= 25:
+                cluster.append(span)
+            else:
+                cluster = [span]                            # a long message: the last time mentioned is the answer
+        return " ".join(message[min(s for s, _ in cluster):max(e for _, e in cluster)].split())[:120]
+    if not strict and (_BARE_NO.match(message) or _NO_DATE_PREF.search(message) or _DONT_KNOW.search(message)):
         return "flexible, no specific date"
+    return None
+
+
+_NO_DATE_PREF = re.compile(
+    r"\b(no preference|any|anything|you choose|you pick|you decide|your choice|up to you|dont mind|don'?t mind|whatever|"
+    r"flexible|terpulang|apa saja|apa-?apa|mana-?mana|tak kisah)\b", re.I)
+
+
+def date_problem(message):
+    """A date answer that cannot be booked: 'date_past' (yesterday) or 'date_need_day' ("after Raya"), else None."""
+    if _PAST_DATE.search(message):
+        return "date_past"
+    if _DATE_NEEDS_DAY.search(message) and not _DATE_WORDS.search(message):
+        return "date_need_day"
     return None
 
 
@@ -189,7 +238,36 @@ def restart_job(state):
 
 _QUESTION_START = re.compile(
     r"^\s*(do|does|can|could|what|whats|what's|how|which|is|are|will|would|any|apa|berapa|bila|boleh|adakah|"
-    r"macam mana|bagaimana|siapa|di mana|kenapa)\b", re.I)
+    r"macam mana|bagaimana|siapa|di mana|kenapa|where|who|why|tell me|can i|do i|brp|bole|when|whens|when's)\b", re.I)
+_FAQ_TOPICS = [
+    ("faq_private", re.compile(r"\b(owner'?s?|boss'?s?)\s+(personal|phone|number|email|address|contact)|personal details|"
+                               r"other customers?|admin panel|dashboard|system prompt|your instructions", re.I)),
+    ("faq_bot", re.compile(r"\b(are you (a |an )?(bot|robot|ai|human|real|machine|person|chatgpt)|bot or|ai or|robot or|"
+                           r"who are you|what'?s your name|what is your name|your name|siapa awak|nama awak|awak (robot|ai|manusia))\b", re.I)),
+    ("faq_discount", re.compile(r"\b(discount|promo\w*|cheaper|lower the price|negotiat\w*|bargain|diskaun|kurangkan|"
+                                r"murah sikit|best price|bulk|wholesale|many units|multiple units|minimum order)\b", re.I)),
+    ("faq_prep", re.compile(r"\b(move (my |the )?furniture|furniture|cover(ing)? (the )?floor|not at home|nobody home|"
+                            r"someone (home|there)|key|clean ?up|mess|dust|alih perabot|tiada di rumah)\b", re.I)),
+    ("faq_time", re.compile(r"\b(how long|how many days|duration|berapa lama|takes? (long|time)|how soon)\b", re.I)),
+    ("faq_avail", re.compile(r"\b(come (today|now|tomorrow|over|this)|available (today|now|tomorrow)|can you start|"
+                             r"when (are|can|will|do) you|you free|your availability|book(ing)? (a |an )?(slot|appointment|time)|"
+                             r"open now|opening hours|boleh datang|datang (hari ini|esok))\b", re.I)),
+    ("faq_where", re.compile(r"\b(where (are|is) you|are you (located|based)|your (location|address|shop|office)|"
+                             r"service area|do you (cover|serve)|which area|di mana|kawasan mana)\b", re.I)),
+    ("faq_pay", re.compile(r"\b(pay|payment|deposit|installments?|cash|bank transfer|online banking|duitnow|tng|"
+                           r"bayar\w*|ansuran)\b", re.I)),
+    ("faq_warranty", re.compile(r"\b(warranty|guarantee|waranti|jaminan)\b", re.I)),
+    ("faq_coats", re.compile(r"\b(coats?|undercoat|primer|lapisan)\b", re.I)),
+    ("faq_wallpaper", re.compile(r"\b(wallpaper|scrap\w*|sanding|putty|plaster\w*|patch\w*|crack repair)\b", re.I)),
+    ("faq_materials", re.compile(r"\b(provide|supply|bring|include[sd]?|buy|bekal\w*)\b.{0,25}\b(paint|materials?|cat)\b|"
+                                 r"\b(paint|materials?)\b.{0,25}\b(included|provided|supplied|myself)\b", re.I)),
+    ("faq_paint", re.compile(r"\b(dulux|nippon|jotun|brands?|jenama|what paint|which paint|apa cat)\b", re.I)),
+    ("faq_compare", re.compile(r"\b(difference|different|compare|versus|vs|which is better|better than|beza)\b", re.I)),
+    ("faq_whyaddress", re.compile(r"\bwhy\b.{0,25}\b(address|location)\b|\bkenapa\b.{0,20}\balamat\b", re.I)),
+    ("faq_whyquestions", re.compile(r"\bwhy\b.{0,25}\b(so many|all these|all the) questions\b|\bkenapa\b.{0,20}\bbanyak soalan\b", re.I)),
+    ("faq_offtopic", re.compile(r"\b(joke|weather|python|script|code|poem|song|recipe|football|bitcoin|crypto|stocks?|"
+                                r"politic\w*|homework|translate)\b", re.I)),
+]
 _FAQ_SERVICES = re.compile(
     r"\b(services?|offer|other|else|what (do|can) you (offer|do|paint|provide|sell)|perkhidmatan|tawar\w*|lain|apa lagi)\b",
     re.I)
@@ -200,13 +278,24 @@ _FAQ_PAINT = re.compile(
     r"\b(paints?|colou?rs?|brands?|quality|finish|cat|warna|jenama|kualiti)\b", re.I)
 
 
-def faq_answer(message, config, stage="job", lang="en"):
+def faq_answer(message, config, stage="job", lang="en", force=False):
     """A fixed answer to a side question (services, price, paint), or None. Nothing here is invented:
     it only repeats the business's own configuration. While collecting the job only services and
     price are answered here, because the paint questions are part of the job itself."""
-    if "?" not in message and not _QUESTION_START.match(message):
+    if not force and "?" not in message and not _QUESTION_START.match(message):
         return None
+    if len(message) > 140 and not _QUESTION_START.match(message):
+        return None                     # a long message with a question tucked in is mostly about the job
     owner = _owner_for(config, lang)
+    persona = config.get("persona") or {}
+    for key, pattern in _FAQ_TOPICS:
+        if pattern.search(message):
+            if key == "faq_paint":
+                tiers = list((config.get("pricing") or {}).get("paint_tiers", {})) or ["standard"]
+                joiner = " atau " if lang == "ms" else " or "
+                names = ", ".join(tiers[:-1]) + joiner + tiers[-1] if len(tiers) > 1 else tiers[0]
+                return t("faq_paint", lang, tiers=names, owner=owner)
+            return t(key, lang, owner=owner, name=persona.get("name") or owner, business=config.get("business_name", ""))
     if _FAQ_PRICE.search(message):
         return t("faq_price", lang, owner=owner)
     if _FAQ_SERVICES.search(message):
@@ -219,6 +308,55 @@ def faq_answer(message, config, stage="job", lang="en"):
     return None
 
 
+_CANCEL = re.compile(r"\b(cancel\w*|batal\w*|tak jadi|no longer (want|need)|dont want (it )?anymore|don'?t want (it )?anymore)\b", re.I)
+_ANOTHER_ROOM = re.compile(r"\b(another|one more|also|too|next|lagi|juga)\b", re.I)
+_RECOMMEND = re.compile(
+    r"\b(recommend\w*|suggest\w*|advise|what (do|would|should) you|which (one|colou?r)|your opinion|help me (choose|pick|decide)|"
+    r"cadang\w*|syor\w*|pilihkan)\b", re.I)
+
+
+_RECAP = re.compile(r"\b(what did i (say|tell)|what('?s| is) my order|my order again|summary|recap|what do you have|"
+                    r"apa yang saya (cakap|beritahu)|ringkasan)\b", re.I)
+
+
+def asks_recap(message):
+    return bool(_RECAP.search(message))
+
+
+def wants_cancel(message):
+    return bool(_CANCEL.search(message))
+
+
+def asks_for_ideas(message):
+    return bool(_RECOMMEND.search(message))
+
+
+_THANKS = {"thanks", "thank", "thx", "tq", "ty", "terima", "kasih", "tqvm", "cheers"}
+_BYE = {"bye", "goodbye", "cya", "tata", "babai", "later"}
+_HELLO = {"hi", "hello", "hey", "hai", "helo", "hye", "anyone", "there", "ping", "oi", "yo"}
+_OKAY = {"ok", "okay", "okey", "hmm", "hm", "um", "uh", "so", "sure", "yes", "yeah", "ya", "yep", "ye", "alright",
+         "oh", "ah", "lol", "haha", "k", "kk", "noted", "no", "nope"}
+
+
+def smalltalk(message):
+    """What a short message with no job in it is: hello | thanks | bye | okay | confused (only symbols)."""
+    text = message.strip().lower()
+    if not re.search(r"[a-z0-9]", text):
+        return "confused"
+    words = re.findall(r"[a-z']+", text)
+    if not words or len(words) > 5 or re.search(r"\d", text):
+        return None
+    if set(words) & _THANKS:
+        return "thanks"
+    if set(words) & _BYE:
+        return "bye"
+    if set(words) <= _HELLO | {"is", "are", "you", "u", "there", "here", "any", "body", "one"}:
+        return "hello"
+    if set(words) <= _OKAY | {"ok", "then"}:
+        return "okay"
+    return None
+
+
 # --- changing their mind ------------------------------------------------------------------------
 CORRECTION = re.compile(
     r"\b(nvm|nevermind|never mind|actually|sorry|my bad|i mean|correction|wait|no it'?s|not \d|make it|"
@@ -227,7 +365,15 @@ CORRECTION = re.compile(
 
 
 def is_correction(message):
-    return bool(CORRECTION.search(message))
+    if CORRECTION.search(message):
+        return True
+    short_size = r"\s*(?:no|ok|okay|so)?\b[\s,.]*(?:final(?:ly)?)?[\s,.]*\d+(?:[.,]\d+)?\s*(?:m|cm|ft|feet|meters?|metres?|kaki)?\s*[.!]*\s*"
+    return bool(re.fullmatch(short_size, message, re.I)) and bool(re.search(r"\b(no|final|finally)\b", message, re.I))
+
+
+# a message that swaps an earlier answer for another ("change colour to blue", "grey is better", "make it saturday")
+SWAP = re.compile(r"\b(nvm|nevermind|never mind|actually|sorry|wait|no|not|make it|change|switch|instead|rather|"
+                  r"better|stick with|go with|prefer|rather|tukar|ubah|bukan|sebenarnya|maaf|lebih baik|pilih)\b", re.I)
 
 
 # --- repeat customers ---------------------------------------------------------------------------

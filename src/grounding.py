@@ -82,22 +82,57 @@ _U = r"(?:\s*(?:metres?|meters?|meter|cm|ft|feet|foot|kaki|m\b))?"          # a 
 _SIZES = re.compile(rf"\b({_NUM}){_U}\s*(?:x|by|\*|kali)\s*({_NUM}){_U}(?:\s*(?:x|by|\*|kali)\s*({_NUM}){_U})?", re.I)
 
 
-def sizes_in(message):
-    """"4 by 5" or "3x4x2.5": the numbers, in the order written (two or three of them), else None."""
+_SPACED = re.compile(r"(?<![\w.])(\d+(?:[.,]\d+)?)[\s,]+(\d+(?:[.,]\d+)?)(?:[\s,]+(\d+(?:[.,]\d+)?))?(?![\w.])")
+_PIECE_SPLIT = re.compile(r"\s*(?:x|by|\*|kali)\s*", re.I)
+
+
+def sizes_metric(message):
+    """Sizes written with their own units ("10ft x 3m", "12 kaki kali 10 kaki"), in metres, or None. A unit written
+    once at the end ("4 x 5 m") counts for the numbers before it."""
     match = _SIZES.search(str(message))
     if not match:
         return None
+    parts = [(numbers_in(p), unit_factors_in(p)) for p in _PIECE_SPLIT.split(match.group(0))]
+    shared = next((next(iter(f)) for _, f in reversed(parts) if len(f) == 1), None)
+    out = []
+    for numbers, factors in parts:
+        factor = next(iter(factors)) if len(factors) == 1 else shared
+        if not numbers or factor is None:
+            return None
+        out.append(round(numbers[0] * factor, 3))
+    return out
+
+
+def sizes_in(message, loose=False):
+    """"4 by 5" or "3x4x2.5": the numbers, in the order written (two or three of them), else None.
+    `loose` also reads numbers just set side by side ("walls 4 4 3") when a room is being measured."""
+    match = _SIZES.search(str(message))
+    if not match:
+        spaced = _SPACED.search(str(message)) if loose else None
+        if not spaced:
+            return None
+        values = [float(g.replace(",", ".")) for g in spaced.groups() if g]
+        return values if all(0.3 <= v <= 100 for v in values) else None
     return [numbers_in(g)[0] for g in match.groups() if g and numbers_in(g)]
 
 
-_CUED = {
-    "room_height_m": re.compile(rf"(?:height|tall|high|tinggi)\D{{0,14}}?({_NUM})\s*(m\b|metres?|meters?|meter|cm|ft|feet|kaki)?|"
-                                rf"\b({_NUM})\s*(m\b|metres?|meters?|meter|cm|ft|feet|kaki)?\s*(?:high|tall|tinggi)\b", re.I),
-    "room_length_m": re.compile(rf"(?:length|long|panjang)\D{{0,14}}?({_NUM})\s*(m\b|metres?|meters?|meter|cm|ft|feet|kaki)?|"
-                                rf"\b({_NUM})\s*(m\b|metres?|meters?|meter|cm|ft|feet|kaki)?\s*(?:long|panjang)\b", re.I),
-    "room_width_m": re.compile(rf"(?:width|wide|lebar)\D{{0,14}}?({_NUM})\s*(m\b|metres?|meters?|meter|cm|ft|feet|kaki)?|"
-                               rf"\b({_NUM})\s*(m\b|metres?|meters?|meter|cm|ft|feet|kaki)?\s*(?:wide|lebar)\b", re.I),
-}
+_CUE_KEYS = {"height": "room_height_m", "tall": "room_height_m", "high": "room_height_m", "tinggi": "room_height_m",
+             "length": "room_length_m", "long": "room_length_m", "panjang": "room_length_m",
+             "width": "room_width_m", "wide": "room_width_m", "lebar": "room_width_m"}
+_CUE_WORD = re.compile(r"\b(" + "|".join(_CUE_KEYS) + r")\b", re.I)
+_UNIT_WORD = r"(m\b|metres?|meters?|meter|cm|ft|feet|foot|kaki)"
+_AMOUNT = re.compile(rf"\b({_NUM})(?:\s*{_UNIT_WORD})?", re.I)
+_DECIMAL = re.compile(rf"\b({_NUM})\s+(?:point|dot|titik)\s+({_NUM})\b", re.I)
+
+
+def spoken_decimals(text):
+    """"three point five" or "3 point 5" is 3.5, which is how callers and voice notes say a size."""
+    def join(match):
+        whole, part = numbers_in(match.group(1)), numbers_in(match.group(2))
+        return f"{whole[0]:g}.{int(part[0])}" if whole and part else match.group(0)
+    return _DECIMAL.sub(join, text)
+
+
 _PERIMETER = re.compile(rf"perim\w*\D{{0,12}}({_NUM})\s*(m\b|metres?|meters?|meter|cm|ft|feet|kaki)?", re.I)
 
 
@@ -113,17 +148,27 @@ def _to_metres(number, unit, plain=(1.5, 8.0)):
 def cued_sizes(message):
     """Sizes tied to a word in the sentence: "height of 3 meters", "4 m long", and a square room's perimeter
     ("perimeter is 16 metres", "square" gives 4 m a side). {room_*_m: metres}; only believable values."""
-    found, where = {}, {}
-    for key, pattern in _CUED.items():
-        match = pattern.search(message)
-        if match:
-            group = 1 if match.group(1) else 3
-            number, unit = match.group(group), match.group(group + 1)
-            metres = _to_metres(number, unit)
-            if metres and 0.3 <= metres <= 100:
-                found[key], where[key] = metres, match.start(group)
-    for key in [k for k in found if list(where.values()).count(where[k]) > 1]:
-        del found[key]                  # two words reached for the same number ("length x width is 5 by 3"): not tied
+    found = {}
+    cues = [(m.start(), m.end(), _CUE_KEYS[m.group(1).lower()]) for m in _CUE_WORD.finditer(message)]
+    amounts = [(m.start(), m.end(), m.group(1), m.group(2)) for m in _AMOUNT.finditer(message)]
+    taken = set()
+    for i, (start, end, key) in enumerate(cues):
+        if i + 1 < len(cues) and not re.search(r"\d", message[end:cues[i + 1][0]]) \
+                and re.fullmatch(r"[\s,x*&]*(?:by|and|kali|dan)?[\s,x*&]*", message[end:cues[i + 1][0]], re.I):
+            return {}                   # "length x width is 5 by 3": the words only name the order, the sizes follow
+        limit = cues[i + 1][0] if i + 1 < len(cues) else len(message)
+        floor = cues[i - 1][1] if i else 0
+        before = [a for a in amounts if floor <= a[0] and a[1] <= start and start - a[1] <= 3 and a[0] not in taken
+                  and not message[a[1]:start].strip()]            # "4 m long", never "4 meters, height 3"
+        after = [a for a in amounts if end <= a[0] < limit and a[0] - end <= 16 and a[0] not in taken
+                 and not re.search(r"\d", message[end:a[0]])]
+        pick = before[-1] if before else (after[0] if after else None)
+        if pick is None:
+            continue
+        taken.add(pick[0])
+        metres = _to_metres(pick[2], pick[3])
+        if metres and 0.3 <= metres <= 100:
+            found[key] = metres
     perimeter = _PERIMETER.search(message)
     if perimeter and re.search(r"\bsquare\b", message, re.I):
         side = _to_metres(perimeter.group(1), perimeter.group(2), plain=(4.0, 40.0))

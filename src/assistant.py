@@ -7,13 +7,16 @@ from types import SimpleNamespace
 
 from . import contact, flow
 from .grounding import (HEDGES, ONES, UNIT_FACTORS, GroundingError, cued_sizes, estimate_in, ground_field,
-                        ground_measurement, numbers_in, sizes_in, unit_factors_in)
+                        _bare_number, ground_measurement, numbers_in, sizes_in, sizes_metric, spoken_decimals,
+                        unit_factors_in)
 from .guard import MAX_STRIKES, clip_message, is_abusive, screen_input
+from . import rooms as rooms_module
+from .answers import CONDITION_STRONG, address_in, explicit_name, fix_typos, is_condition, plausible
 from .i18n import COLOUR_WORDS, STRINGS, TIER_WORDS, detect, metres, requested_language, t, us_spelling
 from .persona import greeting_line, render, text as persona_text
 from .prompt import build_messages, load_system_prompt
 from .runpod_client import RunPodError
-from .schema import FIELDS, Status, ask_for
+from .schema import FIELDS, Status, ask_for, single_wall
 from .validation import validate_response
 
 MAX_RETRIES = 2
@@ -29,7 +32,7 @@ class TurnResult:
     attempts: int = 0
 
 
-def _current_question(state, config):
+def _current_question(state, config, service=False):
     """What the customer is being asked right now, to repeat after a side answer or a language switch."""
     if state.stage == "contact":
         return contact._prompt(state)
@@ -37,12 +40,36 @@ def _current_question(state, config):
         return t("wrap_ok", state.lang)
     if state.stage == "done":
         return ""
+    persona = config.get("persona")
+    if service and persona and not state.service_checked:
+        return render(persona_text(persona, "service_question", state.lang), persona, config)
     nxt = state.next_missing(config)
     return ask_for(nxt, state) if nxt else ""
 
 
 def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
-    message = clip_message(message)
+    """One customer message in, one reply out. The persona says hello in front of the first reply, and a side
+    answer given while the details in the message were still read goes in front of the question that follows."""
+    state._faq_prefix = ""
+    out = _handle(state, message, config, client, max_retries)
+    prefix, state._faq_prefix = state._faq_prefix, ""
+    persona = config.get("persona")
+    if prefix and out.reply:
+        hello = greeting_line(persona, config, state.lang) if persona else ""
+        if hello and out.reply.startswith(hello):
+            out.reply = f"{hello} {prefix} {out.reply[len(hello):].strip()}"
+        else:
+            out.reply = f"{prefix} {out.reply}"
+    if persona and out.reply and not state.greeted:
+        out.reply = _greet(state, config, out.reply)
+    return out
+
+
+def _handle(state, message, config, client, max_retries=MAX_RETRIES):
+    message = spoken_decimals(fix_typos(clip_message(message)))
+    message = re.sub(r"(?<=\d)'", " ft ", message)              # 12'x10' is feet
+    if state.stage == "job":
+        _volunteer(state, message)                              # a name, number or address mentioned in passing
     asked = requested_language(message)
     state.lang = asked or detect(message, state.lang)
     if asked:                           # "speak Malay" / "in English please": switch and carry on
@@ -53,7 +80,7 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
             state.lang = asked
             out.reply = f"{t('lang_' + asked, asked)} {out.reply}".strip()
             return out
-        return _finish(state, message, f"{t('lang_' + asked, asked)} {_current_question(state, config)}".strip(),
+        return _finish(state, message, f"{t('lang_' + asked, asked)} {_current_question(state, config, service=True)}".strip(),
                        Status.COLLECTING.value, record=False)
     if flow.wants_restart(message):
         flow.restart_job(state) if state.stage != "done" else flow.start_new_order(state)
@@ -78,6 +105,13 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
         owner = (config.get("owner") or {}).get("name") or ("pasukan kami" if state.lang == "ms" else "our team")
         return _finish(state, message, f"{t('handoff', state.lang, owner=owner)} {_current_question(state, config)}".strip(),
                        Status.HUMAN.value, human=True, record=False)
+    if flow.wants_cancel(message) and (state.service_checked or state.stage != "job"):
+        state.needs_human = state.attention = True
+        if len(state.followups) < 50:
+            state.followups.append({"text": message[:300], "at": time.time()})
+        owner = (config.get("owner") or {}).get("name") or ("pasukan kami" if state.lang == "ms" else "our team")
+        return _finish(state, message, t("cancel_noted", state.lang, owner=owner), Status.HUMAN.value, human=True,
+                       record=False)
     if state.stage == "done":
         if flow.new_job_intent(message, state):
             flow.start_new_order(state)         # a returning customer: archive the old job, start a new one
@@ -87,6 +121,19 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
         fixed = _correct_measurement(state, message)
         if fixed:
             return _after_correction(state, message, config, fixed)
+    if state.stage == "contact" and flow.asks_recap(message):
+        return _finish(state, message, f"{t('recap_intro', state.lang)}\n{flow.recap(state)}\n\n{contact._prompt(state)}",
+                       Status.COLLECTING.value, record=False)
+    if state.stage == "contact" and flow._SUPPORTED.search(message) and flow._ANOTHER_ROOM.search(message) \
+            and not message.strip().endswith("?"):
+        added = _try_add_rooms(state, message, config)
+        if added:                                            # "also the kitchen 3x3x2.5": added, then the booking goes on
+            return _finish(state, message, f"{added} {contact._prompt(state)}", Status.COLLECTING.value, record=False)
+        return _finish(state, message, f"{t('contact_another', state.lang)} {contact._prompt(state)}",
+                       Status.COLLECTING.value, record=False)
+    if state.stage == "contact" and flow.smalltalk(message) == "thanks":
+        return _finish(state, message, f"{t('st_welcome', state.lang)} {contact._prompt(state)}",
+                       Status.COLLECTING.value, record=False)
     if state.stage == "contact":
         faq = flow.faq_answer(message, config, "contact", state.lang) if persona else None
         if faq and not contact.find_phone(message):
@@ -99,6 +146,9 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
         status = Status.READY.value if finished else Status.COLLECTING.value
         return _finish(state, message, reply, status)
     if state.stage == "wrapup":
+        if flow._SUPPORTED.search(message) and flow._ANOTHER_ROOM.search(message) \
+                and not message.strip().endswith("?") and not sizes_in(message, loose=True):
+            return _finish(state, message, t("wrap_another", state.lang), Status.COLLECTING.value, record=False)
         if flow.is_yes(message):
             state.stage = "done"
             return _finish(state, message, flow.closing_reply(state, config), Status.READY.value)
@@ -110,10 +160,17 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
 
     lowered = message.lower()
     if any(k in lowered for k in config.get("inspection_keywords", [])):
-        return _finish(state, message, t("inspection_reply", state.lang), Status.HUMAN.value, human=True)
+        if persona and (sizes_in(message, loose=True) or cued_sizes(message) or flow._SUPPORTED.search(message)):
+            state.service_checked = True            # it is a painting job: the details are still taken
+            state.needs_human = state.attention = True
+            state._faq_prefix = t("inspection_reply", state.lang)
+        else:
+            return _finish(state, message, t("inspection_reply", state.lang), Status.HUMAN.value, human=True)
 
     if persona and not state.service_checked:
         service = flow.check_service(message)
+        if service == "unknown" and (sizes_in(message, loose=True) or cued_sizes(message)):
+            service = "supported"       # sizes mean there is a room to paint, whatever else the message says
         owner = (config.get("owner") or {}).get("name") or ("pasukan kami" if state.lang == "ms" else "our team")
         if service == "unsupported" and not state.declined:
             state.declined = True
@@ -123,9 +180,17 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
                            human=True, record=False)
         if service == "unknown":
             state.service_misses += 1
-            if state.service_misses == 1:
-                reply = _greet(state, config, render(persona_text(persona, "service_question", state.lang),
-                                                      persona, config))
+            kind = flow.smalltalk(message)
+            side = flow.faq_answer(message, config, "job", state.lang, force=True)
+            question = render(persona_text(persona, "service_question", state.lang), persona, config)
+            if not side and ("?" in message or flow._QUESTION_START.match(message)) and kind is None:
+                side = t("faq_other", state.lang, owner=owner)      # a question we have no fixed answer for
+            if side:                                        # a question before any job: answer it, then ask what they need
+                reply = f"{side} {question}"
+            elif kind and state.service_misses > 1:         # "thanks", "bye", "hello?": answered like a person would
+                reply = t(f"st_{kind}", state.lang)
+            elif state.service_misses == 1:
+                reply = question
             else:                                           # the same question again would be a loop
                 reply = t("service_retry", state.lang)
             # kept out of the history so the first real turn still gets the format primer
@@ -133,18 +198,49 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
         state.declined = False
         state.service_checked = True
 
+    nxt = state.next_missing(config)
+    if flow.asks_recap(message) and state.verified:
+        recap = flow.recap(state)
+        return _finish(state, message, f"{t('recap_intro', state.lang)}\n{recap}\n\n{_current_question(state, config)}".strip(),
+                       Status.COLLECTING.value, record=False)
+    if persona and state.service_checked and nxt and nxt not in ("surface_condition", "address") \
+            and flow.smalltalk(message) in ("okay", "confused") and not state.orders and not state.pending_sizes \
+            and not state.pending_conflict:
+        state.reasks["okay"] = state.reasks.get("okay", 0) + 1
+        pick = f"st_ok_{state.reasks['okay'] % 3 + 1}"          # "ok", "hmm", "sure": no answer yet, ask again gently
+        return _finish(state, message, f"{t(pick, state.lang)} {ask_for(nxt, state)}", Status.COLLECTING.value,
+                       record=False)
+    if persona and nxt == "preferred_datetime" and flow.date_problem(message):
+        return _finish(state, message, t(flow.date_problem(message), state.lang), Status.COLLECTING.value, record=False)
     if persona:
         faq = flow.faq_answer(message, config, "job", state.lang)
-        nxt = state.next_missing(config)
         if faq and nxt:                 # a side question in the middle of the job: answer, then carry on
-            return _finish(state, message, f"{faq} {ask_for(nxt, state)}", Status.COLLECTING.value, record=False)
+            if sizes_in(message, loose=True) or cued_sizes(message):
+                state._faq_prefix = faq         # the message also has sizes: answer first, still read them
+            else:
+                return _finish(state, message, f"{faq} {ask_for(nxt, state)}", Status.COLLECTING.value,
+                               record=False)
 
+    if "colour" in state.missing_required(config) and not (sizes_in(message, loose=True) or cued_sizes(message)) \
+            and not re.search(r"\byou\s+(pick|choose|decide|select)\b", message, re.I) \
+            and (flow.wants_colour_suggestion(message) or (state.next_missing(config) == "colour"
+                                                             and flow.asks_for_ideas(message))):
+        return _finish(state, message, t("colour_ideas", state.lang), Status.COLLECTING.value, record=False)
     _resolve_pending_conflict(state, message)
     asked = state.next_missing(config)              # the question the customer is answering
     before, before_estimated = dict(state.verified), list(state.estimated)
-    _prefill_job(state, message, config)
-    if not _COUNTED.search(message) or sizes_in(message):        # a number next to "one wall" is a count
-        _prefill_measurement(state, message, config)
+    state._rooms_ack = ""
+    work = message
+    if state.stage == "job":
+        added = _try_add_rooms(state, message, config)
+        if added:
+            state._rooms_ack = added
+            work = rooms_module.strip_sizes(message)         # the sizes went to the rooms: do not read them twice
+    _swap_answers(state, work, config)
+    _prefill_job(state, work, config)
+    if not _COUNTED.search(work) or sizes_in(work):          # a number next to "one wall" is a count
+        _prefill_measurement(state, work, config)
+    rooms_module.fill_heights(state.verified)
     changed = {k for k, v in state.verified.items() if before.get(k) != v}   # read by the backend this turn
     pending = state.pending_sizes
     if pending and not pending["asked"]:        # "12 by 10" with no unit: say what was understood and ask which unit
@@ -168,9 +264,11 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
         for key in changed:
             result.accepted.pop(key, None)
         if not changed:
-            _keep_plain_answer(state, message, asked, result.accepted)
+            _keep_plain_answer(state, message, asked, result)
+        if asked in result.dropped and not result.problems:
+            return _ask_again(state, message, config, result, asked, attempt)
         if result.ok:
-            return _accept(state, message, config, result, attempt)
+            return _accept(state, message, config, result, attempt, changed=bool(changed or result.accepted))
         problems = rejection = result.problems + result.soft_problems
         last = result
 
@@ -198,20 +296,62 @@ _FILLER = contact.AFFIRMATIVE | contact.NEGATIVE | {"hi", "hello", "hai", "helo"
                                                      "terima", "kasih", "bye", "lol", "haha", "hmm"}
 
 
-def _keep_plain_answer(state, message, asked, accepted):
+def _keep_plain_answer(state, message, asked, result):
     """The model did not record the answer to the question it asked (often because it rephrased or
     translated the customer's words, and the check against the message then drops it). A short plain
     reply to a free-text question is kept in the customer's own words: those are grounded by definition."""
+    accepted = result.accepted
     limit = _FREE_TEXT.get(asked)
-    if not limit or asked in accepted or asked in state.verified:
+    if not limit or asked in accepted or asked in state.verified or asked in result.dropped:
         return
     text = message.strip()
     words = re.findall(r"[a-z']+", text.lower())
-    if not text or "?" in text or len(text) > limit or all(w in _FILLER for w in words) or flow.is_correction(text):
+    if not text or "?" in text or len(text) > limit or flow.is_correction(text):
+        return
+    if asked == "surface_condition" and is_condition(text):
+        accepted[asked] = text              # "good", "fine", "ok": a real answer about the surface
+        return
+    if all(w in _FILLER for w in words):
+        if asked in _ASK_AGAIN_KEYS:
+            result.dropped.append(asked)        # "yes" is not a condition, a colour or a date
         return
     if asked == "address" and not (re.search(r"\d", text) or len(words) >= 2):
         return
+    if not plausible(asked, text, message):
+        result.dropped.append(asked)        # a date or a name is not a condition: ask again, do not store it
+        return
     accepted[asked] = text
+
+
+_ASK_AGAIN_KEYS = ("surface_condition", "colour", "preferred_datetime", "address")
+_ASK_AGAIN = {"surface_condition": "condition_ask_again", "colour": "colour_ask_again",
+              "preferred_datetime": "date_ask_again", "address": "address_ask_again"}
+_GIVE_UP = {"surface_condition": ("not described", 2), "colour": ("no preference", 2),
+            "preferred_datetime": ("flexible, no specific date", 2), "address": ("to be confirmed with the customer", 3)}
+
+
+def _ask_again(state, message, config, result, asked, attempt):
+    """The reply was not an answer to the question ("bright" for the condition, "yesterday" for the date): ask it
+    again with examples. After a couple of tries the field is left open for the owner and the chat moves on."""
+    state.reasks[asked] = state.reasks.get(asked, 0) + 1
+    placeholder, limit = _GIVE_UP[asked]
+    result.soft_problems, result.problems = [], []
+    if state.reasks[asked] >= limit:
+        result.accepted[asked] = placeholder
+        state.attention = state.attention or asked == "address"
+        missing = state.missing_required(config, extra=result.accepted)
+        result.reply = ask_for(missing[0], state) if missing else ""
+        result.status = Status.COLLECTING.value if missing else Status.READY.value
+    else:
+        if asked == "preferred_datetime" and flow._PAST_DATE.search(message):
+            key = "date_past"
+        elif asked == "preferred_datetime" and flow._DATE_NEEDS_DAY.search(message):
+            key = "date_need_day"
+        else:
+            key = _ASK_AGAIN[asked]
+        result.reply, result.status = t(key, state.lang), Status.COLLECTING.value
+    result.dropped = []
+    return _accept(state, message, config, result, attempt)
 
 
 def _after_done(state, message, config):
@@ -245,8 +385,8 @@ def _backend_turn(state, message, config, client, changed, system_prompt, estima
         except RunPodError:
             pass
     state.merge(accepted)
-    ack = (t("ack_estimate", state.lang) if estimated
-           else t(_ACKS[(len(state.history) // 2) % len(_ACKS)], state.lang))
+    ack = (state._rooms_ack or (t("ack_estimate", state.lang) if estimated
+                                else t(_ACKS[(len(state.history) // 2) % len(_ACKS)], state.lang)))
     missing = state.missing_required(config)
     reply = f"{ack} {ask_for(missing[0], state)}" if missing else ""
     done = SimpleNamespace(accepted=accepted, conflicts=[], reply=reply,
@@ -279,16 +419,21 @@ def _greet(state, config, reply):
     if not persona or state.greeted:
         return reply
     state.greeted = True
-    return f"{greeting_line(persona, config, state.lang)} {reply}"
+    reply = _HELLO_AGAIN.sub("", reply, count=1)      # the model sometimes says hello again after the persona did
+    return f"{greeting_line(persona, config, state.lang)} {reply}".strip()
 
 
-def _accept(state, message, config, result, attempt):
+_HELLO_AGAIN = re.compile(r"^\s*(hi there|hello there|hi|hello|hey|hai)\b[!,.]*\s*", re.I)
+
+
+def _accept(state, message, config, result, attempt, changed=True):
     state.merge(result.accepted)
     for key in result.accepted:
         if FIELDS[key].kind == "measurement":
             state.last_field = key
-    if result.conflicts and flow.is_correction(message):
+    if result.conflicts and (flow.is_correction(message) or flow.SWAP.search(message)):
         for key, _old, new in result.conflicts:     # an explicit "nvm, it's ..." is the answer: no question
+            changed = True
             state.verified[key] = new
             if FIELDS[key].kind == "measurement":
                 state.last_field = key
@@ -304,7 +449,7 @@ def _accept(state, message, config, result, attempt):
         # Job details complete: the backend (not the model) now confirms the booking contact.
         if config.get("persona") and state.contact_confirmed:
             state.stage = "wrapup"      # contact already confirmed: recap again after a correction
-            reply = flow.wrapup_reply(state, config)
+            reply = flow.wrapup_reply(state, config) if changed else t("wrap_nochange", state.lang)
         elif config.get("persona"):
             reply = flow.contact_intro(state)
         else:
@@ -332,6 +477,8 @@ def _refuse(state, message, config):
 _WALLS = re.compile(r"\b(walls|semua dinding|dinding-dinding|keempat-empat dinding)\b", re.I)
 _WALL = re.compile(r"\b(wall|(satu|1|sebelah|sebuah) dinding|dinding (satu|ini|itu|sahaja|saja))\b", re.I)
 _PLAIN_DINDING = re.compile(r"\bdinding\b", re.I)
+_ONE_WALL = re.compile(r"\b(one|1|single|satu)\s+wall\b|\b(a|this|that)\s+wall\b", re.I)
+_PHONE_WORD = re.compile(r"\b(phone|number|call|contact|whatsapp|tel|nombor|hubungi)\b", re.I)
 _CEILING = re.compile(r"\b(ceilings?|siling)\b", re.I)
 _TIERS = re.compile(r"\b(" + "|".join(sorted(TIER_WORDS, key=len, reverse=True)) + r")\b", re.I)
 _COLOURS = re.compile(r"\b(" + "|".join(sorted(COLOUR_WORDS, key=len, reverse=True)) + r")\b", re.I)
@@ -342,6 +489,26 @@ PHOTO_CONDITION = "see the customer's photo"
 
 def changed_keys(before, state):
     return {k for k, v in state.verified.items() if before.get(k) != v}
+
+
+def _volunteer(state, message):
+    """Details mentioned in passing, whatever is being asked: an address, a name, a phone number."""
+    if "address" not in state.verified:
+        found = address_in(message)
+        if found:
+            state.verified["address"] = found                   # "... at 5 Jalan Mawar, Taman Melati ..."
+    name = explicit_name(message)
+    if name:
+        state.verified["customer_name"] = name                  # "my name is Ali", "I'm Sarah"
+    phone = contact.find_phone(message)
+    digits = re.sub(r"\D", "", phone or "")
+    if phone and (_PHONE_WORD.search(message) or (len(digits) >= 9 and len(message.split()) <= 6)):
+        state.verified["phone"] = phone
+        rest = re.sub(r"[+\d\s().\-]{7,}", " ", message).strip(" ,.")
+        if rest and len(rest.split()) <= 3 and "customer_name" not in state.verified:
+            from .answers import is_name
+            if is_name(rest) and re.fullmatch(r"[A-Za-z' ]+", rest):
+                state.verified["customer_name"] = rest.title()  # "Siti 0123456789"
 
 
 def _prefill_job(state, message, config):
@@ -357,7 +524,8 @@ def _prefill_job(state, message, config):
         if _WALLS.search(message):
             items.append("walls")
         elif _WALL.search(message):
-            items.append("one wall")        # a singular "wall" means one wall: length x height is enough
+            # a singular "wall" means one wall (length x height is enough), unless the ceiling is painted too
+            items.append("walls" if _CEILING.search(message) and not _ONE_WALL.search(message) else "one wall")
         elif _PLAIN_DINDING.search(message):
             items.append("walls")           # Malay "dinding" with no number: the walls of the room
         if _CEILING.search(message):
@@ -366,6 +534,9 @@ def _prefill_job(state, message, config):
             state.verified["surfaces"] = items
             missing = state.missing_required(config)
     required = set(state.required_fields(config))
+    if "surface_condition" in required and "surface_condition" not in state.verified \
+            and CONDITION_STRONG.search(message) and "?" not in message:
+        state.verified["surface_condition"] = " ".join(message.split())[:160]    # "paint is peeling and some damp"
     if "paint_tier" in required and "paint_tier" not in state.verified:
         tier = _TIERS.search(message)                   # "Eco", "premium please": said before it was asked
         if tier:
@@ -440,6 +611,8 @@ def _prefill_measurement(state, message, config):
         factors = unit_factors_in(message)
         if len(factors) == 1:
             factor = next(iter(factors))
+            if factor in (1.0, 0.3048):
+                state.unit_factor = factor                      # they measure in feet: later plain numbers are feet
             for key, value in zip(pending["keys"], pending["values"]):
                 if key in open_fields:
                     keep(key, round(value * factor, 3))
@@ -448,10 +621,24 @@ def _prefill_measurement(state, message, config):
     for key, value in cued.items():                     # "height of 3 meters", "4 m long", a square room's perimeter
         keep(key, value)
     open_fields = [k for k in open_fields if k not in cued]
-    sizes = sizes_in(message)
-    if sizes and len(open_fields) >= len(sizes):
+    loose = bool(_COUNT_NOUNS.search(message)) or _bare_number(message) or bool(re.fullmatch(r"[\d\s.,]+", message.strip()))
+    sizes = sizes_in(message, loose=loose)
+    if sizes and all(n > 0 for n in sizes) and len(open_fields) >= len(sizes):
         # "4 by 5": the next open sizes in order, or in the order the customer named them ("width x length")
         keys = _size_keys(message, open_fields, len(sizes))
+        said = unit_factors_in(message)
+        if len(said) > 1:
+            metric = sizes_metric(message)          # "10ft x 3m": each number has its own unit
+            if metric:
+                for key, value in zip(keys, metric):
+                    keep(key, value)
+                return
+        if len(said) == 1 and next(iter(said)) in (1.0, 0.3048):
+            state.unit_factor = next(iter(said))
+        if not said and state.unit_factor != 1.0:
+            for key, number in zip(keys, sizes):                # they said feet before: these are feet too
+                keep(key, round(number * state.unit_factor, 3))
+            return
         if not unit_factors_in(message) and not all(PLAIN_METRES[0] <= n <= PLAIN_METRES[1] for n in sizes):
             if len(sizes) >= 2 and not state.pending_sizes:
                 state.pending_sizes = {"keys": keys, "values": sizes, "asked": False}   # "10 by 12": feet or meters?
@@ -478,14 +665,17 @@ def _prefill_measurement(state, message, config):
     cued = [k for k in open_fields if _CUES[k] & words]
     if len(cued) == 1:
         key = cued[0]
-    elif not cued and missing[0] in _CUES:
-        key = missing[0]
+    elif not cued and open_fields and (missing[0] in _CUES or _bare_number(message)):
+        key = open_fields[0]            # a bare number is the next size, even if the last question was another one
     else:
         return
+    if state.unit_factor != 1.0 and not unit_factors_in(message) and _bare_number(message):
+        state.verified[key], state.last_field = round(numbers[0] * state.unit_factor, 3), key
+        return                          # they measure in feet
     text = message if unit_factors_in(message) or upper is None else f"{message} m"
     try:
         # the customer is answering this very question, so a plain number is metres ("I said 5")
-        assume = (key == missing[0] and PLAIN_METRES[0] <= numbers[0] <= PLAIN_METRES[1]
+        assume = ((key == missing[0] or _bare_number(message)) and PLAIN_METRES[0] <= numbers[0] <= PLAIN_METRES[1]
                   and not _COUNT_NOUNS.search(message))
         state.verified[key] = ground_measurement(numbers[0], text, assume_metres=assume)
     except GroundingError:
@@ -530,7 +720,10 @@ def _correct_measurement(state, message):
         return None
     text = message if unit_factors_in(message) or upper is None else f"{message} m"
     try:
-        value = ground_measurement(numbers[0], text)
+        if state.unit_factor != 1.0 and not unit_factors_in(message):
+            value = round(numbers[0] * state.unit_factor, 3)
+        else:
+            value = ground_measurement(numbers[0], text, assume_metres=PLAIN_METRES[0] <= numbers[0] <= PLAIN_METRES[1])
     except GroundingError:
         return None
     state.verified[key], state.last_field = value, key
@@ -539,6 +732,85 @@ def _correct_measurement(state, message):
     elif not estimated and key in state.estimated:
         state.estimated.remove(key)
     return t("ack_fixed", state.lang, label=t(f"label_{key}", state.lang), value=metres(value, state.lang))
+
+
+_PLACEHOLDERS = {"no preference", "i dont know", "i don't know", "any", "not described"}
+
+
+def _swap_answers(state, message, config):
+    """A new answer to something already answered replaces it when the customer is plainly changing their mind
+    ("actually premium", "change colour to blue", "make it Saturday", "sorry I meant 5 x 5")."""
+    if state.stage == "done" or "?" in message:
+        return
+    v, short = state.verified, len(message.split()) <= 4
+    swap = bool(flow.SWAP.search(message) or flow.is_correction(message))
+    tiers = {TIER_WORDS[m.group(1).lower()] for m in _TIERS.finditer(message)}
+    if len(tiers) == 1 and "paint_tier" in v and v["paint_tier"] not in tiers and v["paint_tier"] != "no preference" \
+            and (swap or short):
+        v["paint_tier"] = next(iter(tiers))
+    elif len(tiers) == 1 and v.get("paint_tier") == "no preference":
+        v["paint_tier"] = next(iter(tiers))
+    colours = list(dict.fromkeys(m.group(1).lower() for m in _COLOURS.finditer(message)))
+    if colours and "colour" in v:
+        new, old = " and ".join(colours), str(v["colour"]).lower()
+        if new != old and (swap or short or old in _PLACEHOLDERS or not _COLOURS.search(old)):
+            v["colour"] = new
+    if "preferred_datetime" in v:
+        when = flow.when_in(message, strict=True)
+        if when and when != v["preferred_datetime"] and (swap or short):
+            v["preferred_datetime"] = when
+    _swap_surfaces(state, message, swap)
+    sized = sizes_in(message)
+    swap = swap or bool(sized and unit_factors_in(message))        # "4 meters by 3 meters" said again: they mean it
+    if not swap:
+        return
+    keys = [k for k in ("room_length_m", "room_width_m", "room_height_m") if k in v]
+    if single_wall(v.get("surfaces")):
+        keys = [k for k in keys if k != "room_width_m"]
+    sizes = sizes_in(message)
+    if sizes and all(n > 0 for n in sizes) and 2 <= len(sizes) <= 3 and len(keys) >= len(sizes):
+        order = ["room_length_m", "room_width_m", "room_height_m"]
+        if single_wall(v.get("surfaces")):
+            order = ["room_length_m", "room_height_m"]
+        said = unit_factors_in(message)
+        plain = all(PLAIN_METRES[0] <= n <= PLAIN_METRES[1] for n in sizes)
+        if said or plain or state.unit_factor != 1.0:
+            factor = next(iter(said)) if len(said) == 1 else state.unit_factor
+            for key, number in zip(_size_keys(message, order, len(sizes)), sizes):
+                v[key] = round(number * factor, 3)
+                state.last_field = key
+            return
+    for key, value in cued_sizes(message).items():
+        if key in v and abs(v[key] - value) > 0.01:
+            v[key], state.last_field = value, key
+
+
+_ADD = re.compile(r"\b(also|too|as well|plus|and|add|juga|pun|dan|tambah)\b", re.I)
+_ONLY = re.compile(r"\b(only|just|instead|change|switch|sahaja|saja|tukar|ubah)\b", re.I)
+_BOTH = re.compile(r"\b(both|semua sekali|dua-dua|kedua-dua)\b", re.I)
+
+
+def _swap_surfaces(state, message, swap):
+    """"actually both", "and also the ceiling", "change it to ceiling": the surfaces to paint change."""
+    current = list(state.verified.get("surfaces") or [])
+    if not current:
+        return
+    if _BOTH.search(message):
+        state.verified["surfaces"] = ["walls", "ceiling"]
+        return
+    ceiling, walls = bool(_CEILING.search(message)), bool(_WALLS.search(message) or _WALL.search(message))
+    has_ceiling = any("ceil" in str(s).lower() for s in current)
+    has_walls = any("wall" in str(s).lower() for s in current)
+    if ceiling and not walls and not has_ceiling:
+        if _ADD.search(message) and not _ONLY.search(message):
+            state.verified["surfaces"] = current + ["ceiling"]
+        elif _ONLY.search(message) or swap:
+            state.verified["surfaces"] = ["ceiling"]
+    elif walls and not ceiling and not has_walls:
+        if _ADD.search(message) and not _ONLY.search(message):
+            state.verified["surfaces"] = current + ["walls"]
+        elif _ONLY.search(message) or swap:
+            state.verified["surfaces"] = ["walls"]
 
 
 def advance(state, config, message, ack=""):
@@ -592,7 +864,52 @@ def _resolve_pending_conflict(state, message):
     state.pending_conflict = None
 
 
+def _try_add_rooms(state, message, config):
+    """Rooms named in the message: "the master bedroom is 4 by 5 by 3 and the kids room is 3 by 3 by 3", "3 bedrooms
+    each 4x4", "also the kitchen 3x3x2.5", "same size for the other bedroom". The first room fills the usual size
+    fields while they are open; every other room is kept in verified["extra_rooms"]. Returns the acknowledgement."""
+    v = state.verified
+    open_sizes = [k for k in state.missing_required(config) if k in _CUES]
+    found = rooms_module.sized_rooms(message, state)
+    count = rooms_module.copies(message)
+    new = []
+    if found and count and len(found) == 1:
+        label = found[0]["name"]
+        new = [dict(found[0], name=(f"{label} {i}" if label else "")) for i in range(1, count + 1)]
+    elif len(found) >= 2:
+        new = found
+    elif len(found) == 1 and not open_sizes and not rooms_module.is_correction(message):
+        label = found[0]["name"]
+        if rooms_module.adds_room(message) or (label and v.get("room_name") and label != v["room_name"]):
+            new = found                                     # one more room after the first
+    elif not found and not open_sizes and rooms_module.wants_same_again(message):
+        last = (v.get("extra_rooms") or [None])[-1] or {k: v.get(k) for k in
+                                                         ("room_length_m", "room_width_m", "room_height_m")}
+        new = [dict(last, name=rooms_module.label_of(message))]
+    if not new:
+        return ""
+    if open_sizes and len(new) >= 2:                         # the first room is the job's own room
+        first, new = new[0], new[1:]
+        for key in ("room_length_m", "room_width_m", "room_height_m"):
+            if key in open_sizes and first.get(key) is not None:
+                v[key] = first[key]
+                state.last_field = key
+        if first.get("name"):
+            v["room_name"] = first["name"]
+    elif open_sizes:
+        return ""
+    extras = v.setdefault("extra_rooms", [])
+    for room in new:
+        if not any(all(room.get(k) == e.get(k) for k in room) for e in extras):
+            extras.append(room)
+    if not extras:
+        v.pop("extra_rooms")
+    rooms_module.fill_heights(v)
+    return t("rooms_noted", state.lang, count=1 + len(extras))
+
+
 def _finish(state, message, reply, status, human=False, extracted=None, record=True):
+    rooms_module.fill_heights(state.verified)
     if state.lang == "en":
         reply = us_spelling(reply)              # "meters" even when the model writes "metres"
     if record:

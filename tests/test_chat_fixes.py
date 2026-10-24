@@ -51,7 +51,7 @@ class SpokenSizeTests(unittest.TestCase):
         out = handle_message(state, said, CONFIG, FakeClient(reply("x?")))
         v = state.verified
         self.assertEqual((v["room_length_m"], v["room_width_m"], v["room_height_m"]), (4.0, 4.0, 3.0))
-        self.assertIn("condition", out.reply.lower())                          # nothing about the size is asked again
+        self.assertIn("paint quality", out.reply.lower())                      # nothing about the size is asked again
 
     def test_four_walls_is_not_one_wall(self):
         state = fresh()
@@ -98,7 +98,8 @@ class ConversationHandlingTests(unittest.TestCase):
         third = handle_message(state, "hello?", CONFIG, FakeClient()).reply
         self.assertIn("Aisha", first)
         self.assertIn("Which room", second)
-        self.assertEqual(second, third)                                      # a short help line, not the greeting again
+        self.assertNotIn("Aisha", third)                                     # a short help line, not the greeting again
+        self.assertIn("Which room", third)
 
     def test_abuse_gets_a_polite_line_and_then_a_person(self):
         state = fresh()

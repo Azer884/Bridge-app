@@ -108,11 +108,8 @@ class EndOfConversationTests(unittest.TestCase):
         handle_message(state, "yes", PERSONA_CONFIG, FakeClient())
         client = FakeClient(reply("Which one?", fields={"address": "99 Jalan Baru"}))
         out = handle_message(state, "no, the address is 99 Jalan Baru", PERSONA_CONFIG, client)
-        self.assertEqual(state.stage, "job")
-        self.assertIn("Which one is correct", out.reply)
-        out = handle_message(state, "99 Jalan Baru", PERSONA_CONFIG,
-                             FakeClient(reply("Thanks!", status="ready_for_estimate")))
-        self.assertEqual(state.stage, "wrapup")                  # contact is not asked a second time
+        self.assertEqual(state.stage, "wrapup")                  # an explicit correction: no "which one?", no contact step
+        self.assertEqual(state.verified["address"], "99 Jalan Baru")
         self.assertIn("99 Jalan Baru", out.reply)
 
     def test_yes_detection(self):

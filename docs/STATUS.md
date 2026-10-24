@@ -42,3 +42,15 @@ in `src/calendar_scheduler.py`) needs a server-held OAuth token and is not conne
 11. **Scope.** Only interior walls and ceilings are priced; trim, doors and exterior work go to a person.
 12. **Operations.** No automated alerting, no database backup routine, no automated frontend tests, no CI.
 13. **Hackathon platform.** Orbyte is not integrated (put aside on purpose).
+
+## Stress testing the chat
+
+`scripts/stress_chat.py` sends 208 scenarios (about 600 messages: vague sizes, mixed units, Malay and Manglish,
+changes of mind, side questions, refusals, odd services, injection attempts, dates and colours) to the live model through
+the real service and writes every reply to a file. It costs roughly one US cent per 10 model calls on a 24 GB RunPod
+GPU; a full run makes about 250 calls. Read the output file for stiff, repeated or wrong replies, fix them, and rerun
+only the scenario groups that changed (for example `time,colour`). Regression tests for what it found are in
+`tests/test_stress_fixes.py`.
+
+Known gaps it did not fix: areas given as square metres or square feet are not turned into room sizes, "steps" or
+"paces" are not read as a unit, and a second room mentioned in the same message is ignored until the first is done.

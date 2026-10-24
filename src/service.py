@@ -1,5 +1,6 @@
 """One incoming event -> the replies to send. Channel-neutral: no HTTP, no WhatsApp here."""
 import logging
+import re
 import time
 from dataclasses import asdict, replace
 from datetime import datetime
@@ -14,6 +15,8 @@ from .quote_message import approved_quote_message, duration_text, final_quote_me
 from .schema import ask_for
 
 PHOTO_REPLY = STRINGS["en"]["photo_reply"]
+_PHOTO_SENT = re.compile(r"\b(already|just|i('ve| have)?|i)\s+sent\b|\bsent (it|the (photo|picture|image|pic))\b|"
+                         r"\b(dah|sudah|telah) hantar\b", re.I)
 UNSUPPORTED_REPLY = STRINGS["en"]["unsupported"]
 LEGACY_STATUS = {"final": "completed"}
 TAKEOVER_SECONDS = 1800        # how long the assistant stays quiet after the owner replies by hand
@@ -370,13 +373,18 @@ class IncomingService:
             reply = self._booking_reply(state, text)
             if reply is not None:
                 return reply
+        if self.colour_assessor and state.stage == "job" and state.awaiting_colour_photo and not state.last_photo_id \
+                and _PHOTO_SENT.search(text):
+            reply = t("colour_not_yet", state.lang)         # "I already sent it": it has not arrived yet
+            state.add_turn(text, reply)
+            return reply
         if self.colour_assessor and state.stage == "job" and flow.wants_colour_suggestion(text):
             return self._colour_reply(state, text)
         return self._with_quote(state, self.handler(state, text, self._turn_config(), self.client).reply)
 
     def _colour_options(self, state, result):
         names = [COLOUR_MS.get(c, c) if state.lang == "ms" else c for c in result["suggestions"]]
-        options = ", ".join(names[:-1]) + (" / " if state.lang == "ms" else " or ") + names[-1] if len(names) > 1 else names[0]
+        options = ", ".join(names[:-1]) + (" atau " if state.lang == "ms" else " or ") + names[-1] if len(names) > 1 else names[0]
         current = result.get("current")
         if current:
             return t("colour_suggest", state.lang, options=options,
@@ -472,6 +480,8 @@ class IncomingService:
             state.channel = {k: v for k, v in channel.items() if v}
         if not state.created_at:
             state.created_at = time.time()
+        if event.channel == "voice":
+            state.greeted = True        # the call greets the caller itself
 
         if event.type == "text" and event.text.strip():
             self.store.log_message(event.user_id, "in", event.text)

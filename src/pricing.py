@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 
 from .assessment import LEVELS, LOW_CONFIDENCE, classify_text, combine
+from .rooms import all_rooms
 from .schema import single_wall
 
 CENT = Decimal("0.01")
@@ -98,7 +99,8 @@ def compute_quotation(verified, pricing, vision=None, overrides=None):
         raise PricingError(f"cannot price yet, missing: {missing}")
 
     flags, assumptions = [], []
-    length, width, height = (_d(verified.get(k, 0)) for k in REQUIRED[:3])
+    rooms = [(_d(l or 0), _d(w or 0), _d(h or 0)) for _, l, w, h in all_rooms(verified)]
+    height = max(h for _, _, h in rooms)             # the tallest room decides the height surcharge
 
     walls, ceiling = False, False
     for surface in verified["surfaces"]:
@@ -113,11 +115,13 @@ def compute_quotation(verified, pricing, vision=None, overrides=None):
         flags.append("no priceable surface (walls or ceiling) requested")
 
     if one_wall:
-        wall_area = length * height                   # one wall; the width the customer gave is not used
+        wall_area = sum((l * h for l, _, h in rooms), Decimal(0))   # one wall each; the width given is not used
         assumptions.append("a single wall is painted: area = length x height")
     else:
-        wall_area = 2 * (length + width) * height if walls else Decimal(0)
-    ceiling_area = length * width if ceiling else Decimal(0)
+        wall_area = sum((2 * (l + w) * h for l, w, h in rooms), Decimal(0)) if walls else Decimal(0)
+    ceiling_area = sum((l * w for l, w, _ in rooms), Decimal(0)) if ceiling else Decimal(0)
+    if len(rooms) > 1:
+        assumptions.append(f"{len(rooms)} rooms are painted; the same surfaces, paint and condition apply to each")
     area = wall_area + ceiling_area
     assumptions.append("openings (doors, windows) are not deducted from the area")
 
@@ -223,6 +227,6 @@ def compute_quotation(verified, pricing, vision=None, overrides=None):
         minimum_charge_applied=minimum_applied, flags=flags, assumptions=assumptions,
         breakdown=breakdown, schedule=schedule,
         inputs={"wall_area_m2": float(wall_area), "ceiling_area_m2": float(ceiling_area),
-                "coats": coats, "paint_tier": tier, "condition_level": level,
+                "rooms": len(rooms), "coats": coats, "paint_tier": tier, "condition_level": level,
                 "condition_issues": list(issues), "complexity_flags": list(complexity),
                 "labour_multiplier": float(multiplier), "litres": float(litres)})

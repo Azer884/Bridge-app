@@ -61,6 +61,7 @@ from . import persona as persona_module
 from . import views, webauth
 from .pdf import estimate_pdf
 from .events import calls_from_meta_payload, from_flat, from_meta_payload
+from .i18n import t
 from .runpod_client import RunPodClient, RunPodError, load_dotenv
 from .service import IncomingService
 from .store import make_store
@@ -242,13 +243,29 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
 
     window = float(env.get("MESSAGE_WINDOW_SECONDS") or 2.0)    # messages this close together are read as one
     inbox, running, inbox_lock = {}, set(), threading.Lock()
+    live_calls, call_outbox, call_lock = {}, {}, threading.Lock()      # callers on the phone right now, and what to tell them
+
+    def on_call(user_id):
+        with call_lock:
+            return live_calls.get(user_id, 0) > time.time()
+
+    def tell_caller(user_id, texts):
+        with call_lock:
+            call_outbox.setdefault(user_id, []).extend(t for t in texts if t)
 
     def deliver(user_id, events):
+        if on_call(user_id) and any(e.type == "image" for e in events):
+            lang = service.store.load(user_id).lang
+            tell_caller(user_id, [t("photo_wait", lang)])           # a photo can take a while to look at
         try:
             replies = service.handle_batch(events)
         except Exception as err:
             log.exception("failed to handle messages %s", [e.message_id for e in events])
             service.store.log_event("handler_error", f"{user_id}: {type(err).__name__}: {err}")
+            return
+        if replies and on_call(user_id):
+            tell_caller(user_id, replies)        # the customer is on the phone: answer in the call, not in the chat
+            service.store.log_event("answered_on_call", user_id)
             return
         for reply in replies:
             if sender is None:
@@ -348,8 +365,26 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
             event = from_flat(body)
         except ValueError as err:
             raise HTTPException(422, str(err))
+        if event.channel == "voice":
+            with call_lock:
+                live_calls[event.user_id] = time.time() + 900       # a call is going on: chat answers go to it
         replies = service.handle(event)
         return {"replies": replies, "lang": service.store.load(event.user_id).lang}   # the voice agent speaks in it
+
+    @app.get("/api/voice/pending")
+    def voice_pending(request: Request, user_id: str, end: bool = False):
+        """The voice agent asks, every second or two, what to tell the caller about things they sent in the chat
+        during the call (a photo, a message). Asking keeps the call marked as live; `end` marks it over."""
+        require_key(request)
+        with call_lock:
+            if end:
+                live_calls.pop(user_id, None)
+            else:
+                live_calls[user_id] = time.time() + 900
+            texts = call_outbox.pop(user_id, [])
+            if end:
+                call_outbox.pop(user_id, None)
+        return {"say": texts, "lang": service.store.load(user_id).lang}
 
     @app.post("/api/text/chat")
     def text_chat(body: TextRequest, request: Request):

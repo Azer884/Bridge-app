@@ -34,10 +34,10 @@ FIELD_CATALOGUE = [
     FieldSpec("room_length_m", "Room length", "measurement", "quote the customer's own words, e.g. \"4 metres\"", ask="How long is the room?"),
     FieldSpec("room_width_m", "Room width", "measurement", "quote the customer's own words", ask="How wide is the room?"),
     FieldSpec("room_height_m", "Room height", "measurement", "quote the customer's own words", ask="How tall is the room?"),
-    FieldSpec("surface_condition", "Surface condition or damage", "text", ask="What condition are the surfaces in?"),
     FieldSpec("paint_tier", "Paint type or tier", "text", ask="What paint quality would you like: economy, standard or premium?"),
     FieldSpec("colour", "Paint colour", "text", ask="What colour would you like?"),
     FieldSpec("preferred_datetime", "Preferred appointment date and time", "text", ask="What date and time would you prefer for the appointment?"),
+    FieldSpec("surface_condition", "Surface condition or damage", "text", ask="What condition are the surfaces in?"),
     FieldSpec("address", "Property address", "text", ask="What is the address of the property?"),
 ]
 FIELDS = {f.key: f for f in FIELD_CATALOGUE}
