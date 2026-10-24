@@ -86,6 +86,30 @@ class WebhookCallTests(unittest.TestCase):
         signed_post(client, calls_payload(CONNECT))
         self.assertEqual(self.handled, [])
         self.assertIn("call_ignored", self.kinds())
+        self.assertIn("WHATSAPP_CALLING_ENABLED=false", self.service.store.events(5)[0]["detail"])
+
+    def test_calls_switch_on_by_themselves_once_livekit_is_configured(self):
+        livekit = {"LIVEKIT_URL": "wss://x", "LIVEKIT_API_KEY": "k", "LIVEKIT_API_SECRET": "s"}
+        client = self.make(enabled="")                      # nothing set: off, and the log says what is missing
+        signed_post(client, calls_payload(CONNECT))
+        self.assertEqual(self.handled, [])
+        self.assertIn("LIVEKIT_URL", self.service.store.events(5)[0]["detail"])
+        self.dir.cleanup()
+        self.dir = tempfile.TemporaryDirectory()
+        self.service = IncomingService(SqliteStore(Path(self.dir.name) / "t.db"), BASIC, FakeClient())
+        self.handled = []
+        env = {**ENV, **livekit}                            # secrets set, flag never touched
+        client = TestClient(create_app(self.service, None, env, call_handler=lambda call, e: self.handled.append(call)))
+        signed_post(client, calls_payload(CONNECT))
+        self.assertEqual(len(self.handled), 1)
+        self.dir.cleanup()
+        self.dir = tempfile.TemporaryDirectory()
+        self.service = IncomingService(SqliteStore(Path(self.dir.name) / "t.db"), BASIC, FakeClient())
+        self.handled = []
+        client = TestClient(create_app(self.service, None, {**env, "WHATSAPP_CALLING_ENABLED": "false"},
+                                       call_handler=lambda call, e: self.handled.append(call)))
+        signed_post(client, calls_payload(CONNECT))
+        self.assertEqual(self.handled, [])                  # an explicit false still wins
 
     def test_a_failed_hand_off_is_logged_and_can_be_retried(self):
         attempts = []

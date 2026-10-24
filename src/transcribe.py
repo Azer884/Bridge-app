@@ -87,10 +87,25 @@ class Transcriber:
                     raise
         return self._model
 
+    @staticmethod
+    def decoder_problem():
+        """faster-whisper 1.2.1 decodes audio with PyAV, and PyAV 19 removed an argument it passes (every voice note then
+        fails with "open() got an unexpected keyword argument 'metadata_errors'"). Returns the fix, or ""."""
+        try:
+            import av
+            if int(av.__version__.split(".")[0]) >= 19:
+                return f'PyAV {av.__version__} is too new for faster-whisper: run uv add "av<19"'
+        except Exception:
+            pass
+        return ""
+
     def warm_up(self):
         """Load the model now (it downloads on first use), so the first voice note is not the slow one."""
         if not self._factory and importlib.util.find_spec("faster_whisper") is None:
             self.last_error = "faster-whisper is not installed (uv add faster-whisper)"
+            return False
+        if not self._factory and self.decoder_problem():
+            self.last_error = self.decoder_problem()
             return False
         try:
             self._load()
@@ -113,6 +128,12 @@ class Transcriber:
                 text = " ".join(segment.text.strip() for segment in segments).strip()
                 if text:
                     break
+        except TypeError as err:
+            if "metadata_errors" in str(err):
+                self.last_error = self.decoder_problem() or str(err)
+                raise RuntimeError(self.last_error) from err
+            self.last_error = f"TypeError: {err}"[:300]
+            raise
         except Exception as err:
             self.last_error = f"{type(err).__name__}: {err}"[:300]
             raise

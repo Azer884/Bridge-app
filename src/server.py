@@ -281,8 +281,13 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         key = f"{call['id']}:{call['event']}"
         if not service.store.claim_call_event(key):
             return
-        if str(env.get("WHATSAPP_CALLING_ENABLED", "false")).lower() != "true":
-            service.store.log_event("call_ignored", "calling is disabled")
+        flag = str(env.get("WHATSAPP_CALLING_ENABLED") or "").lower()
+        keys = ("LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET")
+        # Calls switch themselves on once LiveKit is configured; WHATSAPP_CALLING_ENABLED=false keeps them off.
+        if flag == "false" or (flag != "true" and not all(env.get(k) for k in keys)):
+            missing = [k for k in keys if not env.get(k)]
+            service.store.log_event("call_ignored", "calling is off by WHATSAPP_CALLING_ENABLED=false" if flag == "false"
+                                    else "calling is off: LiveKit secrets missing (" + ", ".join(missing) + ")")
             return
         try:
             call_handler(call, env)

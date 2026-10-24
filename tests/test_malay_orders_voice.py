@@ -3,6 +3,7 @@ repeat customers, estimate/final prices, and voice notes."""
 import json
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -622,6 +623,32 @@ class SecondChatLogTests(unittest.TestCase):
         broken = Transcriber(model_factory=boom)
         self.assertFalse(broken.warm_up())
         self.assertIn("no network", broken.last_error)
+
+
+class PyAvClashTests(unittest.TestCase):
+    def test_a_too_new_pyav_is_named_with_its_fix(self):
+        import sys
+        import types
+        fake = types.SimpleNamespace(__version__="19.0.2")
+        with unittest.mock.patch.dict(sys.modules, {"av": fake}):
+            self.assertIn('uv add "av<19"', Transcriber.decoder_problem())
+        fake.__version__ = "18.1.0"
+        with unittest.mock.patch.dict(sys.modules, {"av": fake}):
+            self.assertEqual(Transcriber.decoder_problem(), "")
+
+    def test_the_metadata_errors_crash_becomes_a_clear_message(self):
+        class Model:
+            def transcribe(self, path, **kwargs):
+                raise TypeError("open() got an unexpected keyword argument 'metadata_errors'")
+
+        import sys
+        import types
+        transcriber = Transcriber(model_factory=Model)
+        with unittest.mock.patch.dict(sys.modules, {"av": types.SimpleNamespace(__version__="19.0.2")}):
+            with self.assertRaises(RuntimeError) as err:
+                transcriber.transcribe(b"ogg", "audio/ogg")
+        self.assertIn('uv add "av<19"', str(err.exception))
+        self.assertIn('av<19', transcriber.last_error)
 
 
 if __name__ == "__main__":
