@@ -65,7 +65,7 @@ from .runpod_client import RunPodClient, RunPodError, load_dotenv
 from .service import IncomingService
 from .store import make_store
 from .transcribe import Transcriber
-from .vision import VisionError, assess_image
+from .vision import VisionError, assess_image, suggest_colours
 from .whatsapp import WhatsAppSender, valid_signature
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -182,6 +182,10 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         assessment, _ = assess_image(model_client("vision"), image, mime)
         return assessment
 
+    def suggest_colour(media_id):
+        image, mime = sender.fetch_media(media_id)
+        return suggest_colours(model_client("vision"), image, mime)
+
     if transcriber is None:
         transcriber = Transcriber.from_env(env)
 
@@ -197,6 +201,7 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         service = IncomingService(make_store(env, ROOT / "data" / "bridge.db"),
                                   json.loads(Path(config_path).read_text(encoding="utf-8")), text_client,
                                   photo_assessor=assess_photo if sender else None,
+                                  colour_assessor=suggest_colour if sender else None,
                                   transcriber=transcribe_voice if sender and transcriber else None)
     clients["text"] = clients["text"] or service.client
 

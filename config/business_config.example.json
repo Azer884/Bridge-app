@@ -117,7 +117,8 @@
       "closing": "Wonderful, thank you! I've passed everything to {owner}, and your price estimate will come right here once it's confirmed.",
       "greeting_ms": "Hai, saya {name} dari {business}!",
       "service_question_ms": "Apa yang boleh kami bantu hari ini?",
-      "closing_ms": "Bagus, terima kasih! Saya dah serahkan semuanya kepada {owner}, dan anggaran harga anda akan dihantar di sini selepas disahkan."
+      "closing_ms": "Bagus, terima kasih! Saya dah serahkan semuanya kepada {owner}, dan anggaran harga anda akan dihantar di sini selepas disahkan.",
+      "voice": "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc"
     },
     "ben": {
       "name": "Ben",
@@ -127,7 +128,8 @@
       "closing": "Thank you. I've handed your details to {owner}, who will confirm your price estimate and send it here.",
       "greeting_ms": "Selamat sejahtera, saya {name} dari {business}.",
       "service_question_ms": "Bagaimana boleh saya bantu anda hari ini?",
-      "closing_ms": "Terima kasih. Saya telah serahkan maklumat anda kepada {owner}, yang akan mengesahkan anggaran harga dan menghantarnya di sini."
+      "closing_ms": "Terima kasih. Saya telah serahkan maklumat anda kepada {owner}, yang akan mengesahkan anggaran harga dan menghantarnya di sini.",
+      "voice": "a167e0f3-df7e-4d52-a9c3-f949145efdab"
     },
     "mei": {
       "name": "Mei",
@@ -137,7 +139,8 @@
       "closing": "Thanks so much! {owner} will check everything and your price estimate will be sent here.",
       "greeting_ms": "Helo! Mei di sini dari {business}.",
       "service_question_ms": "Apa yang anda nak cat?",
-      "closing_ms": "Terima kasih! {owner} akan semak semuanya dan anggaran harga akan dihantar di sini."
+      "closing_ms": "Terima kasih! {owner} akan semak semuanya dan anggaran harga akan dihantar di sini.",
+      "voice": "f31cc6a7-c1e8-4764-980c-60a361443dd1"
     }
   }
 }

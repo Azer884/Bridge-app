@@ -4,11 +4,12 @@ from dataclasses import dataclass, field
 
 from .guard import reply_problem
 from .i18n import language_problem
-from .grounding import GroundingError, ground_field
+from .grounding import GroundingError, ground_field, numbers_in
 from .parsing import ParseError, extract_json
 from .schema import FIELDS, STATUS_VALUES, Status
 
 _PRICE = re.compile(r"[$£€]\s?\d|\b\d[\d,.]*\s?(usd|eur|gbp|dollars?|euros?|pounds?)\b", re.I)
+_FIGURE = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:meters?|metres?|centimet\w+|cm\b|m\b|feet|foot|ft\b|kaki|sq\w*|square)", re.I)
 _BOOKING_CLAIM = re.compile(
     r"\b(is|are|has been|have been|been)\s+(booked|confirmed|reserved)\b|\bslot is available\b", re.I)
 
@@ -70,6 +71,10 @@ def validate_response(raw_text, state, message, config):
         result.problems.append("reply contains a price; the model must never quote prices")
     if _BOOKING_CLAIM.search(reply):
         result.problems.append("reply claims availability or a booking; it must not")
+    invented = invented_figures(reply, state, message)
+    if invented:
+        result.soft_problems.append(
+            f"reply mentions {', '.join(invented)} which the customer never said; do not explain or calculate sizes")
 
     for key, value in extracted.items():
         spec = FIELDS.get(key)
@@ -109,6 +114,24 @@ def validate_response(raw_text, state, message, config):
 
     result.reply, result.status = reply, status
     return result
+
+
+def invented_figures(reply, state, message):
+    """Sizes in the reply that are not the customer's own ("from the perimeter being 16 meters..."), which the model
+    made up. A size is fine when the customer said it, in this message or earlier, or it is a size already saved."""
+    allowed = set(numbers_in(message))
+    for turn in getattr(state, "history", []):
+        if turn.get("role") == "user":
+            allowed.update(numbers_in(turn.get("content", "")))
+    for value in state.verified.values():
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            allowed.update({float(value), round(float(value), 1), round(float(value), 2)})
+    found = []
+    for match in _FIGURE.finditer(reply):
+        number = float(match.group(1).replace(",", "."))
+        if not any(abs(number - a) < 0.051 for a in allowed):
+            found.append(match.group(0).strip())
+    return found
 
 
 # Words that signal the reply is asking for a particular field.

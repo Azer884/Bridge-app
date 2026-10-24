@@ -128,7 +128,7 @@ class ConflictTests(unittest.TestCase):
         from src.schema import ask_for
         state = new_state()
         state.verified["surfaces"] = ["one wall"]
-        self.assertEqual(ask_for("room_length_m", state), "How long is the wall (in metres)?")
-        self.assertEqual(ask_for("room_height_m", state), "How tall is the wall (in metres)?")
+        self.assertEqual(ask_for("room_length_m", state), "How long is the wall (in meters)?")
+        self.assertEqual(ask_for("room_height_m", state), "How tall is the wall (in meters)?")
         state.verified["surfaces"] = ["walls"]
-        self.assertEqual(ask_for("room_length_m", state), "How long is the room (in metres)?")
+        self.assertEqual(ask_for("room_length_m", state), "How long is the room (in meters)?")

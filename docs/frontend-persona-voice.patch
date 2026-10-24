@@ -1,0 +1,141 @@
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=package-lock.json' fe4_orig/frontend/mobile/src/screens/PersonasScreen.tsx fe4/frontend/mobile/src/screens/PersonasScreen.tsx
+--- frontend/mobile/src/screens/PersonasScreen.tsx	2026-10-24 20:02:58.000000000 +0800
++++ frontend/mobile/src/screens/PersonasScreen.tsx	2026-10-24 22:06:25.902624000 +0800
+@@ -2,19 +2,19 @@
+ import { View } from "react-native";
+ import { Ionicons } from "@expo/vector-icons";
+ import { api, explainError } from "../../../shared/api";
+-import { PERSONA_LIMITS, type Persona } from "../../../shared/types";
++import { PERSONA_LIMITS, PERSONA_VOICES, type Persona } from "../../../shared/types";
+ import { useAsync } from "../hooks";
+ import { C, useTheme } from "../theme";
+-import { Banner, Btn, Empty, Field, Group, Row, Screen, Sheet, T, success } from "../ui";
++import { Banner, Btn, Chip, Empty, Field, Group, Row, Screen, Sheet, T, success } from "../ui";
+ 
+-const FIELDS: { key: keyof Persona; label: string; hint: string; area: boolean }[] = [
++const FIELDS: { key: "name" | "style" | "greeting" | "service_question" | "closing"; label: string; hint: string; area: boolean }[] = [
+   { key: "name", label: "Name", hint: "What customers see as the sender.", area: false },
+   { key: "style", label: "Voice", hint: "How the assistant talks. Tone, length, slang.", area: true },
+   { key: "greeting", label: "Greeting", hint: "First message. Use {name}, {business} and {owner}.", area: true },
+   { key: "service_question", label: "First question", hint: "Asked after the greeting.", area: true },
+   { key: "closing", label: "Closing", hint: "Sent when the chat is done and the quote is drafted.", area: true },
+ ];
+-const BLANK: Persona = { name: "", style: "", greeting: "", service_question: "", closing: "" };
++const BLANK: Persona = { name: "", style: "", greeting: "", service_question: "", closing: "", voice: "" };
+ const fill = (t: string, p: Persona) => t.split("{name}").join(p.name || "Name").split("{business}").join("Your Business").split("{owner}").join("the owner");
+ const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "");
+ 
+@@ -79,6 +79,16 @@
+         {FIELDS.map((f) => (
+           <Field key={f.key} label={f.label} hint={f.hint} multiline={f.area} value={form[f.key]} onChangeText={(t) => setForm({ ...form, [f.key]: t })} counter={{ len: form[f.key].length, max: PERSONA_LIMITS[f.key] }} />
+         ))}
++        <View style={{ gap: 8 }}>
++          <T v="label">Phone voice</T>
++          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
++            <Chip label="Server default" on={!form.voice} onPress={() => setForm({ ...form, voice: "" })} />
++            {PERSONA_VOICES.map((v) => (
++              <Chip key={v.id} label={v.label.split(" (")[0]} on={form.voice === v.id} onPress={() => setForm({ ...form, voice: v.id })} />
++            ))}
++          </View>
++          <T v="foot">The voice this character uses when a customer calls. Applies to the next call.</T>
++        </View>
+         <View style={{ backgroundColor: "#E5DDD5", borderRadius: 18, padding: 12, gap: 8 }}>
+           <T v="label" style={{ color: "#3F3A33" }}>Preview in WhatsApp</T>
+           {[fill(form.greeting, form), null, fill(form.service_question, form), null, fill(form.closing, form)].map((m, i) =>
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=package-lock.json' fe4_orig/frontend/shared/types.ts fe4/frontend/shared/types.ts
+--- frontend/shared/types.ts	2026-10-24 20:02:58.000000000 +0800
++++ frontend/shared/types.ts	2026-10-24 22:05:27.824003000 +0800
+@@ -184,6 +184,8 @@
+   greeting: string;
+   service_question: string;
+   closing: string;
++  /** The voice this character uses on a phone call (a Cartesia voice id). Empty means the server default. */
++  voice?: string;
+ }
+ 
+ export interface PersonasResponse {
+@@ -191,7 +193,17 @@
+   active: string;
+ }
+ 
++/** Voices the phone agent can use, from LiveKit's Cartesia examples. Any other voice id can be typed in. */
++export const PERSONA_VOICES: { id: string; label: string }[] = [
++  { id: "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc", label: "Jacqueline (young, confident, female)" },
++  { id: "a167e0f3-df7e-4d52-a9c3-f949145efdab", label: "Blake (energetic, male)" },
++  { id: "f31cc6a7-c1e8-4764-980c-60a361443dd1", label: "Robyn (neutral, mature, female)" },
++  { id: "5c5ad5e7-1020-476b-8b91-fdcbe9cc313c", label: "Daniela (calm, female)" },
++];
++export const VOICE_PATTERN = /^[A-Za-z0-9_.:/-]{1,80}$/;
++
+ export const PERSONA_LIMITS: Record<keyof Persona, number> = {
++  voice: 80,
+   name: 40,
+   style: 300,
+   greeting: 200,
+diff -ruN '--exclude=node_modules' '--exclude=dist' '--exclude=package-lock.json' fe4_orig/frontend/web/src/pages/Personas.tsx fe4/frontend/web/src/pages/Personas.tsx
+--- frontend/web/src/pages/Personas.tsx	2026-10-24 20:02:58.000000000 +0800
++++ frontend/web/src/pages/Personas.tsx	2026-10-24 22:05:27.825002900 +0800
+@@ -1,18 +1,18 @@
+ ﻿import { useEffect, useState } from "react";
+ import { api, explainError } from "@shared/api";
+-import { PERSONA_LIMITS, type Persona } from "@shared/types";
++import { PERSONA_LIMITS, PERSONA_VOICES, VOICE_PATTERN, type Persona } from "@shared/types";
+ import { useAsync } from "../hooks";
+ import { useToast } from "../ui/Toast";
+ 
+ const COLORS = ["#083c57", "#129a8d", "#1c8f63", "#041b2d", "#3fb5c8", "#59a36f"];
+-const FIELDS: { key: keyof Persona; label: string; hint: string; area: boolean }[] = [
++const FIELDS: { key: "name" | "style" | "greeting" | "service_question" | "closing"; label: string; hint: string; area: boolean }[] = [
+   { key: "name", label: "Name", hint: "What customers see as the sender.", area: false },
+   { key: "style", label: "Voice", hint: "How the assistant talks. Tone, length, slang.", area: true },
+   { key: "greeting", label: "Greeting", hint: "First message. Use {name}, {business} and {owner}.", area: true },
+   { key: "service_question", label: "First question", hint: "Asked after the greeting.", area: true },
+   { key: "closing", label: "Closing", hint: "Sent when the chat is done and the quote is drafted.", area: true },
+ ];
+-const BLANK: Persona = { name: "", style: "", greeting: "", service_question: "", closing: "" };
++const BLANK: Persona = { name: "", style: "", greeting: "", service_question: "", closing: "", voice: "" };
+ 
+ const fill = (t: string, p: Persona) =>
+   t.replaceAll("{name}", p.name || "Name").replaceAll("{business}", "Your Business").replaceAll("{owner}", "the owner");
+@@ -40,6 +40,9 @@
+ 
+   const over = FIELDS.some((f) => form[f.key].length > PERSONA_LIMITS[f.key]);
+   const empty = FIELDS.some((f) => !form[f.key].trim());
++  const voice = form.voice ?? "";
++  const known = PERSONA_VOICES.some((v) => v.id === voice);
++  const badVoice = voice !== "" && !VOICE_PATTERN.test(voice);
+ 
+   function pick(id: string) {
+     setIsNew(false);
+@@ -131,8 +134,30 @@
+                 </label>
+               );
+             })}
++            <label className="field">
++              <span>Phone voice</span>
++              <select
++                className="input"
++                value={voice === "" ? "" : known ? voice : "custom"}
++                onChange={(e) => setForm({ ...form, voice: e.target.value === "custom" ? " " : e.target.value })}
++              >
++                <option value="">Server default</option>
++                {PERSONA_VOICES.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
++                <option value="custom">Another voice id…</option>
++              </select>
++              {voice !== "" && !known && (
++                <input
++                  className="input"
++                  placeholder="Paste a Cartesia voice id"
++                  value={voice.trim()}
++                  onChange={(e) => setForm({ ...form, voice: e.target.value.trim() })}
++                />
++              )}
++              <small>The voice this character uses when a customer calls. Applies to the next call.</small>
++              {badVoice && <small className="over">A voice id has only letters, digits, dashes and dots.</small>}
++            </label>
+             <div className="modal-actions" style={{ justifyContent: "flex-start" }}>
+-              <button className="btn primary" disabled={busy || over || empty} onClick={save}>Save persona</button>
++              <button className="btn primary" disabled={busy || over || empty || badVoice} onClick={save}>Save persona</button>
+               {!isNew && sel !== active && (
+                 <button className="btn" disabled={busy} onClick={() => run(() => api.setActivePersona(sel!), "Persona is now active")}>
+                   Make active

@@ -247,7 +247,7 @@ class AssistantTests(unittest.TestCase):
     def test_conflict_question_uses_readable_units(self):
         s = state_with(room_length_m=4.0)
         out, _ = self.run_turn(s, "it is 6 metres", reply("Thanks, noted.", {"room_length_m": "6 metres"}))
-        self.assertIn("4 metres", out.reply)
+        self.assertIn("4 meters", out.reply)
         self.assertNotIn("4.0", out.reply)
 
     def test_failed_turns_stay_out_of_history(self):
@@ -299,8 +299,9 @@ class AssistantTests(unittest.TestCase):
     def test_measurement_without_unit_or_with_two_numbers_is_not_guessed(self):
         s = state_with(address="1 Main St", surfaces=["walls"])
         self.run_turn(s, "12 long", reply("What unit?"))
+        self.assertNotIn("room_length_m", s.verified)                         # 12 could be feet: not guessed
         self.run_turn(s, "4 metres by 3 metres", reply("Thanks, noted."))
-        self.assertNotIn("room_length_m", s.verified)
+        self.assertEqual((s.verified["room_length_m"], s.verified["room_width_m"]), (4.0, 3.0))   # two named sizes are read
 
     def test_model_cannot_set_inconsistent_status(self):
         s = ConversationState("t")

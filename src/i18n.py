@@ -18,11 +18,11 @@ STRINGS = {
         "ask_phone": "What is the best phone number to reach you on?",
         "ask_email": "What is your email address?",
         "ask_surfaces": "Which surfaces would you like painted?",
-        "ask_room_length_m": "How long is the room (in metres)?",
-        "ask_room_width_m": "How wide is the room (in metres)?",
-        "ask_room_height_m": "How tall is the room (in metres)?",
-        "ask_wall_length_m": "How long is the wall (in metres)?",
-        "ask_wall_height_m": "How tall is the wall (in metres)?",
+        "ask_room_length_m": "How long is the room (in meters)?",
+        "ask_room_width_m": "How wide is the room (in meters)?",
+        "ask_room_height_m": "How tall is the room (in meters)?",
+        "ask_wall_length_m": "How long is the wall (in meters)?",
+        "ask_wall_height_m": "How tall is the wall (in meters)?",
         "ask_surface_condition": "What condition are the surfaces in?",
         "ask_paint_tier": "What paint quality would you like: economy, standard or premium?",
         "ask_colour": "What colour would you like?",
@@ -32,12 +32,16 @@ STRINGS = {
         "label_room_width_m": "room width", "label_room_height_m": "room height",
         "label_surface_condition": "surface condition", "label_paint_tier": "paint quality",
         "label_colour": "colour", "label_preferred_datetime": "preferred time",
-        "metres": "{value:g} metres",
+        "metres": "{value:g} meters",
         "refusal": "I can only help with your painting job and quotation.",
         "fallback": "Thanks for your message. A member of our team will review your request and get back to you shortly.",
         "inspection_reply": "Thanks for letting us know. That kind of work needs an inspection, so a member of our team will contact you to arrange the next step.",
         "conflict": "Earlier you told me the {label} was {old}, but now it sounds like {new}. Which one is correct?",
         "photo_reply": "Thanks, I've passed your photo to our team to look at.",
+        "colour_need_photo": "Send me a photo of the room and I'll suggest a colour that suits it.",
+        "colour_suggest": "From your photo, the walls look {current}. These colours would go well: {options}. Which one would you like?",
+        "colour_suggest_plain": "Based on your photo, these colours would suit the room: {options}. Which one would you like?",
+        "colour_failed": "I couldn't judge a colour from that photo. What colour would you like?",
         "unsupported": "Sorry, I can't open that kind of message. Please type it or send a photo.",
         "voice_off": "Sorry, I can't play voice notes right now. Please type your message.",
         "voice_fail": "Sorry, I couldn't make out that voice note. Could you type it or send it again?",
@@ -80,6 +84,12 @@ STRINGS = {
         "ack_fixed": "No problem, I've updated the {label} to {value}.",
         "new_job": "Happy to help with another job! ",
         "restart": "No problem, let's start again.",
+        "ask_unit": "Are those {a:g} by {b:g} in meters or in feet?",
+        "handoff": "Of course, I've asked {owner} to message you here. You can keep telling me about the job in the meantime.",
+        "service_retry": "I can quote interior wall and ceiling painting. Which room would you like painted?",
+        "declined_again": "I've passed your request to {owner}. If you'd like an interior wall or ceiling painted, tell me which room and I'll start the quote.",
+        "foreign": "Sorry, I can only chat in English or Bahasa Malaysia. Could you write to me in one of those?",
+        "abuse": "Please keep the chat respectful so I can help you.",
         "location_saved": "Thanks, I've saved the location you shared.",
         "pinned": "Pinned location ({lat:.5f}, {lon:.5f})",
         "welcome_back": "Hi again! If you would like another painting job quoted, just tell me what you want painted.",
@@ -126,6 +136,10 @@ STRINGS = {
         "inspection_reply": "Terima kasih kerana memberitahu kami. Kerja seperti itu memerlukan pemeriksaan, jadi seorang ahli pasukan kami akan menghubungi anda untuk mengatur langkah seterusnya.",
         "conflict": "Tadi anda kata {label} ialah {old}, tetapi sekarang nampaknya {new}. Yang mana satu betul?",
         "photo_reply": "Terima kasih, saya telah menghantar gambar anda kepada pasukan kami untuk disemak.",
+        "colour_need_photo": "Hantar gambar bilik itu dan saya akan cadangkan warna yang sesuai.",
+        "colour_suggest": "Daripada gambar anda, dinding nampak {current}. Warna ini sesuai: {options}. Yang mana anda mahu?",
+        "colour_suggest_plain": "Berdasarkan gambar anda, warna ini sesuai untuk bilik itu: {options}. Yang mana anda mahu?",
+        "colour_failed": "Saya tidak dapat menilai warna daripada gambar itu. Apakah warna yang anda mahu?",
         "unsupported": "Maaf, saya tidak dapat membuka jenis mesej itu. Sila taip atau hantar gambar.",
         "voice_off": "Maaf, saya tidak dapat mendengar nota suara sekarang. Sila taipkan mesej anda.",
         "voice_fail": "Maaf, saya tidak dapat memahami nota suara itu. Boleh anda taip atau hantar semula?",
@@ -168,6 +182,12 @@ STRINGS = {
         "ack_fixed": "Tiada masalah, saya telah kemas kini {label} kepada {value}.",
         "new_job": "Dengan senang hati saya bantu untuk kerja lain! ",
         "restart": "Tiada masalah, kita mulakan semula.",
+        "ask_unit": "Adakah {a:g} kali {b:g} itu dalam meter atau kaki?",
+        "handoff": "Baik, saya telah minta {owner} mesej anda di sini. Anda boleh terus beritahu saya tentang kerja itu sementara menunggu.",
+        "service_retry": "Saya boleh sebut harga untuk mengecat dinding dan siling dalaman. Bilik mana yang anda mahu cat?",
+        "declined_again": "Saya telah serahkan permintaan anda kepada {owner}. Jika anda mahu dinding atau siling dalaman dicat, beritahu bilik mana dan saya akan mulakan sebut harga.",
+        "foreign": "Maaf, saya hanya boleh berbual dalam bahasa Inggeris atau Bahasa Malaysia. Boleh anda tulis dalam salah satu bahasa itu?",
+        "abuse": "Sila jaga kesopanan dalam sembang ini supaya saya dapat membantu anda.",
         "location_saved": "Terima kasih, saya telah simpan lokasi yang anda kongsi.",
         "pinned": "Lokasi dikongsi ({lat:.5f}, {lon:.5f})",
         "welcome_back": "Hai lagi! Jika anda mahu sebut harga untuk kerja mengecat yang lain, beritahu saya apa yang anda mahu cat.",
@@ -192,6 +212,18 @@ STRINGS = {
 def t(key, lang="en", **kwargs):
     text = STRINGS.get(lang, STRINGS["en"]).get(key) or STRINGS["en"][key]
     return text.format(**kwargs) if kwargs else text
+
+
+_SPELLING = [(re.compile(r"\bmetres\b"), "meters"), (re.compile(r"\bmetre\b"), "meter"),
+             (re.compile(r"\bMetres\b"), "Meters"), (re.compile(r"\bMetre\b"), "Meter"),
+             (re.compile(r"\bcentimetres\b"), "centimeters"), (re.compile(r"\bcentimetre\b"), "centimeter")]
+
+
+def us_spelling(text):
+    """English replies say "meters", including the ones the model writes itself."""
+    for pattern, replacement in _SPELLING:
+        text = pattern.sub(replacement, text)
+    return text
 
 
 def metres(value, lang="en"):
@@ -276,6 +308,9 @@ TIER_WORDS = {"ekonomi": "economy", "economy": "economy", "eco": "economy", "che
 COLOUR_WORDS = {"white", "black", "grey", "gray", "blue", "green", "red", "yellow", "cream", "beige", "brown",
                 "pink", "purple", "orange", "silver", "gold", "navy", "teal", "ivory", "putih", "hitam", "kelabu",
                 "biru", "hijau", "merah", "kuning", "krim", "coklat", "ungu", "oren"}
+COLOUR_MS = {"white": "putih", "ivory": "ivori", "cream": "krim", "beige": "beige", "grey": "kelabu", "blue": "biru",
+             "navy": "biru tua", "teal": "teal", "green": "hijau", "yellow": "kuning", "pink": "merah jambu",
+             "brown": "coklat"}
 ISSUE_MS = {"peeling": "cat mengelupas", "flaking": "cat tertanggal", "cracks": "retak", "stains": "kesan kotoran",
             "bubbling": "cat menggelembung", "holes": "lubang", "damp": "lembap", "mould": "kulat",
             "water_damage": "kerosakan air"}

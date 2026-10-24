@@ -8,7 +8,7 @@ from .assessment import LOW_CONFIDENCE, combine, from_dict
 from . import contact, flow, persona as persona_module, scheduling, views
 from .assistant import PHOTO_CONDITION, advance, handle_message
 from .guard import clean_profile_name, clean_profile_phone
-from .i18n import ISSUE_MS, STRINGS, t
+from .i18n import COLOUR_MS, ISSUE_MS, STRINGS, t
 from .pricing import PricingError, compute_quotation
 from .quote_message import approved_quote_message, duration_text, final_quote_message
 from .schema import ask_for
@@ -31,11 +31,13 @@ def photo_summary(assessment, lang="en"):
 
 
 class IncomingService:
-    def __init__(self, store, config, client, handler=handle_message, photo_assessor=None, transcriber=None):
+    def __init__(self, store, config, client, handler=handle_message, photo_assessor=None, transcriber=None,
+                 colour_assessor=None):
         """photo_assessor(media_id) -> ConditionAssessment or None; it may raise.
         transcriber(media_id) -> (text, language) for a voice note, or None; it may raise."""
         self.store, self.config, self.client, self.handler = store, config, client, handler
         self.photo_assessor, self.transcriber = photo_assessor, transcriber
+        self.colour_assessor = colour_assessor      # colour_assessor(media_id) -> {"current", "suggestions"} or None
 
     def _turn_config(self):
         """The business config plus the persona the dashboard has selected right now."""
@@ -368,9 +370,41 @@ class IncomingService:
             reply = self._booking_reply(state, text)
             if reply is not None:
                 return reply
+        if self.colour_assessor and state.stage == "job" and flow.wants_colour_suggestion(text):
+            return self._colour_reply(state, text)
         return self._with_quote(state, self.handler(state, text, self._turn_config(), self.client).reply)
 
+    def _colour_options(self, state, result):
+        names = [COLOUR_MS.get(c, c) if state.lang == "ms" else c for c in result["suggestions"]]
+        options = ", ".join(names[:-1]) + (" / " if state.lang == "ms" else " or ") + names[-1] if len(names) > 1 else names[0]
+        current = result.get("current")
+        if current:
+            return t("colour_suggest", state.lang, options=options,
+                     current=COLOUR_MS.get(current, current) if state.lang == "ms" else current)
+        return t("colour_suggest_plain", state.lang, options=options)
+
+    def _colour_reply(self, state, text):
+        """Suggest colours from the customer's photo, or ask for the photo and remember why."""
+        if not state.last_photo_id:
+            state.awaiting_colour_photo = True
+            reply = t("colour_need_photo", state.lang)
+        else:
+            reply = self._colour_from_photo(state)
+        state.add_turn(text, reply)
+        return reply
+
+    def _colour_from_photo(self, state):
+        state.awaiting_colour_photo = False
+        try:
+            result = self.colour_assessor(state.last_photo_id)
+        except Exception:
+            log.exception("colour suggestion failed for media %s", state.last_photo_id)
+            result = None
+        return self._colour_options(state, result) if result else t("colour_failed", state.lang)
+
     def _photo_reply(self, state, media_id):
+        if media_id:
+            state.last_photo_id = media_id
         assessment = None
         if self.photo_assessor and media_id:
             try:
@@ -456,8 +490,16 @@ class IncomingService:
             self.store.log_message(event.user_id, "in", event.text, event.media_id)
             reply = self._photo_reply(state, event.media_id)
             caption = event.text.strip()
+            suggested = False
+            if self.colour_assessor and (state.awaiting_colour_photo or flow.wants_colour_suggestion(caption)):
+                reply = f"{reply} {self._colour_from_photo(state)}".strip()     # the photo is what they were asked for
+                suggested = True
+                if flow.wants_colour_suggestion(caption):
+                    caption = ""
             nxt = state.next_missing(self.config) if state.stage == "job" else None
-            if caption and state.stage != "done":
+            if suggested and not caption:
+                pass                                        # the colour question is already asked
+            elif caption and state.stage != "done":
                 # "<photo> 5 here is an image for it too": the words with the photo are a message as well
                 self.store.log_message(event.user_id, "in", caption)
                 answer = self._answer(state, caption)

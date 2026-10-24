@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 from livekit import agents
 from livekit.agents import Agent, AgentServer, AgentSession, FunctionTool, ModelSettings, inference, llm
 
-from .backend import Backend
+from .backend import Backend, keyterms
 
 load_dotenv(".env.local")
 load_dotenv()
@@ -83,6 +83,10 @@ async def entrypoint(ctx: agents.JobContext):
     call_id = meta.get("call_id") or ctx.room.name
     backend = Backend(os.environ["VOICE_BACKEND_URL"], os.environ["INCOMING_API_KEY"],
                       meta.get("user_id") or f"call-{call_id}", call_id)
+    persona = await backend.persona()                      # each character has its own voice and name
+    voice = persona.get("voice") or os.environ["VOICE_TTS_VOICE"]
+    greeting = (f"Hello, this is {persona['name']}. How can I help you today?" if persona.get("name") else GREETING)
+    log.info("call from %s, character %s", backend.user_id, persona.get("name") or "(default)")
     session = AgentSession(
         # One backend call per finished turn. Preemptive generation would send a message to the assistant for every
         # partial transcript ("Hello?", "Hello? I want to paint...") and each one is stored as a customer message.
@@ -91,10 +95,11 @@ async def entrypoint(ctx: agents.JobContext):
         max_endpointing_delay=float(os.environ.get("VOICE_MAX_ENDPOINTING_DELAY", "3.0")),
         min_interruption_words=2,                  # one stray word or an echo of the agent does not cut it off
         stt=inference.STT(model=os.environ.get("VOICE_STT_MODEL", "deepgram/nova-3"),
-                          language=os.environ.get("VOICE_STT_LANGUAGE", "multi")),     # English and Malay together
+                          language=os.environ.get("VOICE_STT_LANGUAGE", "multi"),     # English and Malay together
+                          extra_kwargs={"keyterm": keyterms()}),
         llm=inference.LLM(model=os.environ.get("VOICE_UNUSED_LLM", "openai/gpt-4.1-mini")),   # llm_node replaces it
         tts=inference.TTS(model=os.environ.get("VOICE_TTS_MODEL", "cartesia/sonic-3.5"),
-                          voice=os.environ["VOICE_TTS_VOICE"], language="en"),
+                          voice=voice, language="en"),
     )
     @session.on("agent_state_changed")
     def _agent_state(event):
@@ -110,7 +115,7 @@ async def entrypoint(ctx: agents.JobContext):
 
     await session.start(room=ctx.room, agent=PaintingAssistant(backend))
     await asyncio.sleep(1.0)                       # let the caller's audio path settle before the greeting
-    await session.say(GREETING)
+    await session.say(greeting)
 
 
 if __name__ == "__main__":

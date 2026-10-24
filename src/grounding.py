@@ -9,6 +9,7 @@ ONES.update({"kosong": 0, "sifar": 0, "satu": 1, "dua": 2, "tiga": 3, "empat": 4
              "tujuh": 7, "lapan": 8, "sembilan": 9, "sepuluh": 10, "sebelas": 11})
 TENS = {w: 10 * i for i, w in enumerate(
     "_ _ twenty thirty forty fifty sixty seventy eighty ninety".split()) if w != "_"}
+ORDINALS = {"third": 3, "fourth": 4, "fifth": 5, "sixth": 6, "seventh": 7, "eighth": 8, "ninth": 9, "tenth": 10}
 UNIT_FACTORS = {
     "m": 1.0, "metre": 1.0, "metres": 1.0, "meter": 1.0, "meters": 1.0,
     "cm": 0.01, "centimetre": 0.01, "centimetres": 0.01, "centimeter": 0.01, "centimeters": 0.01,
@@ -33,13 +34,14 @@ def numbers_in(text):
             if pending_tens is not None:
                 found.append(float(pending_tens))
             pending_tens = TENS[tok]
-        elif tok in ONES:
-            if pending_tens is not None and 1 <= ONES[tok] <= 9:
-                found.append(float(pending_tens + ONES[tok]))
+        elif tok in ONES or tok in ORDINALS:
+            value = ONES[tok] if tok in ONES else ORDINALS[tok]      # "seventh" is what speech-to-text writes for "seven"
+            if pending_tens is not None and 1 <= value <= 9:
+                found.append(float(pending_tens + value))
             else:
                 if pending_tens is not None:
                     found.append(float(pending_tens))
-                found.append(float(ONES[tok]))
+                found.append(float(value))
             pending_tens = None
         else:
             if pending_tens is not None:
@@ -75,8 +77,9 @@ def estimate_in(message):
     return None, bool(ESTIMATE_WORDS.search(str(message)))
 
 
-_SIZES = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:x|by|\*|kali)\s*(\d+(?:[.,]\d+)?)(?:\s*(?:x|by|\*|kali)\s*(\d+(?:[.,]\d+)?))?",
-                   re.I)
+_NUM = r"\d+(?:[.,]\d+)?|" + "|".join(sorted((w for w in ONES if w != "zero"), key=len, reverse=True))
+_U = r"(?:\s*(?:metres?|meters?|meter|cm|ft|feet|foot|kaki|m\b))?"          # a unit may follow each number
+_SIZES = re.compile(rf"\b({_NUM}){_U}\s*(?:x|by|\*|kali)\s*({_NUM}){_U}(?:\s*(?:x|by|\*|kali)\s*({_NUM}){_U})?", re.I)
 
 
 def sizes_in(message):
@@ -84,7 +87,50 @@ def sizes_in(message):
     match = _SIZES.search(str(message))
     if not match:
         return None
-    return [float(g.replace(",", ".")) for g in match.groups() if g]
+    return [numbers_in(g)[0] for g in match.groups() if g and numbers_in(g)]
+
+
+_CUED = {
+    "room_height_m": re.compile(rf"(?:height|tall|high|tinggi)\D{{0,14}}?({_NUM})\s*(m\b|metres?|meters?|meter|cm|ft|feet|kaki)?|"
+                                rf"\b({_NUM})\s*(m\b|metres?|meters?|meter|cm|ft|feet|kaki)?\s*(?:high|tall|tinggi)\b", re.I),
+    "room_length_m": re.compile(rf"(?:length|long|panjang)\D{{0,14}}?({_NUM})\s*(m\b|metres?|meters?|meter|cm|ft|feet|kaki)?|"
+                                rf"\b({_NUM})\s*(m\b|metres?|meters?|meter|cm|ft|feet|kaki)?\s*(?:long|panjang)\b", re.I),
+    "room_width_m": re.compile(rf"(?:width|wide|lebar)\D{{0,14}}?({_NUM})\s*(m\b|metres?|meters?|meter|cm|ft|feet|kaki)?|"
+                               rf"\b({_NUM})\s*(m\b|metres?|meters?|meter|cm|ft|feet|kaki)?\s*(?:wide|lebar)\b", re.I),
+}
+_PERIMETER = re.compile(rf"perim\w*\D{{0,12}}({_NUM})\s*(m\b|metres?|meters?|meter|cm|ft|feet|kaki)?", re.I)
+
+
+def _to_metres(number, unit, plain=(1.5, 8.0)):
+    """A number and the unit written after it (or none, which counts as metres only for a room-sized figure)."""
+    value = numbers_in(number)[0]
+    if unit:
+        factors = unit_factors_in(unit)
+        return round(value * next(iter(factors)), 3) if len(factors) == 1 else None
+    return value if plain[0] <= value <= plain[1] else None
+
+
+def cued_sizes(message):
+    """Sizes tied to a word in the sentence: "height of 3 meters", "4 m long", and a square room's perimeter
+    ("perimeter is 16 metres", "square" gives 4 m a side). {room_*_m: metres}; only believable values."""
+    found, where = {}, {}
+    for key, pattern in _CUED.items():
+        match = pattern.search(message)
+        if match:
+            group = 1 if match.group(1) else 3
+            number, unit = match.group(group), match.group(group + 1)
+            metres = _to_metres(number, unit)
+            if metres and 0.3 <= metres <= 100:
+                found[key], where[key] = metres, match.start(group)
+    for key in [k for k in found if list(where.values()).count(where[k]) > 1]:
+        del found[key]                  # two words reached for the same number ("length x width is 5 by 3"): not tied
+    perimeter = _PERIMETER.search(message)
+    if perimeter and re.search(r"\bsquare\b", message, re.I):
+        side = _to_metres(perimeter.group(1), perimeter.group(2), plain=(4.0, 40.0))
+        if side and 1.0 <= side / 4 <= 25:
+            found.setdefault("room_length_m", round(side / 4, 3))
+            found.setdefault("room_width_m", round(side / 4, 3))
+    return found
 
 
 def _bare_number(message):

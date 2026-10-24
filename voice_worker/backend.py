@@ -6,12 +6,25 @@ Standard library only, so it can be tested without LiveKit installed.
 """
 import asyncio
 import json
+import os
 import re
 import urllib.error
 import urllib.request
 import uuid
 
 MAX_SPOKEN_CHARS = 700
+
+
+
+# Words the speech model should favour; callers have accents and phone lines are noisy. Extend with VOICE_STT_KEYTERMS.
+KEYTERMS = ["sitting room", "living room", "master bedroom", "bedroom", "bathroom", "kitchen", "dining room",
+            "ceiling", "skirting", "wall", "walls", "repaint", "meters", "feet", "Jotun", "Nippon Paint", "Dulux",
+            "economy", "standard", "premium", "ruang tamu", "bilik tidur", "dinding", "siling", "cat", "kali"]
+
+
+def keyterms():
+    extra = [w.strip() for w in os.environ.get("VOICE_STT_KEYTERMS", "").split(",") if w.strip()]
+    return KEYTERMS + extra
 
 
 def spoken(replies):
@@ -21,6 +34,9 @@ def spoken(replies):
     text = re.sub(r"\s*\n\s*", ". ", text)                      # one line per sentence
     text = re.sub(r"\.\s*\.", ".", text)
     text = re.sub(r"[*_`#]+", "", text)
+    text = re.sub(r"\bmetres\b", "meters", text)                # "meters" is how the voice says it
+    text = re.sub(r"\bmetre\b", "meter", text)
+    text = re.sub(r"\bMetres\b", "Meters", text)
     text = re.sub(r"\s+", " ", text).strip()
     if len(text) > MAX_SPOKEN_CHARS:
         cut = text[:MAX_SPOKEN_CHARS]
@@ -47,10 +63,24 @@ class Backend:
                 data = json.load(response)
         except urllib.error.HTTPError as err:
             raise RuntimeError(f"the assistant answered HTTP {err.code}") from err
-        except (urllib.error.URLError, TimeoutError, ValueError) as err:
+        except (OSError, ValueError) as err:
             raise RuntimeError(f"the assistant could not be reached: {err}") from err
         self.lang = data.get("lang") or self.lang
         return spoken(data.get("replies") or [])
+
+    def _persona(self):
+        """The character the dashboard has switched on: {name, voice, ...}, or {} if it cannot be read."""
+        base = self.url.rsplit("/incoming", 1)[0]
+        request = urllib.request.Request(base + "/api/personas", headers={"x-api-key": self.api_key})
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                data = json.load(response)
+        except (OSError, ValueError):               # no network, a timeout, or a reply that is not JSON
+            return {}
+        return (data.get("personas") or {}).get(data.get("active")) or {}
+
+    async def persona(self):
+        return await asyncio.to_thread(self._persona)
 
     async def ask(self, text):
         """The words to say for what the caller said ("" when the assistant chose to stay quiet)."""

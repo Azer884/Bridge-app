@@ -6,10 +6,10 @@ import time
 from types import SimpleNamespace
 
 from . import contact, flow
-from .grounding import (HEDGES, ONES, UNIT_FACTORS, GroundingError, estimate_in, ground_field,
+from .grounding import (HEDGES, ONES, UNIT_FACTORS, GroundingError, cued_sizes, estimate_in, ground_field,
                         ground_measurement, numbers_in, sizes_in, unit_factors_in)
-from .guard import MAX_STRIKES, clip_message, screen_input
-from .i18n import COLOUR_WORDS, STRINGS, TIER_WORDS, detect, metres, requested_language, t
+from .guard import MAX_STRIKES, clip_message, is_abusive, screen_input
+from .i18n import COLOUR_WORDS, STRINGS, TIER_WORDS, detect, metres, requested_language, t, us_spelling
 from .persona import greeting_line, render, text as persona_text
 from .prompt import build_messages, load_system_prompt
 from .runpod_client import RunPodError
@@ -63,6 +63,21 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
     if screen_input(message):
         return _refuse(state, message, config)
     persona = config.get("persona")
+    if is_abusive(message):
+        state.strikes += 1                      # polite once or twice, then a person takes over
+        if state.strikes >= MAX_STRIKES:
+            return _finish(state, message, t("fallback", state.lang), Status.HUMAN.value, human=True, record=False)
+        return _finish(state, message, f"{t('abuse', state.lang)} {_current_question(state, config)}".strip(),
+                       Status.COLLECTING.value, record=False)
+    if flow.is_foreign_script(message):
+        return _finish(state, message, t("foreign", state.lang), Status.COLLECTING.value, record=False)
+    if flow.wants_human(message):
+        state.needs_human = state.attention = True
+        if len(state.followups) < 50:
+            state.followups.append({"text": message[:300], "at": time.time()})      # the owner sees what was asked
+        owner = (config.get("owner") or {}).get("name") or ("pasukan kami" if state.lang == "ms" else "our team")
+        return _finish(state, message, f"{t('handoff', state.lang, owner=owner)} {_current_question(state, config)}".strip(),
+                       Status.HUMAN.value, human=True, record=False)
     if state.stage == "done":
         if flow.new_job_intent(message, state):
             flow.start_new_order(state)         # a returning customer: archive the old job, start a new one
@@ -99,13 +114,23 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
 
     if persona and not state.service_checked:
         service = flow.check_service(message)
-        if service == "unsupported":
+        owner = (config.get("owner") or {}).get("name") or ("pasukan kami" if state.lang == "ms" else "our team")
+        if service == "unsupported" and not state.declined:
+            state.declined = True
             return _finish(state, message, flow.decline_reply(state, config), Status.HUMAN.value, human=True)
+        if service != "supported" and state.declined:       # already told it is outside our services: do not repeat it
+            return _finish(state, message, t("declined_again", state.lang, owner=owner), Status.HUMAN.value,
+                           human=True, record=False)
         if service == "unknown":
-            reply = _greet(state, config, render(persona_text(persona, "service_question", state.lang),
-                                                  persona, config))
+            state.service_misses += 1
+            if state.service_misses == 1:
+                reply = _greet(state, config, render(persona_text(persona, "service_question", state.lang),
+                                                      persona, config))
+            else:                                           # the same question again would be a loop
+                reply = t("service_retry", state.lang)
             # kept out of the history so the first real turn still gets the format primer
             return _finish(state, message, reply, Status.COLLECTING.value, record=False)
+        state.declined = False
         state.service_checked = True
 
     if persona:
@@ -121,6 +146,11 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
     if not _COUNTED.search(message) or sizes_in(message):        # a number next to "one wall" is a count
         _prefill_measurement(state, message, config)
     changed = {k for k, v in state.verified.items() if before.get(k) != v}   # read by the backend this turn
+    pending = state.pending_sizes
+    if pending and not pending["asked"]:        # "12 by 10" with no unit: say what was understood and ask which unit
+        pending["asked"] = True
+        return _finish(state, message, t("ask_unit", state.lang, a=pending["values"][0], b=pending["values"][1]),
+                       Status.COLLECTING.value, record=False)
     system_prompt = load_system_prompt()
     if persona and changed:
         return _backend_turn(state, message, config, client, changed, system_prompt,
@@ -319,6 +349,9 @@ def _prefill_job(state, message, config):
     photo, and "no preference". Only the field being asked about (or a clearly stated surface) is filled,
     so a short reply is never lost and the customer is never asked the same thing twice."""
     missing = state.missing_required(config)
+    if state.verified.get("surfaces") == ["one wall"] and _WALLS.search(message):
+        state.verified["surfaces"] = ["walls"]              # "4 walls each 4x4": it was more than one wall after all
+        missing = state.missing_required(config)
     if "surfaces" in missing:
         items = []
         if _WALLS.search(message):
@@ -393,22 +426,45 @@ def _prefill_measurement(state, message, config):
     """
     missing = state.missing_required(config)
     open_fields = [k for k in missing if k in _CUES]
+    _, hedged = estimate_in(message)
+
+    def keep(key, value):
+        state.verified[key] = value
+        state.last_field = key
+        if hedged and key not in state.estimated:
+            state.estimated.append(key)
+
+    pending = state.pending_sizes
+    if pending:                                         # the customer is answering "meters or feet?"
+        state.pending_sizes = None
+        factors = unit_factors_in(message)
+        if len(factors) == 1:
+            factor = next(iter(factors))
+            for key, value in zip(pending["keys"], pending["values"]):
+                if key in open_fields:
+                    keep(key, round(value * factor, 3))
+            return
+    cued = {k: v for k, v in cued_sizes(message).items() if k in open_fields}
+    for key, value in cued.items():                     # "height of 3 meters", "4 m long", a square room's perimeter
+        keep(key, value)
+    open_fields = [k for k in open_fields if k not in cued]
     sizes = sizes_in(message)
     if sizes and len(open_fields) >= len(sizes):
-        # "4 by 5": the next open measurements in order (length then width, or length then height for one wall)
+        # "4 by 5": the next open sizes in order, or in the order the customer named them ("width x length")
+        keys = _size_keys(message, open_fields, len(sizes))
         if not unit_factors_in(message) and not all(PLAIN_METRES[0] <= n <= PLAIN_METRES[1] for n in sizes):
-            return                      # "10 by 12" could be feet: the model asks which
+            if len(sizes) >= 2 and not state.pending_sizes:
+                state.pending_sizes = {"keys": keys, "values": sizes, "asked": False}   # "10 by 12": feet or meters?
+            return
         text = message if unit_factors_in(message) else f"{message} m"
         try:
             values = [ground_measurement(n, text) for n in sizes]
         except GroundingError:
             return
-        _, hedged = estimate_in(message)
-        for key, value in zip(open_fields, values):
-            state.verified[key] = value
-            state.last_field = key
-            if hedged and key not in state.estimated:
-                state.estimated.append(key)
+        for key, value in zip(keys, values):
+            keep(key, value)
+        return
+    if cued:
         return
     numbers = numbers_in(message)
     upper, estimated = estimate_in(message)
@@ -437,6 +493,25 @@ def _prefill_measurement(state, message, config):
     state.last_field = key
     if estimated and key not in state.estimated:
         state.estimated.append(key)
+
+
+_CUE_WORDS = re.compile(r"\b(length|long|panjang|width|wide|lebar|height|tall|high|tinggi)\b", re.I)
+_CUE_KEY = {"length": "room_length_m", "long": "room_length_m", "panjang": "room_length_m", "width": "room_width_m",
+            "wide": "room_width_m", "lebar": "room_width_m", "height": "room_height_m", "tall": "room_height_m",
+            "high": "room_height_m", "tinggi": "room_height_m"}
+
+
+def _size_keys(message, open_fields, count):
+    """Which sizes "3x4" are, in order. "width x length" or "lebar x panjang" names them: the first number is the
+    width. Without such words it is length first, then width (then height)."""
+    named = []
+    for found in _CUE_WORDS.finditer(message):
+        key = _CUE_KEY[found.group(1).lower()]
+        if key not in named:
+            named.append(key)
+    if len(named) == count and all(key in open_fields for key in named):
+        return named
+    return open_fields[:count]
 
 
 def _correct_measurement(state, message):
@@ -518,6 +593,8 @@ def _resolve_pending_conflict(state, message):
 
 
 def _finish(state, message, reply, status, human=False, extracted=None, record=True):
+    if state.lang == "en":
+        reply = us_spelling(reply)              # "meters" even when the model writes "metres"
     if record:
         state.add_turn(message, reply, status, extracted)
     state.status = status

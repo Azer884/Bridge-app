@@ -25,6 +25,11 @@ def clean(data):
         if not isinstance(value, str) or len(value) > limit:
             raise ValueError(f"{key}_ms must be at most {limit} characters")
         persona[f"{key}_ms"] = value.strip()
+    voice = data.get("voice")
+    if voice not in (None, ""):                         # optional: the voice this character uses on a phone call
+        if not isinstance(voice, str) or not re.fullmatch(r"[A-Za-z0-9_.:/\-]{1,80}", voice):
+            raise ValueError("voice must be a voice id (letters, digits, - _ . : /)")
+        persona["voice"] = voice
     if any(screen_input(value) for value in persona.values()):
         raise ValueError("persona text looks like an instruction to the model")
     return persona

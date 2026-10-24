@@ -152,7 +152,7 @@ class ChangeOfMindTests(unittest.TestCase):
         self.assertEqual(state.verified["room_length_m"], 5.0)
         out = handle_message(state, "nvm its 4m", CONFIG, FakeClient())
         self.assertEqual(state.verified["room_length_m"], 4.0)
-        self.assertIn("updated the room length to 4 metres", out.reply)
+        self.assertIn("updated the room length to 4 meters", out.reply)
         self.assertIn("wide", out.reply)                                  # and it carries on
 
     def test_a_named_measurement_is_the_one_corrected(self):

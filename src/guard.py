@@ -34,6 +34,16 @@ _BLOCKED_REPLY = re.compile(
     re.I | re.S)
 
 
+_ABUSE = re.compile(
+    r"\b(nigg(?:er|a)s?|fagg?ots?|retard(?:ed)?|cunts?|bitch(?:es)?|motherfuck\w*|fuck (?:you|off|u)\b|f+u+c+k+ (?:you|off|u)|"
+    r"wh?ore|slut|asshole|babi|sial|bodoh|anjing|pukimak|puki|celaka|bangsat|keparat|kimak|lancau)\b", re.I)
+
+
+def is_abusive(message):
+    """Slurs and direct insults. The assistant answers once politely, and a customer who keeps it up goes to a person."""
+    return bool(_ABUSE.search(message))
+
+
 def clip_message(message):
     return message.strip()[:MAX_MESSAGE_CHARS]
 

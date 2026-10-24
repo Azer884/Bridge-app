@@ -3,9 +3,11 @@ team's voice-agent branch: a biasing prompt for painting words and a normaliser 
 ("empat kali lima meter" -> "4 by 5 metres"). The text then goes through the same screening, grounding and
 validation as a typed message.
 
-The model loads on first use, in the server process: `faster-whisper` must be installed
-(`uv add faster-whisper` on Replit). Without it voice notes are answered with a polite "please type it".
+With STT_RUNPOD_ENDPOINT_ID set, the audio goes to a RunPod faster-whisper worker (GPU, much faster than the Replit CPU).
+If that call fails, or no endpoint is set, the model loads on first use in the server process: `faster-whisper` must then
+be installed (`uv add faster-whisper` on Replit). Without it voice notes are answered with a polite "please type it".
 """
+import base64
 import importlib.util
 import logging
 import os
@@ -26,8 +28,14 @@ HOMOPHONES = {"won": "1", "to": "2", "too": "2", "for": "4", "fore": "4", "ate":
 DEFAULT_PROMPT = (
     "Malaysian painting quotation enquiry. Dimensions: 4 by 5 metres, 3 by 4 metres, 10 by 12 feet, 4x5m. "
     "Cat dinding, siling, bilik tidur, ruang tamu, cat mengelupas, retak, lembap, berkulat, Jotun, Nippon Paint. "
-    "Empat kali lima meter, tiga kali empat meter."
+    "Empat kali lima meter, tiga kali empat meter. Sitting room, living room, master bedroom, kitchen, bathroom, "
+    "dining room, ceiling, skirting, repaint, economy, standard, premium."
 )
+# Phrases speech-to-text writes for a room word when the speaker has an accent or the line is noisy
+_MISHEARS = [(re.compile(r"\b(?:sitting|setting|seating)\s+(?:maybe one word|may be one word|rum|rom|rooms?\b)", re.I),
+              "sitting room"),
+             (re.compile(r"\bliving\s+(?:rum|rom|rube)\b", re.I), "living room"),
+             (re.compile(r"\bbed\s+(?:rum|rom)\b", re.I), "bedroom")]
 
 _WORDS = {**MALAY_NUMBERS, **ENGLISH_NUMBERS}
 _NUMBER = r"\d+(?:\.\d+)?|" + "|".join(sorted(map(re.escape, {**_WORDS, **HOMOPHONES}), key=len, reverse=True))
@@ -51,12 +59,15 @@ def normalize_spoken(text):
     def single(match):
         return f"{_digit(match.group(1))} {match.group(2)}"
 
+    for pattern, fixed in _MISHEARS:
+        text = pattern.sub(fixed, text)
     return _SINGLE.sub(single, _PAIR.sub(pair, text))
 
 
 class Transcriber:
-    def __init__(self, model_size="base", device="cpu", model_factory=None):
+    def __init__(self, model_size="base", device="cpu", model_factory=None, remote=None, remote_model="small"):
         self.model_size, self.device = model_size, device
+        self.remote, self.remote_model = remote, remote_model       # a RunPodClient for a faster-whisper worker, or None
         self._factory, self._model, self._lock = model_factory, None, threading.Lock()
         self.last_error = ""                    # why the last load or transcription failed, for /api/voice/health
 
@@ -65,11 +76,18 @@ class Transcriber:
         """None when voice is switched off (STT_ENABLED=0). The model itself loads on first use."""
         if str(env.get("STT_ENABLED", "1")).lower() in ("0", "false", "no", "off"):
             return None
-        return cls(env.get("STT_MODEL_SIZE") or "base", env.get("STT_DEVICE") or "cpu")
+        remote = None
+        if env.get("STT_RUNPOD_ENDPOINT_ID"):
+            from .runpod_client import RunPodClient
+            key = env.get("STT_RUNPOD_API_KEY") or env.get("RUNPOD_API_KEY")
+            if key:
+                remote = RunPodClient(key, env["STT_RUNPOD_ENDPOINT_ID"], timeout_s=180)
+        return cls(env.get("STT_MODEL_SIZE") or "base", env.get("STT_DEVICE") or "cpu", remote=remote,
+                   remote_model=env.get("STT_RUNPOD_MODEL") or "small")
 
     @property
     def loaded(self):
-        return self._model is not None
+        return self._model is not None or self.remote is not None
 
     def _load(self):
         with self._lock:
@@ -100,7 +118,10 @@ class Transcriber:
         return ""
 
     def warm_up(self):
-        """Load the model now (it downloads on first use), so the first voice note is not the slow one."""
+        """Load the model now (it downloads on first use), so the first voice note is not the slow one.
+        With a RunPod worker there is nothing to load here; the local model only loads if the worker fails."""
+        if self.remote:
+            return True
         if not self._factory and importlib.util.find_spec("faster_whisper") is None:
             self.last_error = "faster-whisper is not installed (uv add faster-whisper)"
             return False
@@ -114,8 +135,25 @@ class Transcriber:
             log.exception("could not load the speech model")
             return False
 
+    def _transcribe_remote(self, audio):
+        output = self.remote.run({"audio_base64": base64.b64encode(audio).decode(), "model": self.remote_model,
+                                  "language": None, "initial_prompt": DEFAULT_PROMPT, "beam_size": 5})
+        text = (output.get("transcription") or " ".join(s.get("text", "").strip() for s in output.get("segments", []))
+                ).strip() if isinstance(output, dict) else ""
+        if not text:
+            raise RuntimeError("RunPod whisper returned no text")
+        return normalize_spoken(text), output.get("detected_language", "")
+
     def transcribe(self, audio, mime=""):
         """(text, detected language) for the audio bytes of a voice note. Raises on any failure."""
+        if self.remote:
+            try:
+                result = self._transcribe_remote(audio)
+                self.last_error = ""
+                return result
+            except Exception as err:
+                self.last_error = f"RunPod whisper failed, using local model: {type(err).__name__}: {err}"[:300]
+                log.warning(self.last_error)
         model = self._load()
         suffix = ".ogg" if "ogg" in mime or "opus" in mime or not mime else ".m4a" if "mp4" in mime or "aac" in mime else ".mp3"
         with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as handle:

@@ -50,20 +50,24 @@ class RunPodClient:
         """Job and worker counts for this endpoint (RunPod's /health)."""
         return self._call(f"https://api.runpod.ai/v2/{self.endpoint_id}/health")
 
-    def chat(self, messages, sampling=None):
-        """Return the assistant message text. runsync gives up after ~90s, so poll /status."""
+    def run(self, payload, timeout_s=None):
+        """Run one job with `payload` as its input and return the worker's output. runsync gives up after ~90s, so poll /status."""
         base = f"https://api.runpod.ai/v2/{self.endpoint_id}"
         start = time.time()
-        body = self._call(f"{base}/runsync",
-                          {"input": {"messages": messages, "sampling_params": sampling or self.sampling}})
+        body = self._call(f"{base}/runsync", {"input": payload})
         while body.get("status") in ("IN_QUEUE", "IN_PROGRESS"):
-            if time.time() - start > self.timeout_s:
+            if time.time() - start > (timeout_s or self.timeout_s):
                 raise RunPodError("RunPod job timed out (worker cold start?)")
             time.sleep(3)
             body = self._call(f"{base}/status/{body['id']}")
         if body.get("status") != "COMPLETED":
             raise RunPodError(f"RunPod job ended with status {body.get('status')}: {body.get('error')}")
+        return body.get("output")
+
+    def chat(self, messages, sampling=None):
+        """Return the assistant message text."""
+        output = self.run({"messages": messages, "sampling_params": sampling or self.sampling})
         try:
-            return body["output"][0]["choices"][0]["message"]["content"]
+            return output[0]["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError) as err:
             raise RunPodError(f"unexpected RunPod output shape: {err}") from err

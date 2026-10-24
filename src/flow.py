@@ -31,6 +31,36 @@ def _owner_for(config, lang):
     return (config.get("owner") or {}).get("name") or ("pasukan kami" if lang == "ms" else "our team")
 
 
+_HUMAN = re.compile(
+    r"\b(live agent|(?:a |an |real |actual )human\b(?!-)|real person|(speak|talk|chat) (to|with) (a |an |the |your )?(person|someone|somebody|agent|"
+    r"owner|manager|human|representative|staff)|customer service|representative|operator|call me|ring me|"
+    r"cakap dengan (orang|pemilik|manager|staf)|orang sebenar|nak cakap dengan)\b", re.I)
+
+
+def wants_human(message):
+    """The customer asks for a person: that is the owner's cue, not something to answer with another question."""
+    return bool(_HUMAN.search(message))
+
+
+_COLOUR_SUGGEST = re.compile(
+    r"\b(suggest|recommend|advise|pick|choose|decide|match|cadang\w*|syorkan|pilihkan)\b.{0,50}\b(colou?rs?|warna)\b|"
+    r"\b(what|which|any)\b.{0,20}\b(colou?rs?|warna)\b.{0,40}\b(suit|match|go with|fit|best|sesuai|cantik|photo|picture|pic|image|gambar)\b|"
+    r"\b(colou?rs?|warna)\b.{0,30}\b(based on|from|according to|dari|berdasarkan)\b.{0,20}\b(photo|picture|pic|image|gambar)\b", re.I)
+
+
+def wants_colour_suggestion(message):
+    """"Suggest a colour based on the picture": the customer wants the colour chosen from their photo."""
+    return bool(_COLOUR_SUGGEST.search(message))
+
+
+def is_foreign_script(message):
+    """Mostly letters of another alphabet (Arabic, Cyrillic, Chinese...), which the assistant cannot read."""
+    letters = [c for c in message if c.isalpha()]
+    if len(letters) < 4:
+        return False
+    return sum(1 for c in letters if ord(c) > 0x024F) / len(letters) > 0.5
+
+
 def decline_reply(state, config):
     return t("decline", state.lang, services=" and ".join(config["services"]))
 
@@ -161,7 +191,8 @@ _QUESTION_START = re.compile(
     r"^\s*(do|does|can|could|what|whats|what's|how|which|is|are|will|would|any|apa|berapa|bila|boleh|adakah|"
     r"macam mana|bagaimana|siapa|di mana|kenapa)\b", re.I)
 _FAQ_SERVICES = re.compile(
-    r"\b(services?|offer|other|else|what (do|can) you|perkhidmatan|tawar\w*|lain|apa lagi)\b", re.I)
+    r"\b(services?|offer|other|else|what (do|can) you (offer|do|paint|provide|sell)|perkhidmatan|tawar\w*|lain|apa lagi)\b",
+    re.I)
 _FAQ_PRICE = re.compile(
     r"\b(price|prices|cost|costs|how much|expensive|cheap|charge|rates?|harga|kos|berapa|mahal|murah|bayar)\b",
     re.I)

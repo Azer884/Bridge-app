@@ -42,6 +42,11 @@ class ConversationState:
     overrides: dict = field(default_factory=dict)   # the owner's corrections from the dashboard form
     pending_booking: dict = None   # a slot offered to the customer, waiting for their yes or no
     human_until: float = 0.0       # the owner is replying by hand until this time: the assistant stays quiet
+    service_misses: int = 0        # messages that did not say what the customer wants painted
+    pending_sizes: dict = None     # sizes given without a unit that could be feet; waiting for "meters or feet?"
+    last_photo_id: str = ""        # the customer's latest photo, kept to suggest a colour from it later
+    awaiting_colour_photo: bool = False   # asked for a photo because the customer wanted a colour suggested
+    declined: bool = False         # the request was outside the services offered (exterior work, say)
 
     def required_fields(self, config):
         wanted = set(config["required_fields"])
