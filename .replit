@@ -1,4 +1,4 @@
-modules = ["python-3.12"]
+modules = ["python-3.12", "postgresql-16"]
 run = "python -m uvicorn src.server:create_app --factory --host 0.0.0.0 --port 8000"
 
 [nix]
