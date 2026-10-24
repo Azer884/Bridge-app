@@ -162,7 +162,7 @@ curl -X POST https://api.runpod.ai/v2/$RUNPOD_ENDPOINT_ID/runsync \
 ## Challenges & Learnings
 
 - What challenges did you face, and how did you overcome them?
-- What did your team learn?
+- what did your team learned
 
 ## Future Improvements
 
@@ -171,13 +171,13 @@ curl -X POST https://api.runpod.ai/v2/$RUNPOD_ENDPOINT_ID/runsync \
 
 ## Team
 
-| Name            | Role                | GitHub                                   |
-| -----------     | ------------------- | ---------------------------------------- |
-| Azer Hamdaoui   | Team Lead / Backend | [@username](https://github.com/username) |
-|Tarek ben slimen | Frontend            | [@username](https://github.com/username) |
-| Omar Bouhlel    | AI / RunPod         | [@username](https://github.com/username) |
-| Ilyess Hassine  | AI / RunPod         | [@username](https://github.com/username) |
-| Moetez Soltani  | AI / RunPod         | [@username](https://github.com/username) |
+| Name              | Role                                       | GitHub                                   |
+| -----------       | -------------------------------------------| ---------------------------------------- |
+| Azer Hamdaoui     | Team Lead / Runpod/ AI Expe                | [@username](https://github.com/username) |
+| Omar Bouhlel      | Frontend / AI-calendar Developer           | [@username](https://github.com/username) |
+| Tarek ben slimen  | AI-whatsapp voice/call Messages Expert     | [@username](https://github.com/username) |
+| Ilyess Hassine    | Whatsapp Linkage Analyzer                  | [@username](https://github.com/username) |
+| Moetez Soltani    | Representater / Organizer                  |@Moe-MY                                   |
 
 ---
 
