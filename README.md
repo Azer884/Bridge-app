@@ -24,7 +24,7 @@ The first version is built for Malaysian painting businesses.
 | ----------------- | ---------------------------------------------- |
 | GitHub Repository | https://github.com/Azer884/Bridge-app          |
 | Replit Project    | https://replit.com/@AzerHamdaoui/Bridge-app    |
-| Live Demo         | https://gesir-ai.replit.app (the dashboard is at `/app` and needs the team password) |
+| Live Demo         | https://gesir-ai.replit.app (the dashboard is at `/app`; demo password: `TiJedWeldikYa5ra3fest3al5ra9omtnl9a5ryaBh8aElFarch`) |
 | RunPod Endpoints  | text model `ose8agxpb9p1mr`, vision model `m3a8r7m8ebibba` (`https://api.runpod.ai/v2/<id>/runsync`) |
 | Slide Deck        | https://canva.link/gesir-ai                    |
 | Demo Video        | https://example.com/demo-video                 |
@@ -56,7 +56,7 @@ See [`docs/STATUS.md`](docs/STATUS.md) for what is built and what is still missi
 
 | Layer         | Technology                                              |
 | ------------- | ------------------------------------------------------- |
-| Frontend      | React, TypeScript and Vite (web), Expo React Native (mobile). Source on the `feature/frontend` branch; the web build is served from `dashboard/` |
+| Frontend      | React, TypeScript and Vite (web), Expo React Native (mobile). Source in `frontend/` (`web/`, `mobile/`, `shared/`); the web build is served from `dashboard/` |
 | Backend       | Python 3.12, FastAPI, uvicorn                           |
 | Database      | PostgreSQL on Replit (SQLite for local runs)            |
 | AI / Compute  | RunPod serverless GPU: Qwen2.5-7B-Instruct (chat), Qwen2.5-VL-7B-Instruct (photos). Whisper (`faster-whisper`) for voice notes |
@@ -169,6 +169,36 @@ python -m unittest discover tests
 ```
 
 Tests use a fake model and need no network. The PostgreSQL tests run only when `TEST_DATABASE_URL` is set.
+
+### Mobile App (Android)
+
+The mobile app is an Expo React Native app in `frontend/mobile/`. It shares one typed API client with the web dashboard (`frontend/shared/`) and has the same screens: quote review, pipeline, calendar, customers, personas, WhatsApp link and status.
+
+**Run in development**
+
+```bash
+cd frontend/mobile
+npm install
+cp .env.example .env     # set EXPO_PUBLIC_USE_MOCK=false, EXPO_PUBLIC_API_URL and EXPO_PUBLIC_API_KEY for the real backend
+npx expo start           # scan the QR code with Expo Go, or press a for an Android emulator
+```
+
+With `EXPO_PUBLIC_USE_MOCK=true` (the default in `.env.example`) the app runs on sample data and needs no backend. On a phone, `EXPO_PUBLIC_API_URL` must be a reachable URL (the Replit URL or your PC's LAN IP), not `localhost`.
+
+**Build the APK** (cloud build with EAS, no Android SDK needed)
+
+```bash
+cd frontend/mobile
+npm install -g eas-cli            # or prefix the commands below with npx
+eas login
+eas init                          # links the project to your Expo account (edits app.json)
+eas env:create preview --name EXPO_PUBLIC_API_KEY --value <INCOMING_API_KEY> --visibility sensitive
+eas build -p android --profile preview
+```
+
+`eas.json` defines the `preview` profile: it builds an `.apk`, turns sample data off, points at `https://Gesir-AI.replit.app` and enables live bookings. Change `EXPO_PUBLIC_API_URL` there if your backend is elsewhere. When the build finishes EAS prints a download link; open it on the phone and install the APK (allow "install unknown apps" if Android asks).
+
+**Security:** `EXPO_PUBLIC_` values are bundled into the app, so the `INCOMING_API_KEY` is inside the APK and can be extracted. Share the APK and its download link only with people you trust, and do not put the link in public places, until the backend has real per-user login.
 
 ---
 
