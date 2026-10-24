@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages (conversation_id, id);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS processed_call_events (event_key TEXT PRIMARY KEY, received_at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS bookings (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, data TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings (user_id);
 CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, ts REAL NOT NULL, data TEXT NOT NULL);
@@ -170,6 +171,17 @@ class SqliteStore:
         with self._conn() as conn:
             conn.execute("DELETE FROM processed_messages WHERE message_id=?", (message_id,))
 
+    def claim_call_event(self, event_key):
+        """True the first time a call event is seen, so a repeated delivery cannot accept or hang up a call twice."""
+        with self._conn() as conn:
+            cursor = conn.execute("INSERT INTO processed_call_events VALUES (?,?) ON CONFLICT DO NOTHING",
+                                  (event_key, time.time()))
+            return cursor.rowcount == 1
+
+    def release_call_event(self, event_key):
+        with self._conn() as conn:
+            conn.execute("DELETE FROM processed_call_events WHERE event_key=?", (event_key,))
+
     def log_message(self, conversation_id, direction, text, media_id=""):
         with self._conn() as conn:
             conn.execute("INSERT INTO messages (conversation_id, direction, text, media_id, created_at) "
@@ -193,6 +205,7 @@ PG_SCHEMA = [
     "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS events (id BIGSERIAL PRIMARY KEY, ts DOUBLE PRECISION NOT NULL, "
     "kind TEXT NOT NULL, detail TEXT NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS processed_call_events (event_key TEXT PRIMARY KEY, received_at DOUBLE PRECISION NOT NULL)",
     "CREATE TABLE IF NOT EXISTS bookings (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, data TEXT NOT NULL)",
     "CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings (user_id)",
     "CREATE TABLE IF NOT EXISTS audit (id BIGSERIAL PRIMARY KEY, user_id TEXT NOT NULL, "

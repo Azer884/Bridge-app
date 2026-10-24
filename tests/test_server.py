@@ -290,7 +290,7 @@ class ServerTests(unittest.TestCase):
         body = {"message_id": "m1", "user_id": "u1", "text": "hi"}
         self.assertEqual(self.client.post("/incoming", json=body).status_code, 401)
         res = self.client.post("/incoming", json=body, headers={"x-api-key": "key"})
-        self.assertEqual(res.json(), {"replies": ["echo hi"]})
+        self.assertEqual(res.json(), {"replies": ["echo hi"], "lang": "en"})
         self.assertEqual(self.client.post("/incoming", json={"text": "x"}, headers={"x-api-key": "key"}).status_code, 422)
 
     def test_unconfigured_secrets_fail_closed(self):

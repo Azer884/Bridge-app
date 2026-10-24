@@ -82,3 +82,32 @@ def from_meta_payload(payload):
                     media_id=_text(body.get("id")) if kind in ("image", "audio") else "",
                     timestamp=int(message["timestamp"]) if str(message.get("timestamp", "")).isdigit() else 0))
     return events
+
+
+def calls_from_meta_payload(payload):
+    """WhatsApp call lifecycle events (connect, terminate) from a Meta webhook body. Message parsing is separate.
+    Each is {id, event, phone_number_id, sdp, sdp_type, caller}: caller is the customer's WhatsApp number, so a
+    phone call can join the same conversation as their chat."""
+    calls = []
+    entries = payload.get("entry") if isinstance(payload, dict) else None
+    for entry in entries if isinstance(entries, list) else []:
+        for change in entry.get("changes", []) if isinstance(entry, dict) else []:
+            if not isinstance(change, dict) or change.get("field") != "calls":
+                continue
+            value = change.get("value")
+            if not isinstance(value, dict):
+                continue
+            metadata = value.get("metadata") or {}
+            phone_id = _text(metadata.get("phone_number_id")) if isinstance(metadata, dict) else ""
+            for call in value.get("calls", []):
+                if not isinstance(call, dict):
+                    continue
+                call_id = _text(call.get("id")).strip()
+                event = _text(call.get("event")).strip().lower()
+                session = call.get("session") if isinstance(call.get("session"), dict) else {}
+                caller = "".join(ch for ch in _text(call.get("from")) if ch.isdigit())
+                if call_id and event in {"connect", "terminate"}:
+                    calls.append({"id": call_id, "event": event, "phone_number_id": phone_id,
+                                  "sdp": _text(session.get("sdp")), "sdp_type": _text(session.get("sdp_type")).lower(),
+                                  "caller": caller})
+    return calls

@@ -60,7 +60,7 @@ from pydantic import BaseModel, Field
 from . import persona as persona_module
 from . import views, webauth
 from .pdf import estimate_pdf
-from .events import from_flat, from_meta_payload
+from .events import calls_from_meta_payload, from_flat, from_meta_payload
 from .runpod_client import RunPodClient, RunPodError, load_dotenv
 from .service import IncomingService
 from .store import make_store
@@ -155,7 +155,8 @@ def _same(a, b):
     return bool(a) and bool(b) and hmac.compare_digest(a.encode(), b.encode())
 
 
-def create_app(service=None, sender=None, env=None, text_client=None, vision_client=None, transcriber=None):
+def create_app(service=None, sender=None, env=None, text_client=None, vision_client=None, transcriber=None,
+               call_handler=None):
     if env is None:
         load_dotenv()
         env = dict(os.environ)
@@ -223,6 +224,9 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
             raise HTTPException(502, "model unavailable")
 
     app = FastAPI(title="Painting assistant")
+    if call_handler is None:
+        from .whatsapp_calling import handle_call_event      # LiveKit is only imported when a call arrives
+        call_handler = handle_call_event
     origins = [o.strip() for o in (env.get("CORS_ORIGINS") or "").split(",") if o.strip()]
     if origins:                                 # the web dashboard on another origin; native apps need none
         app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["*"], allow_headers=["*"])
@@ -271,6 +275,23 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
                 running.discard(event.user_id)
             raise
 
+    def process_call(call):
+        """A WhatsApp call event: connect hands the call to the voice agent, terminate hangs it up. Off unless
+        WHATSAPP_CALLING_ENABLED=true, and each event is handled once."""
+        key = f"{call['id']}:{call['event']}"
+        if not service.store.claim_call_event(key):
+            return
+        if str(env.get("WHATSAPP_CALLING_ENABLED", "false")).lower() != "true":
+            service.store.log_event("call_ignored", "calling is disabled")
+            return
+        try:
+            call_handler(call, env)
+            service.store.log_event("call_handled", f"{call['event']} {call['id']}")
+        except Exception as err:
+            service.store.release_call_event(key)            # Meta's retry may succeed
+            log.exception("failed to handle WhatsApp call event")
+            service.store.log_event("call_error", f"{call['event']} {type(err).__name__}: {str(err)[:200]}")
+
     @app.get("/health")
     def health():
         return {"ok": True}
@@ -301,10 +322,13 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
             payload = json.loads(raw)
         except ValueError:
             raise HTTPException(400, "invalid JSON")
-        events = from_meta_payload(payload)
-        service.store.log_event("webhook", f"{len(events)} message(s): " + ", ".join(e.type for e in events))
+        events, calls = from_meta_payload(payload), calls_from_meta_payload(payload)
+        service.store.log_event("webhook", f"{len(events)} message(s): " + ", ".join(e.type for e in events)
+                                + (f"; {len(calls)} call event(s)" if calls else ""))
         for event in events:
             background.add_task(process_and_send, event)
+        for call in calls:
+            background.add_task(process_call, call)
         return {"ok": True}                     # answer fast: Meta retries slow webhooks
 
     @app.post("/incoming")
@@ -314,7 +338,8 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
             event = from_flat(body)
         except ValueError as err:
             raise HTTPException(422, str(err))
-        return {"replies": service.handle(event)}
+        replies = service.handle(event)
+        return {"replies": replies, "lang": service.store.load(event.user_id).lang}   # the voice agent speaks in it
 
     @app.post("/api/text/chat")
     def text_chat(body: TextRequest, request: Request):
@@ -356,7 +381,8 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
     @app.get("/api/events")
     def recent_events(request: Request, limit: int = Query(50, ge=1, le=200)):
         require_key(request)
-        return {"events": service.store.events(limit)}
+        return {"events": [{**e, "ts": views._iso(e["ts"]), "ok": not any(w in e["kind"] for w in ("fail", "error"))}
+                           for e in service.store.events(limit)]}
 
     @app.get("/api/quotes")
     def list_quotes(request: Request, status: str = "pending_approval"):

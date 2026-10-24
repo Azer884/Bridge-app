@@ -403,5 +403,23 @@ class HumanTakeoverTests(unittest.TestCase):
         self.assertEqual(self.service.store.get_booking(booking["id"])["status"], "confirmed")
 
 
+class NewCustomerVisibilityTests(unittest.TestCase):
+    def test_a_customer_who_only_said_hello_is_in_the_pipeline_and_the_collecting_list(self):
+        service = priced_service()                       # one finished customer already
+        service.handle(IncomingEvent("hello-1", "60198765432", text="hi", profile_name="Team Mate"))
+        api = TestClient(create_app(service, Sender(), ENV))
+        rows = {r["user_id"]: r for r in api.get("/api/pipeline", headers=KEY).json()["quotes"]}
+        self.assertEqual(rows["60198765432"]["stage"], "pending_extraction")
+        self.assertEqual(rows["60198765432"]["customer"], "Team Mate")
+        collecting = api.get("/api/quotes?status=collecting", headers=KEY).json()["quotes"]
+        self.assertEqual([q["user_id"] for q in collecting], ["60198765432"])
+        self.assertEqual([q["user_id"] for q in api.get("/api/quotes", headers=KEY).json()["quotes"]], ["u1"])
+        service.store.log_event("send_failed", "x")
+        service.store.log_event("sent", "y")
+        events = api.get("/api/events", headers=KEY).json()["events"]
+        self.assertEqual([(e["kind"], e["ok"]) for e in events], [("sent", True), ("send_failed", False)])
+        self.assertRegex(events[0]["ts"], r"^20\d\d-\d\d-\d\dT")           # a date the dashboard can read, not epoch seconds
+
+
 if __name__ == "__main__":
     unittest.main()

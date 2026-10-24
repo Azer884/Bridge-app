@@ -106,12 +106,12 @@ class IncomingService:
         status = LEGACY_STATUS.get(status, status)
         booked = {b["user_id"] for b in self.store.bookings() if b["status"] == "confirmed"}
         return [views.quote_item(s, s.conversation_id in booked) for s in self.store.conversations()
-                if (s.verified or s.quote) and views.front_status(s) == status]
+                if views.front_status(s) == status]
 
     def pipeline(self):
         booked = {b["user_id"] for b in self.store.bookings() if b["status"] == "confirmed"}
-        return [views.quote_item(s, s.conversation_id in booked) for s in self.store.conversations()
-                if s.verified or s.quote]
+        # every customer who has written, even one who has only said hello (no answers saved yet)
+        return [views.quote_item(s, s.conversation_id in booked) for s in self.store.conversations()]
 
     def detail(self, user_id):
         """The review screen: job, quote, editable parameters, chat, photos, audit trail."""
