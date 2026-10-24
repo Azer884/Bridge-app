@@ -6,10 +6,10 @@ import time
 from types import SimpleNamespace
 
 from . import contact, flow
-from .grounding import (GroundingError, estimate_in, ground_field, ground_measurement, numbers_in,
-                        sizes_in, unit_factors_in)
+from .grounding import (HEDGES, ONES, UNIT_FACTORS, GroundingError, estimate_in, ground_field,
+                        ground_measurement, numbers_in, sizes_in, unit_factors_in)
 from .guard import MAX_STRIKES, clip_message, screen_input
-from .i18n import STRINGS, TIER_WORDS, detect, metres, requested_language, t
+from .i18n import COLOUR_WORDS, STRINGS, TIER_WORDS, detect, metres, requested_language, t
 from .persona import greeting_line, render, text as persona_text
 from .prompt import build_messages, load_system_prompt
 from .runpod_client import RunPodError
@@ -118,7 +118,7 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
     asked = state.next_missing(config)              # the question the customer is answering
     before, before_estimated = dict(state.verified), list(state.estimated)
     _prefill_job(state, message, config)
-    if "surfaces" not in changed_keys(before, state):         # a number next to "one wall" is a count
+    if not _COUNTED.search(message) or sizes_in(message):        # a number next to "one wall" is a count
         _prefill_measurement(state, message, config)
     changed = {k for k, v in state.verified.items() if before.get(k) != v}   # read by the backend this turn
     system_prompt = load_system_prompt()
@@ -206,7 +206,8 @@ def _backend_turn(state, message, config, client, changed, system_prompt, estima
     for anything else the message says, but its reply is not used: it tends to ask for the value the
     backend just filled in. The backend acknowledges and asks the next question itself."""
     accepted = {}
-    if state.missing_required(config):          # nothing left to ask: no model call is needed
+    # nothing left to ask, or the message said nothing the backend has not already read: no model call is needed
+    if state.missing_required(config) and len(_leftover_words(message)) > 1:
         try:
             raw = client.chat(build_messages(config, state, message, None, system_prompt))
             result = validate_response(raw, state, message, config)
@@ -221,6 +222,25 @@ def _backend_turn(state, message, config, client, changed, system_prompt, estima
     done = SimpleNamespace(accepted=accepted, conflicts=[], reply=reply,
                            status=Status.COLLECTING.value if missing else Status.READY.value)
     return _accept(state, message, config, done, 1)
+
+
+_FILLER_WORDS = {"x", "by", "the", "a", "an", "is", "it", "its", "i", "im", "my", "me", "ok", "okay", "yes", "no",
+                 "ya", "please", "pls", "thanks", "thank", "then", "and", "also", "for", "to", "of", "in", "at", "on",
+                 "hi", "hello", "hai", "ceiling", "ceilings", "wall", "walls", "one", "only", "just", "long", "wide",
+                 "high", "tall", "height", "width", "length", "m", "metre", "metres", "meter", "meters", "cm", "ft",
+                 "feet", "dinding", "siling", "tinggi", "lebar", "panjang", "kaki", "meter", "paint", "with", "want",
+                 "need", "like", "would", "id", "ill", "can", "you"}
+
+
+def _leftover_words(message):
+    """The words of a message that the backend's own readers did not account for (sizes, tier, colour, time,
+    surfaces, filler). Few leftovers means the model has nothing more to extract."""
+    text = message.lower()
+    for pattern in (_TIERS, _COLOURS, flow._DATE_WORDS, flow._ASAP, flow.NO_PREFERENCE, _WALLS, _WALL, _CEILING):
+        text = pattern.sub(" ", text)
+    text = re.sub(r"\d+(?:[.,]\d+)?", " ", text)
+    return [w for w in re.findall(r"[a-z']+", text) if w not in _FILLER_WORDS and w not in HEDGES
+            and w not in ONES and w not in UNIT_FACTORS]
 
 
 def _greet(state, config, reply):
@@ -283,7 +303,10 @@ _WALLS = re.compile(r"\b(walls|semua dinding|dinding-dinding|keempat-empat dindi
 _WALL = re.compile(r"\b(wall|(satu|1|sebelah|sebuah) dinding|dinding (satu|ini|itu|sahaja|saja))\b", re.I)
 _PLAIN_DINDING = re.compile(r"\bdinding\b", re.I)
 _CEILING = re.compile(r"\b(ceilings?|siling)\b", re.I)
-_TIERS = re.compile(r"\b(economy|ekonomi|standard|premium)\b", re.I)
+_TIERS = re.compile(r"\b(" + "|".join(sorted(TIER_WORDS, key=len, reverse=True)) + r")\b", re.I)
+_COLOURS = re.compile(r"\b(" + "|".join(sorted(COLOUR_WORDS, key=len, reverse=True)) + r")\b", re.I)
+_COUNTED = re.compile(r"\b(\d+|one|two|three|four|five|satu|dua|tiga|empat|lima)\s*(walls?|ceilings?|rooms?|"
+                      r"bedrooms?|coats?|doors?|windows?|dinding|siling|bilik|pintu|tingkap)\b", re.I)
 PHOTO_CONDITION = "see the customer's photo"
 
 
@@ -309,6 +332,20 @@ def _prefill_job(state, message, config):
         if items:
             state.verified["surfaces"] = items
             missing = state.missing_required(config)
+    required = set(state.required_fields(config))
+    if "paint_tier" in required and "paint_tier" not in state.verified:
+        tier = _TIERS.search(message)                   # "Eco", "premium please": said before it was asked
+        if tier:
+            state.verified["paint_tier"] = TIER_WORDS[tier.group(1).lower()]
+    if "colour" in required and "colour" not in state.verified:
+        colours = [m.group(1).lower() for m in _COLOURS.finditer(message)]
+        if colours:
+            state.verified["colour"] = " and ".join(dict.fromkeys(colours))
+    if "preferred_datetime" in required and "preferred_datetime" not in state.verified and len(message.split()) > 1:
+        when = flow.when_in(message, strict=True)
+        if when:
+            state.verified["preferred_datetime"] = when
+    missing = state.missing_required(config)
     if "surface_condition" in missing and state.photo_assessment:
         state.verified["surface_condition"] = PHOTO_CONDITION      # the photo already shows it
         missing = state.missing_required(config)
@@ -329,6 +366,10 @@ def _prefill_job(state, message, config):
             state.verified[key] = "no preference"
     elif key == "colour" and flow.NO_PREFERENCE.search(message):
         state.verified[key] = "no preference"
+    elif key == "address" and state.verified.get("location") and "address" not in state.verified:
+        place = state.verified["location"]                     # they already shared where the job is
+        state.verified[key] = (" ".join(x for x in (place.get("name"), place.get("address")) if x)
+                               or t("pinned", state.lang, lat=place["lat"], lon=place["lon"]))
     elif key == "address" and state.orders and flow.is_yes(message):
         previous = state.orders[-1]["verified"].get("address")      # a returning customer, same address
         if previous:
@@ -423,6 +464,16 @@ def _correct_measurement(state, message):
     elif not estimated and key in state.estimated:
         state.estimated.remove(key)
     return t("ack_fixed", state.lang, label=t(f"label_{key}", state.lang), value=metres(value, state.lang))
+
+
+def advance(state, config, message, ack=""):
+    """Carry on after the backend filled a field itself (a shared location answering the address): acknowledge,
+    then ask the next question, or move on to the contact step when the job is complete."""
+    missing = state.missing_required(config)
+    reply = f"{ack} {ask_for(missing[0], state)}".strip() if missing else ack
+    done = SimpleNamespace(accepted={}, conflicts=[], reply=reply,
+                           status=Status.COLLECTING.value if missing else Status.READY.value)
+    return _accept(state, message, config, done, 1).reply
 
 
 def _after_correction(state, message, config, fixed):

@@ -72,6 +72,26 @@ ROOT = Path(__file__).resolve().parent.parent
 log = logging.getLogger("server")
 
 
+def worker_state(data):
+    """A model's readiness for the dashboard. RunPod's own counts are summarised on purpose: the dashboard decides
+    "waking up" or "problem" by looking for those words anywhere in the reply, and RunPod's raw keys
+    ("initializing", "failed", "throttled") are there even when everything is fine."""
+    workers, jobs = data.get("workers") or {}, data.get("jobs") or {}
+    idle = int(workers.get("idle") or 0) + int(workers.get("ready") or 0)
+    busy = int(workers.get("running") or 0)
+    booting, queued = int(workers.get("initializing") or 0), int(jobs.get("inQueue") or 0)
+    sick = int(workers.get("unhealthy") or 0)
+    if idle or busy:
+        state = "ready"
+    elif booting or queued:
+        state = "waking"                    # a worker is starting, or a job is waiting for one
+    elif sick:
+        state = "down"
+    else:
+        state = "asleep"                    # scaled to zero: the first message starts a worker (2 to 5 minutes)
+    return {"state": state, "idle": idle, "busy": busy, "queued": queued}
+
+
 class ChatMessage(BaseModel):
     role: Literal["system", "user", "assistant"]
     content: str = Field(max_length=4000)
@@ -119,6 +139,10 @@ class LinkBody(BaseModel):
     number: str = Field(min_length=6, max_length=20)
 
 
+class OwnerMessage(BaseModel):
+    text: str = Field(min_length=1, max_length=1000)
+
+
 class FinalRequest(BaseModel):
     total: float = Field(gt=0, le=1_000_000)
 
@@ -163,6 +187,9 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
     def transcribe_voice(media_id):
         audio, mime = sender.fetch_media(media_id)
         return transcriber.transcribe(audio, mime)
+
+    if transcriber and sender and str(env.get("STT_WARMUP", "1")).lower() not in ("0", "false", "no", "off"):
+        threading.Thread(target=transcriber.warm_up, daemon=True, name="stt-warm-up").start()
 
     if service is None:
         config_path = env.get("BUSINESS_CONFIG") or ROOT / "config" / "business_config.example.json"
@@ -312,6 +339,15 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
             raise HTTPException(502, "vision model returned no usable assessment")
         return dataclasses.asdict(assessment)
 
+    @app.get("/api/voice/health")
+    def voice_health(request: Request):
+        """Is voice-note transcription on, is the model loaded, and why did the last attempt fail."""
+        require_key(request)
+        if transcriber is None:
+            return {"enabled": False, "loaded": False, "error": "STT_ENABLED is off"}
+        return {"enabled": True, "model": transcriber.model_size, "loaded": transcriber.loaded,
+                "error": transcriber.last_error}
+
     @app.get("/api/storage")
     def storage(request: Request):
         require_key(request)
@@ -459,6 +495,28 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         service.store.set_setting("whatsapp_number", None)
         return Response(status_code=204)
 
+    @app.post("/api/quotes/{user_id}/message")
+    def owner_message(user_id: str, body: OwnerMessage, request: Request):
+        """The owner writes to the customer in the assistant's place. The assistant then stays quiet for 30 minutes."""
+        require_key(request)
+        if sender is None:
+            raise HTTPException(503, "WhatsApp sender is not configured")
+        try:
+            sent = service.send_owner_message(user_id, body.text, notifier(user_id))
+        except KeyError:
+            raise HTTPException(404, "no such customer")
+        except ValueError as err:
+            raise HTTPException(422, str(err))
+        if not sent:
+            raise HTTPException(502, "could not send the message to the customer")
+        return {"sent": True}
+
+    @app.post("/api/quotes/{user_id}/resume")
+    def resume_assistant(user_id: str, request: Request):
+        require_key(request)
+        service.resume_assistant(user_id)
+        return {"resumed": True}
+
     @app.post("/api/quotes/{user_id}/final")
     def final_price(user_id: str, body: FinalRequest, request: Request):
         require_key(request)
@@ -510,8 +568,7 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         report = {}
         for name in ("text", "vision"):
             try:
-                data = call_model(model_client(name).health)
-                report[name] = {"jobs": data.get("jobs"), "workers": data.get("workers")}
+                report[name] = worker_state(call_model(model_client(name).health))
             except HTTPException as err:
                 report[name] = {"error": err.detail}
         return report

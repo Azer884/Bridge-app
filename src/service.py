@@ -2,10 +2,11 @@
 import logging
 import time
 from dataclasses import asdict, replace
+from datetime import datetime
 
 from .assessment import LOW_CONFIDENCE, combine, from_dict
 from . import contact, flow, persona as persona_module, scheduling, views
-from .assistant import PHOTO_CONDITION, handle_message
+from .assistant import PHOTO_CONDITION, advance, handle_message
 from .guard import clean_profile_name, clean_profile_phone
 from .i18n import ISSUE_MS, STRINGS, t
 from .pricing import PricingError, compute_quotation
@@ -15,6 +16,7 @@ from .schema import ask_for
 PHOTO_REPLY = STRINGS["en"]["photo_reply"]
 UNSUPPORTED_REPLY = STRINGS["en"]["unsupported"]
 LEGACY_STATUS = {"final": "completed"}
+TAKEOVER_SECONDS = 1800        # how long the assistant stays quiet after the owner replies by hand
 log = logging.getLogger("service")
 
 
@@ -148,6 +150,30 @@ class IncomingService:
             self.store.save(state)
             return views.detail_view(state, self.store.messages(user_id), self.store.audit(user_id, 200), False)
 
+    def send_owner_message(self, user_id, text, send):
+        """The owner writes to the customer in the assistant's place (for example when it asked for a human).
+        The assistant then stays quiet for a while so the two do not talk over each other. False if the send failed."""
+        text = (text or "").strip()
+        if not text or len(text) > 1000:
+            raise ValueError("write a message of 1 to 1000 characters")
+        with self.store.lock(user_id):
+            state = self.store.load(user_id)
+            if not (state.history or state.verified):
+                raise KeyError(user_id)
+            if not send(text):
+                return False
+            self.store.log_message(user_id, "owner", text)
+            state.human_until, state.attention, state.needs_human = time.time() + TAKEOVER_SECONDS, False, False
+            self.store.save(state)
+            self.store.add_audit(user_id, "owner", "send", "The owner replied to the customer: " + text[:120])
+            return True
+
+    def resume_assistant(self, user_id):
+        with self.store.lock(user_id):
+            state = self.store.load(user_id)
+            state.human_until = 0.0
+            self.store.save(state)
+
     def audit_feed(self, limit=20):
         names = {s.conversation_id: views.customer_name(s) for s in self.store.conversations()}
         return [{**e, "customer": names.get(e["user_id"], e["user_id"]), "ts": views._iso(e["ts"])}
@@ -213,8 +239,11 @@ class IncomingService:
         """Suggested start times for this customer's job, best first. A slot next to a job in the same area
         scores higher, so the crew's day stays compact. `busy` are events the dashboard already knows about."""
         state = self.store.load(user_id)
+        anchor = datetime.fromtimestamp(state.created_at, scheduling.TZ) if state.created_at else None
+        preference = scheduling.parse_preference(state.verified.get("preferred_datetime"), anchor)
         return scheduling.suggest_slots(self.store.bookings(), self._job_hours(state), state.verified.get("address", ""),
-                                        extra_busy=[(b["start"], b["end"]) for b in busy], ignore_id=None)
+                                        extra_busy=[(b["start"], b["end"]) for b in busy], preference=preference,
+                                        location=state.verified.get("location"))
 
     def booking_list(self, start=None, end=None):
         """Bookings overlapping [start, end] as the dashboard's Booking objects."""
@@ -235,10 +264,11 @@ class IncomingService:
             hours = self._job_hours(state, fallback=max(
                 (scheduling.parse_time(end) - scheduling.parse_time(start)).total_seconds() / 3600, 1.0))
             address = state.verified.get("address", "")
-            if scheduling.conflicts(self.store.bookings(), start, hours, address):
+            location = state.verified.get("location")
+            if scheduling.conflicts(self.store.bookings(), start, hours, address, location=location):
                 raise ValueError("that time overlaps another job")
             booking = scheduling.new_booking(user_id, views.customer_name(state), views.job_view(state)["phone"], address,
-                                             start, hours, "tentative")
+                                             start, hours, "tentative", location=location)
             self.store.save_booking(booking)
             when = scheduling.describe_when(booking["start"], state.lang)
             work = duration_text((state.quote or {}).get("schedule"), state.lang) or (
@@ -325,7 +355,15 @@ class IncomingService:
 
     # --- the customer's side -------------------------------------------------------------------
     def _answer(self, state, text):
-        """The reply to one customer message, with the offered slot and the draft quote taken care of."""
+        """The reply to one customer message, with the offered slot and the draft quote taken care of.
+        While the owner is replying by hand the assistant only answers a slot offer and otherwise stays quiet."""
+        if state.human_until > time.time():
+            if state.pending_booking and state.stage == "done":
+                reply = self._booking_reply(state, text)
+                if reply is not None:
+                    return reply
+            state.attention = True
+            return ""
         if state.pending_booking and state.stage == "done":
             reply = self._booking_reply(state, text)
             if reply is not None:
@@ -428,6 +466,17 @@ class IncomingService:
                 reply += " " + ask_for(nxt, state)
             elif state.stage == "job" and state.service_checked and self._turn_config().get("persona"):
                 reply += " " + flow.contact_intro(state)      # the photo answered the last open question
+        elif event.type == "location":
+            place = event.location or {}
+            lat, lon = place.get("lat"), place.get("lon")
+            state.verified["location"] = {**place}
+            self.store.log_message(event.user_id, "in", "[location] " + (event.text or f"{lat:.5f}, {lon:.5f}"))
+            if state.stage == "job" and state.next_missing(self.config) == "address":
+                label = event.text or t("pinned", state.lang, lat=lat, lon=lon)
+                state.verified["address"] = label                               # the shared location is the address
+                reply = advance(state, self._turn_config(), label, t("location_saved", state.lang))
+            else:
+                reply = t("location_saved", state.lang)
         elif event.type == "unsupported":
             self.store.log_message(event.user_id, "in", "[unsupported message type]")
             reply = t("unsupported", state.lang)

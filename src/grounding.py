@@ -58,7 +58,7 @@ def norm(text):
     return re.sub(r"[^a-z0-9@+ ]+", " ", str(text).lower()).split()
 
 
-_HEDGES = {"about", "around", "roughly", "approximately", "approx", "maybe", "perhaps", "probably", "say",
+HEDGES = _HEDGES = {"about", "around", "roughly", "approximately", "approx", "maybe", "perhaps", "probably", "say",
            "lets", "let", "s", "its", "it", "is", "i", "think", "guess", "like", "around", "over", "under",
            "just", "estimate", "estimation", "the", "a", "be", "would", "should", "might", "or", "so"}
 _RANGE = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:to|-|or|and)\s*(\d+(?:[.,]\d+)?)", re.I)

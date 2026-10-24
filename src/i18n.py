@@ -80,6 +80,9 @@ STRINGS = {
         "ack_fixed": "No problem, I've updated the {label} to {value}.",
         "new_job": "Happy to help with another job! ",
         "restart": "No problem, let's start again.",
+        "location_saved": "Thanks, I've saved the location you shared.",
+        "pinned": "Pinned location ({lat:.5f}, {lon:.5f})",
+        "welcome_back": "Hi again! If you would like another painting job quoted, just tell me what you want painted.",
         "duration": " We expect the work to take {text}.",
         "booking_ask": "Good news: {owner} can do your job on {when}. We expect {text}. Does that work for you? Reply yes, or tell me which day suits you better.",
         "booking_ok": "Great, you're booked in for {when}. {owner}'s team will see you then!",
@@ -165,6 +168,9 @@ STRINGS = {
         "ack_fixed": "Tiada masalah, saya telah kemas kini {label} kepada {value}.",
         "new_job": "Dengan senang hati saya bantu untuk kerja lain! ",
         "restart": "Tiada masalah, kita mulakan semula.",
+        "location_saved": "Terima kasih, saya telah simpan lokasi yang anda kongsi.",
+        "pinned": "Lokasi dikongsi ({lat:.5f}, {lon:.5f})",
+        "welcome_back": "Hai lagi! Jika anda mahu sebut harga untuk kerja mengecat yang lain, beritahu saya apa yang anda mahu cat.",
         "duration": " Kami menjangka kerja ini mengambil masa {text}.",
         "booking_ask": "Berita baik: {owner} boleh melakukan kerja anda pada {when}. Kami menjangka {text}. Adakah itu sesuai untuk anda? Balas ya, atau beritahu hari mana yang lebih sesuai.",
         "booking_ok": "Baik, anda telah ditempah pada {when}. Pasukan {owner} akan datang pada masa itu!",
@@ -264,7 +270,12 @@ def language_problem(reply, lang):
 
 # --- surface / tier vocabulary ----------------------------------------------------------------
 SURFACE_WORDS = {"dinding": "walls", "siling": "ceiling"}
-TIER_WORDS = {"ekonomi": "economy", "economy": "economy", "standard": "standard", "premium": "premium"}
+TIER_WORDS = {"ekonomi": "economy", "economy": "economy", "eco": "economy", "cheap": "economy",
+              "budget": "economy", "basic": "economy", "murah": "economy", "standard": "standard",
+              "premium": "premium"}
+COLOUR_WORDS = {"white", "black", "grey", "gray", "blue", "green", "red", "yellow", "cream", "beige", "brown",
+                "pink", "purple", "orange", "silver", "gold", "navy", "teal", "ivory", "putih", "hitam", "kelabu",
+                "biru", "hijau", "merah", "kuning", "krim", "coklat", "ungu", "oren"}
 ISSUE_MS = {"peeling": "cat mengelupas", "flaking": "cat tertanggal", "cracks": "retak", "stains": "kesan kotoran",
             "bubbling": "cat menggelembung", "holes": "lubang", "damp": "lembap", "mould": "kulat",
             "water_damage": "kerosakan air"}

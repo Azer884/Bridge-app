@@ -97,10 +97,15 @@ def closing_reply(state, config):
 
 
 _DATE_WORDS = re.compile(
-    r"\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\b|"
+    r"\b(monday|mon|tuesday|tues|tue|wednesday|wed|thursday|thurs|thur|thu|friday|fri|saturday|sat|sunday|sun)\b|"
+    r"\b\d{1,2}(st|nd|rd|th)?\s+(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|"
+    r"september|sept|sep|october|oct|november|nov|december|dec)\b|"
+    r"\b(january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sept|sep|"
+    r"october|oct|november|nov|december|dec)\s+\d{1,2}\b|"
     r"\b(today|tomorrow|tonight|weekend|weekday|morning|afternoon|evening|next week|next month)\b|"
     r"\b(isnin|selasa|rabu|khamis|jumaat|sabtu|ahad|esok|lusa|petang|malam|pagi|minggu depan|bulan depan|"
-    r"hari ini|hujung minggu|januari|februari|mac|april|mei|jun|julai|ogos|september|oktober|november|"
+    r"hari ini|hujung minggu)\b|"
+    r"\b\d{1,2}(st|nd|rd|th)?\s+(januari|februari|mac|april|mei|jun|julai|ogos|september|oktober|november|"
     r"disember)\b|"
     r"\b\d{1,2}\s?(am|pm)\b|\b\d{1,2}[/.-]\d{1,2}\b", re.I)
 _DATE_QUESTION = re.compile(
@@ -118,15 +123,22 @@ NO_PREFERENCE = re.compile(
     r"tiada pilihan|awak pilih|cadangkan|tak pasti|tidak pasti)\b", re.I)
 
 
-def when_in(message):
-    """The customer's answer to "when would you like us to come": a date or time, or flexible."""
-    if _DATE_WORDS.search(message) or _ASAP.search(message):
-        return " ".join(message.split())[:120]
-    if _BARE_NO.match(message) or NO_PREFERENCE.search(message) or _DONT_KNOW.search(message):
+def when_in(message, strict=False):
+    """The customer's answer to "when would you like us to come": a date or time, or flexible. In a long message
+    that says other things too, only the part about the time is kept. `strict` (a time said unprompted) only
+    accepts real dates, times and "anytime", not "no preference" or "I don't know"."""
+    spans = [m.span() for pattern in (_DATE_WORDS, _ASAP_TIME if strict else _ASAP) for m in pattern.finditer(message)]
+    if spans:
+        words = message.split()
+        if len(words) <= 3:
+            return " ".join(words)[:120]
+        return " ".join(message[min(s for s, _ in spans):max(e for _, e in spans)].split())[:120]
+    if not strict and (_BARE_NO.match(message) or NO_PREFERENCE.search(message) or _DONT_KNOW.search(message)):
         return "flexible, no specific date"
     return None
 
 
+_ASAP_TIME = re.compile(r"\b(asap|as soon as poss\w*|any ?time|whenever|soonest|secepat mungkin|secepatnya|bila-?bila)\b", re.I)
 _DONT_KNOW = re.compile(r"\b(idk|dunno|don'?t know|do not know|no idea|tak tahu|entah|tak pasti)\b", re.I)
 _RESTART = re.compile(r"\b(start over|start again|restart|begin again|from the start|mulakan semula|mula semula|"
                       r"mula balik)\b", re.I)
@@ -227,6 +239,9 @@ def important(message):
     return bool(_IMPORTANT.search(message) or _MEASURE.search(message) or is_correction(message))
 
 
+_GREETING = re.compile(r"^\s*(hi|hello|hey|hai|helo|hye|hy|yo|assalamualaikum|salam)\b[\s!.?,a-z]{0,20}$", re.I)
+
+
 def after_done(state, message, config):
     """The reply once the chat is complete, or None to stay silent. While the SME has not confirmed, the
     bot answers real questions and anything important (and flags it), acknowledges a couple of other
@@ -236,6 +251,8 @@ def after_done(state, message, config):
     if len(state.followups) < 50:
         state.followups.append({"text": message[:300], "at": time.time()})
     faq = faq_answer(message, config, "done", lang)
+    if _GREETING.match(message) and state.quote_status in ("approved", "final"):
+        return t("welcome_back", lang)               # a returning customer saying hello
     if _DATE_WORDS.search(message):
         state.verified["preferred_datetime"] = message.strip()[:120]
         state.attention = True

@@ -486,18 +486,34 @@ class ChatLogRegressionTests(unittest.TestCase):
         self.assertIn("surfaces", out.reply.lower())
         self.assertEqual(state.orders, [])                                          # not a second job
 
-    def test_shared_location_is_text(self):
+    def test_shared_location_is_kept_and_answers_the_address(self):
         payload = {"entry": [{"changes": [{"value": {"messages": [
-            {"id": "l1", "from": "6012", "type": "location",
+            {"id": "l1", "from": "u", "type": "location",
              "location": {"latitude": 2.8345504, "longitude": 101.7020259, "name": "Home"}}]}}]}]}
         event = from_meta_payload(payload)[0]
-        self.assertEqual(event.type, "text")
-        self.assertIn("2.83455, 101.70203", event.text)
+        self.assertEqual((event.type, event.text), ("location", "Home"))
+        self.assertEqual(event.location["lat"], 2.8345504)
+        bad = {"entry": [{"changes": [{"value": {"messages": [
+            {"id": "l2", "from": "6012", "type": "location", "location": {"latitude": 200, "longitude": 1}}]}}]}]}
+        self.assertEqual(from_meta_payload(bad)[0].type, "unsupported")
+        service = make_service()
         state = job_state()
         state.stage = "job"
         del state.verified["address"]
-        handle_message(state, event.text, CONFIG, FakeClient(reply("Thanks!")))
-        self.assertIn("Home", state.verified["address"])
+        service.store.save(state)
+        service.handle(event)
+        saved = service.store.load("u")
+        self.assertEqual(saved.verified["address"], "Home")                         # it was the address question
+        self.assertEqual(saved.verified["location"]["lat"], 2.8345504)
+
+    def test_a_location_shared_early_fills_the_address_later(self):
+        state = job_state()
+        state.stage = "job"
+        del state.verified["address"]
+        state.verified["location"] = {"lat": 2.83, "lon": 101.7, "name": "", "address": ""}
+        state.verified.pop("preferred_datetime")
+        handle_message(state, "tomorrow morning", CONFIG, FakeClient(reply("x?")))
+        self.assertIn("Pinned location", state.verified["address"])
 
     def test_photo_caption_is_read_as_a_message(self):
         from src.assessment import ConditionAssessment
@@ -522,6 +538,90 @@ class ChatLogRegressionTests(unittest.TestCase):
         events = service.store.events(5)
         self.assertEqual(events[0]["kind"], "voice_failed")
         self.assertIn("faster_whisper", events[0]["detail"])
+
+
+class SecondChatLogTests(unittest.TestCase):
+    """The second real chat: several answers in one message, "Eco", a returning customer, voice diagnostics."""
+
+    def fresh(self):
+        state = new_state()
+        state.greeted = state.service_checked = True
+        return state
+
+    def test_everything_said_in_one_message_is_read_without_the_model(self):
+        state = self.fresh()
+        client = FakeClient()                                                      # any model call would raise
+        out = handle_message(state, "Ceiling 3x4x5 white premium anytime", CONFIG, client)
+        self.assertEqual(client.calls, [])
+        v = state.verified
+        self.assertEqual((v["surfaces"], v["room_length_m"], v["room_width_m"], v["room_height_m"]),
+                         (["ceiling"], 3.0, 4.0, 5.0))
+        self.assertEqual((v["colour"], v["paint_tier"], v["preferred_datetime"]), ("white", "premium", "anytime"))
+        self.assertIn("condition", out.reply.lower())                              # only the condition is left to ask
+
+    def test_eco_means_economy(self):
+        state = self.fresh()
+        state.verified.update({"surfaces": ["ceiling"], "room_length_m": 5.0, "room_width_m": 3.0, "room_height_m": 4.0,
+                               "surface_condition": "good"})
+        handle_message(state, "Eco", CONFIG, FakeClient(reply("x?")))
+        self.assertEqual(state.verified["paint_tier"], "economy")
+
+    def test_a_street_name_is_not_a_date(self):
+        from src.flow import when_in
+        self.assertIsNone(when_in("Jalan Sunsuria 43900", strict=True))
+        self.assertIsNone(when_in("maybe 4 to 5 m", strict=True))
+        self.assertEqual(when_in("Monday evening"), "Monday evening")
+        self.assertEqual(when_in("ok but only on Saturday afternoon please, thanks"), "Saturday afternoon")
+
+    def test_a_returning_customer_saying_hi_is_welcomed_back(self):
+        state = job_state()
+        state.stage, state.quote_status = "done", "approved"
+        out = handle_message(state, "Hi", CONFIG, FakeClient())
+        self.assertIn("another painting job", out.reply)
+        state.quote_status = "pending_approval"
+        self.assertNotIn("another painting job", handle_message(state, "Hi", CONFIG, FakeClient()).reply)
+
+    def test_voice_health_reports_why_it_failed(self):
+        from src.server import create_app
+        service = make_service()
+
+        class Sender:
+            last_error = ""
+
+        api = TestClient(create_app(service, Sender(), {**ENV, "STT_WARMUP": "0"}))
+        report = api.get("/api/voice/health", headers=KEY).json()
+        self.assertEqual((report["enabled"], report["loaded"]), (True, False))
+        off = TestClient(create_app(service, Sender(), {**ENV, "STT_ENABLED": "0"}))
+        self.assertFalse(off.get("/api/voice/health", headers=KEY).json()["enabled"])
+        self.assertEqual(api.get("/api/voice/health").status_code, 401)
+
+    def test_warm_up_and_the_silence_filter_retry(self):
+        calls = []
+
+        class Segment:
+            text = "tiga kali empat meter"
+
+        class Info:
+            language = "ms"
+
+        class Model:
+            def transcribe(self, path, **kwargs):
+                calls.append(kwargs["vad_filter"])
+                return ([] if kwargs["vad_filter"] else [Segment()]), Info()
+
+        transcriber = Transcriber(model_factory=Model)
+        self.assertFalse(transcriber.loaded)
+        self.assertTrue(transcriber.warm_up())
+        self.assertTrue(transcriber.loaded)
+        text, language = transcriber.transcribe(b"ogg", "audio/ogg; codecs=opus")
+        self.assertEqual((text, calls), ("3 by 4 metres", [True, False]))             # empty with the filter, then retried
+
+        def boom():
+            raise OSError("no network")
+
+        broken = Transcriber(model_factory=boom)
+        self.assertFalse(broken.warm_up())
+        self.assertIn("no network", broken.last_error)
 
 
 if __name__ == "__main__":

@@ -6,6 +6,7 @@ validation as a typed message.
 The model loads on first use, in the server process: `faster-whisper` must be installed
 (`uv add faster-whisper` on Replit). Without it voice notes are answered with a polite "please type it".
 """
+import importlib.util
 import logging
 import os
 import re
@@ -57,6 +58,7 @@ class Transcriber:
     def __init__(self, model_size="base", device="cpu", model_factory=None):
         self.model_size, self.device = model_size, device
         self._factory, self._model, self._lock = model_factory, None, threading.Lock()
+        self.last_error = ""                    # why the last load or transcription failed, for /api/voice/health
 
     @classmethod
     def from_env(cls, env):
@@ -65,16 +67,37 @@ class Transcriber:
             return None
         return cls(env.get("STT_MODEL_SIZE") or "base", env.get("STT_DEVICE") or "cpu")
 
+    @property
+    def loaded(self):
+        return self._model is not None
+
     def _load(self):
         with self._lock:
             if self._model is None:
-                if self._factory:
-                    self._model = self._factory()
-                else:
-                    from faster_whisper import WhisperModel           # optional dependency
-                    compute = "int8" if self.device == "cpu" else "float16"
-                    self._model = WhisperModel(self.model_size, device=self.device, compute_type=compute)
+                try:
+                    if self._factory:
+                        self._model = self._factory()
+                    else:
+                        from faster_whisper import WhisperModel           # optional dependency
+                        compute = "int8" if self.device == "cpu" else "float16"
+                        self._model = WhisperModel(self.model_size, device=self.device, compute_type=compute)
+                    self.last_error = ""
+                except Exception as err:
+                    self.last_error = f"{type(err).__name__}: {err}"[:300]
+                    raise
         return self._model
+
+    def warm_up(self):
+        """Load the model now (it downloads on first use), so the first voice note is not the slow one."""
+        if not self._factory and importlib.util.find_spec("faster_whisper") is None:
+            self.last_error = "faster-whisper is not installed (uv add faster-whisper)"
+            return False
+        try:
+            self._load()
+            return True
+        except Exception:
+            log.exception("could not load the speech model")
+            return False
 
     def transcribe(self, audio, mime=""):
         """(text, detected language) for the audio bytes of a voice note. Raises on any failure."""
@@ -84,9 +107,15 @@ class Transcriber:
             handle.write(audio)
             path = handle.name
         try:
-            segments, info = model.transcribe(path, language=None, initial_prompt=DEFAULT_PROMPT, beam_size=5,
-                                              vad_filter=True, vad_parameters={"min_silence_duration_ms": 500})
-            text = " ".join(segment.text.strip() for segment in segments).strip()
+            for vad in (True, False):           # the silence filter can drop a quiet or short note: retry without it
+                segments, info = model.transcribe(path, language=None, initial_prompt=DEFAULT_PROMPT, beam_size=5,
+                                                  vad_filter=vad, vad_parameters={"min_silence_duration_ms": 500})
+                text = " ".join(segment.text.strip() for segment in segments).strip()
+                if text:
+                    break
+        except Exception as err:
+            self.last_error = f"{type(err).__name__}: {err}"[:300]
+            raise
         finally:
             Path(path).unlink(missing_ok=True)
         return normalize_spoken(text), getattr(info, "language", "")

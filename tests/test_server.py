@@ -411,8 +411,19 @@ class ModelApiTests(unittest.TestCase):
 
     def test_models_health_reports_both_models_without_extra_fields(self):
         report = self.client().get("/api/models/health", headers=KEY).json()
-        self.assertEqual(report["text"], {"jobs": {"completed": 3}, "workers": {"ready": 1}})
+        self.assertEqual(report["text"], {"state": "ready", "idle": 1, "busy": 0, "queued": 0})
         self.assertEqual(report["vision"], report["text"])
+        text = json.dumps(report).lower()                    # the dashboard looks for these words anywhere in the reply
+        for word in ("cold", "starting", "initializ", "waking", "loading", "throttled", "error", "unhealthy", "down", "fail"):
+            self.assertNotIn(word, text)
+
+    def test_worker_state(self):
+        from src.server import worker_state
+        self.assertEqual(worker_state({"workers": {"idle": 1, "initializing": 1}})["state"], "ready")
+        self.assertEqual(worker_state({"workers": {"initializing": 1}})["state"], "waking")
+        self.assertEqual(worker_state({"jobs": {"inQueue": 2}, "workers": {}})["state"], "waking")
+        self.assertEqual(worker_state({"workers": {"unhealthy": 1}})["state"], "down")
+        self.assertEqual(worker_state({"jobs": {"failed": 9}, "workers": {}})["state"], "asleep")
 
 
 if __name__ == "__main__":

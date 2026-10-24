@@ -1,7 +1,7 @@
 """Channel-neutral incoming message. WhatsApp's nested payload is flattened here, once."""
 from dataclasses import dataclass
 
-KNOWN_TYPES = {"text", "image", "audio"}
+KNOWN_TYPES = {"text", "image", "audio", "location"}
 
 
 @dataclass(frozen=True)
@@ -15,20 +15,22 @@ class IncomingEvent:
     media_id: str = ""
     timestamp: int = 0
     channel: str = "whatsapp"
+    location: dict = None       # {lat, lon, name, address} for a shared location
 
 
 def _text(value):
     return value if isinstance(value, str) else ""
 
 
-def _location_text(body):
-    """A shared WhatsApp location as text, so it can answer "what is the address?"."""
-    label = " ".join(x for x in (_text(body.get("name")), _text(body.get("address"))) if x)
+def _location(body):
+    """A shared WhatsApp location as {lat, lon, name, address}, or None when it has no usable coordinates."""
     try:
-        coords = f"{float(body['latitude']):.5f}, {float(body['longitude']):.5f}"
+        lat, lon = float(body["latitude"]), float(body["longitude"])
     except (KeyError, TypeError, ValueError):
-        coords = ""
-    return f"{label} (location {coords})".strip() if coords else label
+        return None
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        return None
+    return {"lat": lat, "lon": lon, "name": _text(body.get("name"))[:120], "address": _text(body.get("address"))[:200]}
 
 
 def from_flat(data):
@@ -67,12 +69,15 @@ def from_meta_payload(payload):
                 kind = message.get("type")
                 body = message.get(kind) if isinstance(message.get(kind), dict) else {}
                 sender = str(message["from"])
-                if kind == "location" and _location_text(body):
-                    kind, body = "text", {"body": _location_text(body)}
+                place = _location(body) if kind == "location" else None
+                if kind == "location" and place is None:
+                    kind = "unsupported"
                 events.append(IncomingEvent(
                     message_id=str(message["id"]), user_id=sender,
                     type=kind if kind in KNOWN_TYPES else "unsupported",
-                    text=_text(body.get("body") if kind == "text" else body.get("caption")),
+                    text=(" ".join(x for x in (place["name"], place["address"]) if x) if place
+                          else _text(body.get("body") if kind == "text" else body.get("caption"))),
+                    location=place,
                     profile_name=_text(names.get(sender)), phone="+" + sender,
                     media_id=_text(body.get("id")) if kind in ("image", "audio") else "",
                     timestamp=int(message["timestamp"]) if str(message.get("timestamp", "")).isdigit() else 0))

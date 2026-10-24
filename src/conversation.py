@@ -41,6 +41,7 @@ class ConversationState:
     quote_stale: bool = False      # a size changed after pricing: the draft must be recalculated
     overrides: dict = field(default_factory=dict)   # the owner's corrections from the dashboard form
     pending_booking: dict = None   # a slot offered to the customer, waiting for their yes or no
+    human_until: float = 0.0       # the owner is replying by hand until this time: the assistant stays quiet
 
     def required_fields(self, config):
         wanted = set(config["required_fields"])

@@ -5,9 +5,10 @@ first free slot; this one scores several candidate slots so jobs near each other
 same day, back to back, which saves the crew travel time. Bookings live in the store, so the dashboard, the
 WhatsApp confirmation and the suggestions all see the same calendar.
 """
+import math
 import re
 import uuid
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 from .calendar_scheduler import RULES, TZ
 
@@ -23,11 +24,21 @@ def parse_time(value):
     return moment.replace(tzinfo=TZ) if moment.tzinfo is None else moment.astimezone(TZ)
 
 
-def area_of(address):
-    """The part of an address that says where it is: the postcode (its first 3 digits cover a district) and
-    the town after the last comma. {} when the address says neither."""
+def km_between(a, b):
+    """Straight-line distance in km between two {"lat", "lon"} points."""
+    p1, p2 = math.radians(a["lat"]), math.radians(b["lat"])
+    dlat, dlon = p2 - p1, math.radians(b["lon"] - a["lon"])
+    h = math.sin(dlat / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dlon / 2) ** 2
+    return 6371 * 2 * math.asin(math.sqrt(h))
+
+
+def area_of(address, location=None):
+    """Where a job is: the postcode (its first 3 digits cover a district), the town after the last comma, and the
+    coordinates when the customer shared a location. {} when nothing says."""
     text = address or ""
     out = {}
+    if location and location.get("lat") is not None and location.get("lon") is not None:
+        out["lat"], out["lon"] = float(location["lat"]), float(location["lon"])
     match = POSTCODE.search(text)
     if match:
         out["postcode"], out["prefix"] = match.group(1), match.group(1)[:3]
@@ -40,12 +51,96 @@ def area_of(address):
 
 
 def closeness(a, b):
-    """same (same postcode) | near (same district or town) | far (or unknown)."""
+    """same (same postcode, or under 2 km apart) | near (same district or town, or under 15 km) | far (or unknown)."""
+    if "lat" in a and "lat" in b:
+        km = km_between(a, b)
+        return "same" if km < 2 else "near" if km < 15 else "far"
     if a.get("postcode") and a.get("postcode") == b.get("postcode"):
         return "same"
     if (a.get("prefix") and a.get("prefix") == b.get("prefix")) or (a.get("name") and a.get("name") == b.get("name")):
         return "near"
     return "far"
+
+
+WEEKDAYS = {"monday": 0, "mon": 0, "tuesday": 1, "tues": 1, "tue": 1, "wednesday": 2, "wed": 2, "thursday": 3,
+            "thurs": 3, "thur": 3, "thu": 3, "friday": 4, "fri": 4, "saturday": 5, "sat": 5, "sunday": 6, "sun": 6,
+            "isnin": 0, "selasa": 1, "rabu": 2, "khamis": 3, "jumaat": 4, "sabtu": 5, "ahad": 6}
+PARTS = {"morning": (9, 12), "pagi": (9, 12), "afternoon": (12, 16), "evening": (15, 18), "tonight": (15, 18),
+         "night": (15, 18), "malam": (15, 18), "petang": (15, 18)}
+MONTHS = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7, "aug": 8, "sep": 9, "oct": 10,
+          "nov": 11, "dec": 12, "mac": 3, "mei": 5, "ogos": 8, "dis": 12}
+
+
+def parse_preference(text, anchor=None):
+    """What the customer asked for, read from their own words ("Monday evening", "tomorrow 8am", "26 Oct"):
+    {"date", "weekday", "part", "hour", "after", "text"}; empty values mean they did not say. Relative words
+    ("tomorrow") count from `anchor`, the day they said it."""
+    anchor = anchor or datetime.now(TZ)
+    low = (text or "").lower()
+    pref = {"date": None, "weekday": None, "part": None, "hour": None, "after": None, "text": (text or "").strip()}
+    words = re.findall(r"[a-z]+", low)
+    if "tomorrow" in words or "esok" in words:
+        pref["date"] = (anchor + timedelta(days=1)).date()
+    elif "today" in words or "tonight" in words:
+        pref["date"] = anchor.date()
+    elif "lusa" in words:
+        pref["date"] = (anchor + timedelta(days=2)).date()
+    for word in words:
+        if word in WEEKDAYS and not pref["date"]:
+            pref["weekday"] = WEEKDAYS[word]
+        if word in PARTS and not pref["part"]:
+            pref["part"] = word if word in ("morning", "afternoon", "evening") else {"pagi": "morning"}.get(word, "evening")
+    explicit = re.search(r"\b(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]{3})", low) or re.search(r"\b([a-z]{3})[a-z]*\s+(\d{1,2})\b", low)
+    if explicit:
+        day, month = explicit.groups()
+        if day.isalpha():
+            day, month = month, day
+        if month[:3] in MONTHS and day.isdigit():
+            try:
+                chosen = date(anchor.year, MONTHS[month[:3]], int(day))
+                pref["date"] = chosen if chosen >= anchor.date() else date(anchor.year + 1, chosen.month, chosen.day)
+            except ValueError:
+                pass
+    slash = re.search(r"\b(\d{1,2})[/.-](\d{1,2})\b", low)
+    if slash and not pref["date"]:
+        try:
+            chosen = date(anchor.year, int(slash.group(2)), int(slash.group(1)))
+            pref["date"] = chosen if chosen >= anchor.date() else date(anchor.year + 1, chosen.month, chosen.day)
+        except ValueError:
+            pass
+    clock = re.search(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b", low)
+    if clock:
+        hour = int(clock.group(1)) % 12 + (12 if clock.group(3) == "pm" else 0)
+        pref["hour"] = hour
+        pref["part"] = pref["part"] or ("morning" if hour < 12 else "afternoon" if hour < 15 else "evening")
+    if "next week" in low or "minggu depan" in low:
+        pref["after"] = (anchor + timedelta(days=7 - anchor.weekday())).date()
+    return pref
+
+
+def _wanted(pref, start, hours):
+    """(bonus, matches) for a slot against the customer's preference."""
+    if not pref or not any(pref.get(k) is not None for k in ("date", "weekday", "part", "hour", "after")):
+        return 0, []
+    bonus, matched = 0, []
+    day = start.date()
+    if pref.get("date") is not None:
+        if day == pref["date"]:
+            bonus, matched = bonus + 40, matched + ["day"]
+    elif pref.get("weekday") is not None:
+        if day.weekday() == pref["weekday"]:
+            bonus, matched = bonus + 40, matched + ["day"]
+    elif pref.get("after") is not None and day >= pref["after"]:
+        bonus, matched = bonus + 15, matched + ["week"]
+    if pref.get("hour") is not None:
+        if abs(start.hour + start.minute / 60 - pref["hour"]) <= 1:
+            bonus, matched = bonus + 25, matched + ["time"]
+    elif pref.get("part"):
+        low, high = PARTS[pref["part"]]
+        end_hour = start.hour + start.minute / 60 + hours
+        if low <= start.hour + start.minute / 60 and (end_hour <= high + 3 if pref["part"] == "evening" else start.hour < high):
+            bonus, matched = bonus + 25, matched + ["time"]
+    return bonus, matched
 
 
 def day_segments(start, hours, rules=RULES):
@@ -94,19 +189,25 @@ def _free(segments, busy, extra_busy, area, rules):
     return True
 
 
-def conflicts(bookings, start, hours, address="", ignore_id=None, extra_busy=(), rules=RULES):
+def conflicts(bookings, start, hours, address="", ignore_id=None, extra_busy=(), rules=RULES, location=None):
     """True when the job would overlap an existing booking (with travel time) or an outside event."""
     segments = day_segments(parse_time(start), hours, rules)
     extra = [(parse_time(s), parse_time(e)) for s, e in extra_busy]
-    return not _free(segments, _busy(bookings, ignore_id, rules), extra, area_of(address), rules)
+    return not _free(segments, _busy(bookings, ignore_id, rules), extra, area_of(address, location), rules)
 
 
-def suggest_slots(bookings, hours, address="", now=None, rules=RULES, extra_busy=(), limit=6, ignore_id=None):
+def suggest_slots(bookings, hours, address="", now=None, rules=RULES, extra_busy=(), limit=6, ignore_id=None,
+                  preference=None, location=None):
     """Best start times for a job of `hours` on site, best first: {start, end, score 0-100, reason}.
     Earlier is better, and a slot right after or on the same day as a job in the same area scores higher."""
     now = now or datetime.now(TZ)
     hours = max(float(hours or 4), 0.5)
-    area = area_of(address)
+    area = area_of(address, location)
+    if preference and preference.get("date") is not None:
+        wanted_day = preference["date"]                  # a preferred day that is not a working day moves to the next one
+        while wanted_day.weekday() not in rules.working_days:
+            wanted_day += timedelta(days=1)
+        preference = {**preference, "date": wanted_day}
     busy = _busy(bookings, ignore_id, rules)
     extra = [(parse_time(s), parse_time(e)) for s, e in extra_busy]
     candidates = {}
@@ -116,6 +217,12 @@ def suggest_slots(bookings, hours, address="", now=None, rules=RULES, extra_busy
             continue
         opening = datetime.combine(day, rules.day_start, TZ)
         starts = [opening]
+        close_of_day = datetime.combine(day, rules.day_end, TZ)
+        if preference:                                  # start times that fit what the customer asked for
+            latest = close_of_day - timedelta(hours=min(hours, 9))
+            starts += [datetime.combine(day, time(13, 0), TZ), latest.replace(minute=latest.minute - latest.minute % 30)]
+            if preference.get("hour") is not None:
+                starts.append(datetime.combine(day, time(preference["hour"], 0), TZ))
         if offset == 0:
             starts.append(_round_up(now, rules.step_minutes))
         for seg_start, seg_end, other in busy:        # right after a nearby job that day
@@ -129,7 +236,13 @@ def suggest_slots(bookings, hours, address="", now=None, rules=RULES, extra_busy
             segments = day_segments(start, hours, rules)
             if start in candidates or not _free(segments, busy, extra, area, rules):
                 continue
-            score, reason = 80 - 2 * offset, "Free time"
+            wanted, matched = _wanted(preference, segments[0][0], hours)
+            score, reason = 80 - 2 * offset + wanted, "Free time"
+            if matched:
+                said = preference["text"][:40]
+                reason = (f'Matches what the customer asked for ("{said}")' if "time" in matched
+                          else f'Day the customer asked for ("{said}")')
+            cluster = 0
             for seg_start, seg_end, other in busy:
                 kind = closeness(area, other.get("area", {}))
                 if kind == "far":
@@ -145,23 +258,29 @@ def suggest_slots(bookings, hours, address="", now=None, rules=RULES, extra_busy
                     ("near", 0, False): (15, "Same day as {name}, same area"),
                     ("near", 1, False): (6, "Day next to {name}, same area"),
                 }.get((kind, days_apart if days_apart <= 1 else 9, adjacent and days_apart == 0), (0, ""))
-                if bonus and 80 - 2 * offset + bonus > score:
-                    score, reason = 80 - 2 * offset + bonus, why.format(name=other.get("customer") or "another job")
+                if bonus > cluster:
+                    cluster, why_cluster = bonus, why.format(name=other.get("customer") or "another job")
+            if cluster:
+                score += cluster
+                reason = why_cluster if not matched else f"{reason}; {why_cluster[0].lower()}{why_cluster[1:]}"
             candidates[start] = {"start": segments[0][0].isoformat(), "end": segments[-1][1].isoformat(),
-                                 "score": max(0, min(100, int(score))), "reason": reason}
+                                 "score": max(0, min(100, int(score))), "reason": reason, "_raw": score}
     plain = sorted((c for c in candidates.values() if c["reason"] == "Free time"), key=lambda c: c["start"])
     if plain:
         plain[0]["reason"] = "Earliest free time"
-    ranked = sorted(candidates.values(), key=lambda c: (-c["score"], c["start"]))
-    return ranked[:limit]
+    ranked = sorted(candidates.values(), key=lambda c: (-c["_raw"], c["start"]))     # the raw score keeps ties apart
+    top = max((c["_raw"] for c in ranked), default=100)
+    scale = 100 / top if top > 100 else 1                   # keep the best at 100 and the rest in proportion
+    return [{**{k: v for k, v in c.items() if k not in ("_raw", "score")}, "score": max(0, int(c["_raw"] * scale))}
+            for c in ranked[:limit]]
 
 
-def new_booking(user_id, customer, phone, address, start, hours, status="tentative", rules=RULES):
+def new_booking(user_id, customer, phone, address, start, hours, status="tentative", rules=RULES, location=None):
     segments = day_segments(parse_time(start), hours, rules)
     return {"id": uuid.uuid4().hex[:12], "user_id": user_id, "customer": customer or "Customer", "phone": phone or "",
-            "address": address or "", "area": area_of(address), "start": segments[0][0].isoformat(),
+            "address": address or "", "area": area_of(address, location), "start": segments[0][0].isoformat(),
             "end": segments[-1][1].isoformat(), "hours": float(hours), "status": status,
-            "created_at": datetime.now(TZ).isoformat()}
+            "location": location, "created_at": datetime.now(TZ).isoformat()}
 
 
 def describe_when(start, lang="en"):

@@ -1,5 +1,6 @@
 """The dashboard's view of a customer's job: the shapes the frontend's shared/types.ts expects, built from the
 conversation state, the stored messages, bookings and audit log. Pure functions, no HTTP."""
+import time
 from datetime import datetime
 
 from .calendar_scheduler import TZ
@@ -42,7 +43,18 @@ def job_view(state):
             "room_height_m": v.get("room_height_m"), "surface_condition": v.get("surface_condition"),
             "preferred_datetime": v.get("preferred_datetime"), "paint_tier": v.get("paint_tier"),
             "colour": v.get("colour"), "name": customer_name(state),
-            "phone": v.get("phone") or state.channel.get("phone")}
+            "phone": v.get("phone") or state.channel.get("phone"), "location": location_view(v.get("location"))}
+
+
+def maps_url(lat, lon):
+    return f"https://www.google.com/maps?q={lat},{lon}"
+
+
+def location_view(location):
+    """A shared location with a link that opens it in Google Maps, or None."""
+    if not location or location.get("lat") is None:
+        return None
+    return {**location, "maps_url": maps_url(location["lat"], location["lon"])}
 
 
 def quote_view(quote, state=None):
@@ -62,6 +74,7 @@ def quote_item(state, booked=False):
             "phone": state.verified.get("phone") or state.channel.get("phone"), "job": job_view(state),
             "quote": quote_view(state.quote), "stage": stage_of(state, booked), "lang": state.lang,
             "is_estimate": True, "estimated_fields": state.estimated, "attention": state.attention,
+            "needs_human": state.needs_human, "human_active": state.human_until > time.time(),
             "followups": state.followups, "updated_at": datetime.fromtimestamp(state.created_at, TZ).isoformat()
             if state.created_at else None}
 
@@ -146,7 +159,8 @@ def chat_view(messages):
     for m in messages:
         if m["text"] == "[voice note]":
             continue
-        chat.append({"id": str(m["id"]), "role": "customer" if m["direction"] == "in" else "assistant",
+        role = {"in": "customer", "owner": "owner"}.get(m["direction"], "assistant")
+        chat.append({"id": str(m["id"]), "role": role,
                      "text": m["text"] or ("[photo]" if m["media_id"] else ""), "ts": _iso(m["ts"]),
                      **({"photo_ids": [m["media_id"]]} if m["media_id"] and m["direction"] == "in" else {})})
     return chat

@@ -302,11 +302,105 @@ class BookingFlowTests(unittest.TestCase):
     def test_slots_for_a_customer_cluster_by_area(self):
         booking = self.offer().json()
         self.api.patch(f"/api/bookings/{booking['id']}", headers=KEY, json={"status": "confirmed"})
-        add_customer(self.service, "u3", "Lee", "88 Jalan Sunsuria, 43900 Sepang")
+        add_customer(self.service, "u3", "Lee", "88 Jalan Sunsuria, 43900 Sepang", {"preferred_datetime": "anytime"})
         slots = self.api.post("/api/quotes/u3/slots", headers=KEY, json={"busy": []}).json()["slots"]
         self.assertTrue(slots)
         self.assertTrue(slots[0]["reason"].startswith("Right after Azer"))
         self.assertGreaterEqual(slots[0]["score"], slots[-1]["score"])
+
+
+class PreferenceAndLocationTests(unittest.TestCase):
+    def test_what_the_customer_said_is_understood(self):
+        saturday = datetime(2026, 10, 24, 18, 0, tzinfo=TZ)
+        pref = scheduling.parse_preference("Tomorrow evening", saturday)
+        self.assertEqual((pref["date"].isoformat(), pref["part"]), ("2026-10-25", "evening"))
+        pref = scheduling.parse_preference("monday evening please", saturday)
+        self.assertEqual((pref["weekday"], pref["part"]), (0, "evening"))
+        self.assertEqual(scheduling.parse_preference("tomorrow 8am", saturday)["hour"], 8)
+        self.assertEqual(scheduling.parse_preference("26 Oct", saturday)["date"].isoformat(), "2026-10-26")
+        self.assertEqual(scheduling.parse_preference("Isnin petang", saturday)["part"], "evening")
+        empty = scheduling.parse_preference("anytime", saturday)
+        self.assertFalse(any(empty[k] for k in ("date", "weekday", "part", "hour", "after")))
+
+    def test_evening_preference_gets_an_evening_slot_not_9am(self):
+        saturday = datetime(2026, 10, 24, 18, 0, tzinfo=TZ)
+        pref = scheduling.parse_preference("Monday evening", saturday)
+        slots = scheduling.suggest_slots([], 2.9, "x", now=saturday, preference=pref, limit=3)
+        self.assertEqual(slots[0]["start"][:16], "2026-10-26T15:00")                  # ends before closing at 18:00
+        self.assertIn("asked for", slots[0]["reason"])
+        self.assertEqual(slots[0]["score"], 100)
+        self.assertLess(slots[-1]["score"], 100)
+
+    def test_a_sunday_request_moves_to_the_next_working_day(self):
+        saturday = datetime(2026, 10, 24, 18, 0, tzinfo=TZ)
+        pref = scheduling.parse_preference("tomorrow morning", saturday)               # a Sunday
+        slots = scheduling.suggest_slots([], 2, "x", now=saturday, preference=pref, limit=1)
+        self.assertEqual(slots[0]["start"][:16], "2026-10-26T09:00")
+
+    def test_shared_coordinates_decide_how_close_two_jobs_are(self):
+        a, b = {"lat": 2.8345, "lon": 101.7020}, {"lat": 2.8327, "lon": 101.7032}      # about 250 m apart
+        far = {"lat": 3.139, "lon": 101.6869}                                           # Kuala Lumpur
+        self.assertEqual(scheduling.closeness(scheduling.area_of("x", a), scheduling.area_of("y", b)), "same")
+        self.assertEqual(scheduling.closeness(scheduling.area_of("x", a), scheduling.area_of("y", far)), "far")
+        self.assertLess(scheduling.km_between(a, b), 1)
+
+    def test_the_slots_endpoint_uses_the_customers_words_and_location(self):
+        service = priced_service("u5", "Dee", "somewhere", {"preferred_datetime": "Monday evening", "surfaces": ["ceiling"],
+                                                             "room_length_m": 3.0, "room_width_m": 3.0,
+                                                             "location": {"lat": 2.83, "lon": 101.70}})
+        api = TestClient(create_app(service, Sender(), ENV))
+        slots = api.post("/api/quotes/u5/slots", headers=KEY, json={"busy": []}).json()["slots"]
+        self.assertEqual(datetime.fromisoformat(slots[0]["start"]).weekday(), 0)
+        self.assertGreaterEqual(datetime.fromisoformat(slots[0]["start"]).hour, 13)
+        detail = api.get("/api/quotes/u5", headers=KEY).json()
+        self.assertEqual(detail["job"]["location"]["maps_url"], "https://www.google.com/maps?q=2.83,101.7")
+
+
+class HumanTakeoverTests(unittest.TestCase):
+    def setUp(self):
+        self.service = priced_service()
+        self.sender = Sender()
+        self.api = TestClient(create_app(self.service, self.sender, ENV))
+
+    def test_owner_message_goes_out_logged_and_the_assistant_stays_quiet(self):
+        state = self.service.store.load("u1")
+        state.needs_human, state.attention = True, True
+        self.service.store.save(state)
+        res = self.api.post("/api/quotes/u1/message", headers=KEY, json={"text": "Hi Azer, Daniel here. Happy to help."})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(self.sender.sent[-1], ("u1", "Hi Azer, Daniel here. Happy to help."))
+        detail = self.api.get("/api/quotes/u1", headers=KEY).json()
+        self.assertEqual(detail["chat"][-1]["role"], "owner")
+        self.assertTrue(detail["human_active"])
+        self.assertFalse(detail["needs_human"])
+        self.assertEqual(detail["audit"][-1]["actor"], "owner")
+        replies = self.service.handle(IncomingEvent("q1", "u1", text="how long will it take?"))
+        self.assertEqual(replies, [])                                                    # the owner will answer
+        self.assertTrue(self.service.store.load("u1").attention)                        # and is told there is a new message
+        self.assertEqual(self.api.post("/api/quotes/u1/resume", headers=KEY).status_code, 200)
+        self.assertTrue(self.service.handle(IncomingEvent("q2", "u1", text="how long will it take?")))
+
+    def test_validation_and_failures(self):
+        self.assertEqual(self.api.post("/api/quotes/u1/message", headers=KEY, json={"text": ""}).status_code, 422)
+        self.assertEqual(self.api.post("/api/quotes/u1/message", headers=KEY, json={"text": "x" * 1001}).status_code, 422)
+        self.assertEqual(self.api.post("/api/quotes/nobody/message", headers=KEY, json={"text": "hi"}).status_code, 404)
+        self.assertEqual(self.api.post("/api/quotes/u1/message", json={"text": "hi"}).status_code, 401)
+
+        class Failing(Sender):
+            def send_text(self, to, text):
+                return False
+
+        api = TestClient(create_app(self.service, Failing(), ENV))
+        self.assertEqual(api.post("/api/quotes/u1/message", headers=KEY, json={"text": "hi"}).status_code, 502)
+        self.assertEqual(self.service.store.load("u1").human_until, 0.0)               # nothing was sent: no takeover
+
+    def test_a_slot_answer_still_works_during_a_takeover(self):
+        booking = self.api.post("/api/bookings", headers=KEY, json={
+            "user_id": "u1", "start": iso(monday(), 9), "end": iso(monday(), 12)}).json()
+        self.api.post("/api/quotes/u1/message", headers=KEY, json={"text": "hello"})
+        reply = self.service.handle(IncomingEvent("y9", "u1", text="yes"))[0]
+        self.assertIn("you're booked in", reply)
+        self.assertEqual(self.service.store.get_booking(booking["id"])["status"], "confirmed")
 
 
 if __name__ == "__main__":
