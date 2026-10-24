@@ -222,11 +222,11 @@ curl -X POST https://api.runpod.ai/v2/$RUNPOD_ENDPOINT_ID/runsync \
 
 | Name              | Role                                       | GitHub                                   |
 | -----------       | -------------------------------------------| ---------------------------------------- |
-| Azer Hamdaoui     | Team Lead / Runpod/ AI Expe                | [@username](https://github.com/username) |
-| Omar Bouhlel      | Frontend / AI-calendar Developer           | [@username](https://github.com/username) |
-| Tarek ben slimen  | AI-whatsapp voice/call Messages Expert     | [@username](https://github.com/username) |
-| Ilyess Hassine    | Whatsapp Linkage Analyzer                  | [@username](https://github.com/username) |
-| Moetez Soltani    | Representater / Organizer                  |@Moe-MY                                   |
+| Azer Hamdaoui     | Team Lead / Runpod/ AI Expert               | [@Azer884](https://github.com/Azer884) |
+| Omar Bouhlel      | Frontend / AI-calendar Developer           | [@omarbouuhlel](https://github.com/omarbouuhlel) |
+| Tarek ben slimen  | AI-whatsapp voice/call Messages Expert     | [@Trexgames4324](https://github.com/Trexgames4324) |
+| Ilyess Hassine    | Whatsapp Linkage Analyzer                  | [@ilyesshassine](https://github.com/ilyesshassine) |
+| Moetez Soltani    | Representater / Organizer                  |[@Moe-MY](https://github.com/Moe-MY)|
 
 ---
 
