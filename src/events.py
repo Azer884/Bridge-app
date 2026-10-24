@@ -65,3 +65,30 @@ def from_meta_payload(payload):
                     media_id=_text(body.get("id")) if kind == "image" else "",
                     timestamp=int(message["timestamp"]) if str(message.get("timestamp", "")).isdigit() else 0))
     return events
+
+
+def calls_from_meta_payload(payload):
+    """Extract WhatsApp call lifecycle events without changing message parsing."""
+    calls = []
+    entries = payload.get("entry") if isinstance(payload, dict) else None
+    for entry in entries if isinstance(entries, list) else []:
+        for change in entry.get("changes", []) if isinstance(entry, dict) else []:
+            if not isinstance(change, dict) or change.get("field") != "calls":
+                continue
+            value = change.get("value")
+            if not isinstance(value, dict):
+                continue
+            metadata = value.get("metadata") or {}
+            phone_id = _text(metadata.get("phone_number_id")) if isinstance(metadata, dict) else ""
+            for call in value.get("calls", []):
+                if not isinstance(call, dict):
+                    continue
+                call_id = _text(call.get("id")).strip()
+                event = _text(call.get("event")).strip().lower()
+                session = call.get("session") if isinstance(call.get("session"), dict) else {}
+                sdp = _text(session.get("sdp"))
+                sdp_type = _text(session.get("sdp_type")).lower()
+                if call_id and event in {"connect", "terminate"}:
+                    calls.append({"id": call_id, "event": event, "phone_number_id": phone_id,
+                                  "sdp": sdp, "sdp_type": sdp_type})
+    return calls

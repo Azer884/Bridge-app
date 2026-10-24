@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS conversations (
     conversation_id TEXT PRIMARY KEY, state TEXT NOT NULL, updated_at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS processed_messages (
     message_id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL, received_at REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS processed_call_events (
+    event_key TEXT PRIMARY KEY, received_at REAL NOT NULL);
 CREATE TABLE IF NOT EXISTS messages (
     id INTEGER PRIMARY KEY AUTOINCREMENT, conversation_id TEXT NOT NULL, direction TEXT NOT NULL,
     text TEXT NOT NULL, media_id TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL);
@@ -108,6 +110,17 @@ class SqliteStore:
         """Undo a claim when processing crashed, so the provider's retry is not discarded."""
         with self._conn() as conn:
             conn.execute("DELETE FROM processed_messages WHERE message_id=?", (message_id,))
+
+    def claim_call_event(self, event_key):
+        """Prevent duplicate Meta delivery from accepting or disconnecting a call twice."""
+        with self._conn() as conn:
+            cursor = conn.execute("INSERT OR IGNORE INTO processed_call_events VALUES (?,?)",
+                                  (event_key, time.time()))
+            return cursor.rowcount == 1
+
+    def release_call_event(self, event_key):
+        with self._conn() as conn:
+            conn.execute("DELETE FROM processed_call_events WHERE event_key=?", (event_key,))
 
     def log_message(self, conversation_id, direction, text, media_id=""):
         with self._conn() as conn:

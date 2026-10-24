@@ -38,7 +38,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from . import persona as persona_module
-from .events import from_flat, from_meta_payload
+from .events import calls_from_meta_payload, from_flat, from_meta_payload
 from .runpod_client import RunPodClient, RunPodError, load_dotenv
 from .service import IncomingService
 from .store import SqliteStore
@@ -77,7 +77,7 @@ def _same(a, b):
     return bool(a) and bool(b) and hmac.compare_digest(a.encode(), b.encode())
 
 
-def create_app(service=None, sender=None, env=None, text_client=None, vision_client=None):
+def create_app(service=None, sender=None, env=None, text_client=None, vision_client=None, call_handler=None):
     if env is None:
         load_dotenv()
         env = dict(os.environ)
@@ -86,6 +86,9 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
     if sender is None:
         sender = WhatsAppSender.from_env(env)
     clients = {"text": text_client, "vision": vision_client}
+    if call_handler is None:
+        from .whatsapp_calling import handle_call_event
+        call_handler = handle_call_event
 
     def model_client(name):
         """The vision client is built on first use, so the server starts without vision credentials."""
@@ -140,6 +143,21 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
             else:
                 service.store.log_event("send_failed", f"{event.user_id}: {getattr(sender, 'last_error', '')}")
 
+    def process_call(call):
+        event_key = f"{call['id']}:{call['event']}"
+        if not service.store.claim_call_event(event_key):
+            return
+        try:
+            if env.get("WHATSAPP_CALLING_ENABLED", "false").lower() != "true":
+                service.store.log_event("call_ignored", "calling is disabled")
+                return
+            call_handler(call, env)
+            service.store.log_event("call_handled", call["event"])
+        except Exception as err:
+            service.store.release_call_event(event_key)
+            log.exception("failed to handle WhatsApp call event")
+            service.store.log_event("call_handler_error", type(err).__name__)
+
     @app.get("/", include_in_schema=False)
     @app.get("/health")
     def health():
@@ -165,9 +183,12 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         except ValueError:
             raise HTTPException(400, "invalid JSON")
         events = from_meta_payload(payload)
-        service.store.log_event("webhook", f"{len(events)} message(s): " + ", ".join(e.type for e in events))
+        calls = calls_from_meta_payload(payload)
+        service.store.log_event("webhook", f"{len(events)} message(s), {len(calls)} call event(s)")
         for event in events:
             background.add_task(process_and_send, event)
+        for call in calls:
+            background.add_task(process_call, call)
         return {"ok": True}                     # answer fast: Meta retries slow webhooks
 
     @app.post("/incoming")

@@ -14,7 +14,7 @@ from unittest import mock
 from fastapi.testclient import TestClient
 
 from src.assessment import ConditionAssessment
-from src.events import IncomingEvent, from_flat, from_meta_payload
+from src.events import IncomingEvent, calls_from_meta_payload, from_flat, from_meta_payload
 from src.server import create_app
 from src.service import IncomingService
 from src.store import SqliteStore
@@ -68,6 +68,18 @@ class EventTests(unittest.TestCase):
     def test_garbage_payloads_do_not_crash(self):
         for junk in (None, [], {"entry": "x"}, {"entry": [None, {"changes": [1]}]}):
             self.assertEqual(from_meta_payload(junk), [])
+
+    def test_meta_call_connect_and_terminate_are_parsed(self):
+        payload = {"entry": [{"changes": [{"field": "calls", "value": {
+            "metadata": {"phone_number_id": "business-id"},
+            "calls": [{"id": "call-1", "event": "connect", "session": {
+                "sdp_type": "offer", "sdp": "offer-sdp"}},
+                {"id": "call-1", "event": "terminate"}]}}]}]}
+        connect, terminate = calls_from_meta_payload(payload)
+        self.assertEqual((connect["id"], connect["event"], connect["phone_number_id"],
+                          connect["sdp_type"], connect["sdp"]),
+                         ("call-1", "connect", "business-id", "offer", "offer-sdp"))
+        self.assertEqual((terminate["id"], terminate["event"]), ("call-1", "terminate"))
 
     def test_flat_event_validation(self):
         self.assertEqual(from_flat({"message_id": "m", "user_id": "u", "text": "hi"}).type, "text")
@@ -262,6 +274,33 @@ class ServerTests(unittest.TestCase):
         res = self.client.post("/webhook", content=raw, headers={"x-hub-signature-256": self.sign(raw)})
         self.assertEqual(res.status_code, 200)
         self.assertEqual(self.sender.sent, [("60123456789", "echo hello")])
+
+    def test_existing_signed_webhook_dispatches_calls_and_messages(self):
+        handled = []
+        env = {**ENV, "WHATSAPP_CALLING_ENABLED": "true"}
+        client = TestClient(create_app(make_service(), self.sender, env,
+                                       call_handler=lambda call, configured: handled.append(call)))
+        payload = meta_body("hello")
+        payload["entry"][0]["changes"].append({"field": "calls", "value": {
+            "metadata": {"phone_number_id": "business-id"},
+            "calls": [{"id": "call-1", "event": "connect", "session": {
+                "sdp_type": "offer", "sdp": "offer-sdp"}}]}})
+        raw = json.dumps(payload).encode()
+        res = client.post("/webhook", content=raw, headers={"x-hub-signature-256": self.sign(raw)})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual((len(handled), handled[0]["id"], self.sender.sent),
+                         (1, "call-1", [("60123456789", "echo hello")]))
+
+    def test_calls_are_ignored_until_explicitly_enabled(self):
+        handled = []
+        client = TestClient(create_app(make_service(), self.sender, ENV,
+                                       call_handler=lambda call, configured: handled.append(call)))
+        payload = {"entry": [{"changes": [{"field": "calls", "value": {
+            "calls": [{"id": "call-2", "event": "terminate"}]}}]}]}
+        raw = json.dumps(payload).encode()
+        res = client.post("/webhook", content=raw, headers={"x-hub-signature-256": self.sign(raw)})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(handled, [])
 
     def test_events_trail_shows_arrivals_sends_and_failures(self):
         raw = json.dumps(meta_body("hello")).encode()

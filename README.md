@@ -126,6 +126,25 @@ python src/main.py
 python -m unittest discover tests
 ```
 
+### WhatsApp voice calls (LiveKit)
+
+Inbound WhatsApp calls use the existing Meta callback URL at `/webhook`; keep its current
+verification token and message subscription. The deployed app must also subscribe to Meta's
+`calls` webhook field (with a supported Graph API version) and have these Replit Secrets set:
+
+- `WHATSAPP_CALLING_ENABLED=true` (leave false until the LiveKit worker is deployed)
+- `WHATSAPP_CALL_GRAPH_API_VERSION=26.0`
+- `WHATSAPP_LIVEKIT_AGENT_NAME=orbyte-whatsapp`
+- `WHATSAPP_PHONE_NUMBER_ID` and the existing `WHATSAPP_TOKEN`
+- `LIVEKIT_URL`, `LIVEKIT_API_KEY`, and `LIVEKIT_API_SECRET`
+
+The `orbyte-whatsapp` LiveKit Agent must be running and able to reach the Bridge app's
+`POST /incoming` endpoint using its `INCOMING_API_KEY`. Call transcripts and the call ID
+(used as the chatbot conversation ID) go from the local worker to that endpoint over HTTPS;
+caller phone numbers are not forwarded. LiveKit's WhatsApp connector requires LiveKit Cloud.
+See [LiveKit's WhatsApp connector guide](https://docs.livekit.io/telephony/connectors/whatsapp/)
+for the supported Meta API versions and webhook setup.
+
 ---
 
 ## How We Use Replit *(Required)*
