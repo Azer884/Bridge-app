@@ -27,7 +27,7 @@ The first version is built for Malaysian painting businesses.
 | Live Demo         | https://gesir-ai.replit.app (the dashboard is at `/app`; demo password: `TiJedWeldikYa5ra3fest3al5ra9omtnl9a5ryaBh8aElFarch`) |
 | RunPod Endpoints  | text model `ose8agxpb9p1mr`, vision model `m3a8r7m8ebibba`, speech-to-text (Faster Whisper) `nvnrh39cdxgymr` (`https://api.runpod.ai/v2/<id>/runsync`) |
 | Slide Deck        | https://canva.link/gesir-ai                    |
-| Demo Video        | https://example.com/demo-video                 |
+| Demo Video        | [https://example.com/demo-video  ](https://youtu.be/tXOuRwmwh6g)               |
 
 ---
 
