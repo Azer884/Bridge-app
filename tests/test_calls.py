@@ -233,7 +233,7 @@ class VoiceWorkerBackendTests(unittest.TestCase):
         self.assertEqual(spoken([]), "")
         self.assertEqual(spoken(["**bold** and `code`"]), "bold and code")
         long = spoken(["Sentence number one is here. " * 80])
-        self.assertLessEqual(len(long), 700)
+        self.assertLessEqual(len(long), 1000)
         self.assertTrue(long.endswith("."))
 
     def test_each_utterance_is_a_text_message_from_the_caller(self):

@@ -13,7 +13,7 @@ import urllib.parse
 import urllib.request
 import uuid
 
-MAX_SPOKEN_CHARS = 700
+MAX_SPOKEN_CHARS = 1000
 
 
 
@@ -71,6 +71,7 @@ class Backend:
         self.api_key, self.user_id, self.call_id, self.timeout = api_key, user_id, call_id, timeout
         self.turn = 0
         self.lang = "en"
+        self.end_call = False           # the assistant says the conversation is over: say goodbye and hang up
 
     def _ask(self, text):
         self.turn += 1
@@ -86,6 +87,7 @@ class Backend:
         except (OSError, ValueError) as err:
             raise RuntimeError(f"the assistant could not be reached: {err}") from err
         self.lang = data.get("lang") or self.lang
+        self.end_call = bool(data.get("end_call"))
         return spoken(data.get("replies") or [])
 
     def _persona(self):

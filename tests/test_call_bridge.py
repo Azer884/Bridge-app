@@ -83,3 +83,14 @@ class ChatDuringCallTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HangUpTests(unittest.TestCase):
+    def test_goodbye_ends_the_call(self):
+        client = TestClient(create_app(make_service(), SentRecorder(), ENV))
+        body = {"message_id": "v9", "user_id": "60123456789", "type": "text", "text": "ok thanks, bye", "channel": "voice"}
+        self.assertTrue(client.post("/incoming", json=body, headers=KEY).json()["end_call"])
+        body.update(message_id="v10", text="I want to paint my bedroom")
+        self.assertFalse(client.post("/incoming", json=body, headers=KEY).json()["end_call"])
+        body.update(message_id="w1", text="bye", channel="whatsapp")
+        self.assertFalse(client.post("/incoming", json=body, headers=KEY).json()["end_call"])   # chat: no call to end

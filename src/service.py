@@ -212,7 +212,8 @@ class IncomingService:
         the quote is marked approved only if the send worked. Raises ValueError when nothing is waiting."""
         with self.store.lock(user_id):
             state = self.store.load(user_id)
-            if state.quote_status != "pending_approval":
+            # a job flagged for inspection can be approved too, once the owner has checked it (or decided it is fine)
+            if state.quote_status not in ("pending_approval", "needs_inspection"):
                 raise ValueError("no quote is waiting for approval")
             amount = state.quote["total"] if total is None else total
             message = approved_quote_message(amount, state.quote["currency"], self.config.get("business_name", "us"),
@@ -223,7 +224,7 @@ class IncomingService:
             if not send(message):
                 return False
             state.quote["approved_total"], state.quote_status = amount, "approved"
-            state.waiting_count, state.attention = 0, False
+            state.waiting_count, state.attention, state.needs_human = 0, False, False
             self.store.save(state)
             self.store.log_message(user_id, "out", message)
             self.store.add_audit(user_id, "owner", "state_change",

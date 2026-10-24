@@ -165,3 +165,21 @@ class EstimateMessageTests(unittest.TestCase):
         self.assertIn("attached as a PDF", texts[0])
         self.assertTrue(files[0][0].startswith(b"%PDF"))
         self.assertTrue(files[0][1].endswith(".pdf"))
+
+
+class InspectionApprovalTests(unittest.TestCase):
+    def test_a_job_flagged_for_inspection_can_still_be_approved(self):
+        service, _ = service_with_alerts()
+        state = job_state()
+        state.stage, state.contact_confirmed = "done", True
+        state.verified["surface_condition"] = "damp and mould everywhere"
+        service.store.save(state)
+        service.handle(IncomingEvent("m0", "u", text="ok"))
+        self.assertEqual(service.store.load("u").quote_status, "needs_inspection")
+        sent = []
+        self.assertTrue(service.approve_quote("u", lambda text: sent.append(text) or True))
+        state = service.store.load("u")
+        self.assertEqual(state.quote_status, "approved")
+        self.assertFalse(state.needs_human)
+        with self.assertRaises(ValueError):
+            service.approve_quote("u", lambda text: True)              # approved already: nothing is waiting

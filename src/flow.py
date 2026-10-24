@@ -323,6 +323,16 @@ def asks_recap(message):
     return bool(_RECAP.search(message))
 
 
+_CALL_OVER = re.compile(
+    r"\b(bye|goodbye|good bye|that'?s all|that is all|nothing else|no more questions?|i'?m done|that'?s it|"
+    r"selamat tinggal|itu sahaja|itu saja|tu je|dah habis)\b", re.I)
+
+
+def ends_call(message):
+    """The caller is saying goodbye ("ok thanks, bye", "that's all"): a short message, not "bye the way..."."""
+    return len(message.split()) <= 8 and bool(_CALL_OVER.search(message))
+
+
 def wants_cancel(message):
     return bool(_CANCEL.search(message))
 

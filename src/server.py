@@ -57,6 +57,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
+from . import flow
 from . import persona as persona_module
 from . import views, webauth
 from .pdf import estimate_pdf
@@ -369,11 +370,16 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
             event = from_flat(body)
         except ValueError as err:
             raise HTTPException(422, str(err))
+        before = service.store.load(event.user_id).stage
         if event.channel == "voice":
             with call_lock:
                 live_calls[event.user_id] = time.time() + 900       # a call is going on: chat answers go to it
         replies = service.handle(event)
-        return {"replies": replies, "lang": service.store.load(event.user_id).lang}   # the voice agent speaks in it
+        state = service.store.load(event.user_id)
+        # the voice agent hangs up after this answer: the job was just completed, or the caller said goodbye
+        end_call = event.channel == "voice" and ((state.stage == "done" and before != "done")
+                                                 or flow.ends_call(event.text or ""))
+        return {"replies": replies, "lang": state.lang, "end_call": end_call}
 
     @app.get("/api/voice/pending")
     def voice_pending(request: Request, user_id: str, end: bool = False):

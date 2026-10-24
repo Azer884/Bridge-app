@@ -13,6 +13,7 @@ import asyncio
 import json
 import logging
 import os
+import random
 import time
 from collections.abc import AsyncIterable
 
@@ -29,12 +30,27 @@ log = logging.getLogger("voice-agent")
 AGENT_NAME = os.environ.get("WHATSAPP_LIVEKIT_AGENT_NAME", "orbyte-whatsapp")
 RECORDING_NOTICE = os.environ.get("VOICE_RECORDING_NOTICE", "This call will be recorded and transcribed.")
 GREETING = os.environ.get("VOICE_GREETING", f"Hello, thanks for calling. {RECORDING_NOTICE} How can I help you today?")
-FILLER = os.environ.get("VOICE_FILLER", "One moment please")             # no full stop: it can be read as "dot"
-FILLER_AGAIN = os.environ.get("VOICE_FILLER_AGAIN", "Still working on it, thank you for waiting")
-FILLER_AFTER = float(os.environ.get("VOICE_FILLER_AFTER_SECONDS", "1.5"))    # a slow answer gets a short "one moment"
+# Said while the assistant works, picked at random so the caller does not hear the same words every time. No full
+# stops: a full stop at the end of a short line can be read aloud as "dot". VOICE_FILLERS replaces the English list
+# ("|" between lines).
+FILLERS = {
+    "en": [s.strip() for s in os.environ.get("VOICE_FILLERS", "One moment please|Just a moment|Give me a second|"
+                                             "Let me check that for you|Bear with me a moment").split("|") if s.strip()],
+    "ms": ["Sekejap ya", "Tunggu sebentar", "Biar saya semak dulu", "Sebentar ya"],
+}
+FILLERS_AGAIN = {
+    "en": ["Still working on it, thank you for waiting", "Almost there, thanks for your patience",
+           "Thanks for holding, I'm nearly done"],
+    "ms": ["Masih menyemak, terima kasih kerana menunggu", "Hampir siap, terima kasih kerana bersabar"],
+}
+GOODBYE = {
+    "en": os.environ.get("VOICE_GOODBYE", "Thank you for calling, have a great day. Goodbye"),
+    "ms": "Terima kasih kerana menelefon. Selamat tinggal",
+}
+FILLER_AFTER = float(os.environ.get("VOICE_FILLER_AFTER_SECONDS", "4"))      # a slow answer gets a short "one moment"
 FILLER_EVERY = float(os.environ.get("VOICE_FILLER_EVERY_SECONDS", "20"))     # and a reminder now and then
 CHAT_POLL = float(os.environ.get("VOICE_CHAT_POLL_SECONDS", "2"))            # how often to look for chat messages/photos
-GIVE_UP_AFTER = float(os.environ.get("VOICE_GIVE_UP_AFTER_SECONDS", "90"))
+GIVE_UP_AFTER = float(os.environ.get("VOICE_GIVE_UP_AFTER_SECONDS", "240"))     # a cold photo model can take minutes
 SORRY = os.environ.get("VOICE_SORRY", "Sorry, I am having trouble right now. A team member will get back to you.")
 
 
@@ -45,6 +61,14 @@ class PaintingAssistant(Agent):
         super().__init__(instructions="Relay the business's assistant. Its replies come from the backend.")
         self.backend = backend
         self._heard, self._task = "", None
+        self.end_call, self._last_filler = False, ""
+
+    def _filler(self, again=False):
+        """A "one moment" line in the caller's language, never the same one twice in a row."""
+        options = (FILLERS_AGAIN if again else FILLERS).get(self.backend.lang) or (FILLERS_AGAIN if again else FILLERS)["en"]
+        choices = [o for o in options if o != self._last_filler] or options
+        self._last_filler = random.choice(choices)
+        return self._last_filler
 
     async def on_user_turn_completed(self, turn_ctx: llm.ChatContext, new_message: llm.ChatMessage) -> None:
         """The caller finished a sentence: ask the assistant now, and if it is slow say "one moment" out loud while
@@ -60,7 +84,7 @@ class PaintingAssistant(Agent):
         spoke = 0
         while not done and time.monotonic() - started < GIVE_UP_AFTER:
             log.info("the assistant is slow (%.1fs): saying a filler", time.monotonic() - started)
-            await self.session.say(FILLER if not spoke else FILLER_AGAIN, add_to_chat_ctx=False)
+            await self.session.say(self._filler(again=bool(spoke)), add_to_chat_ctx=False)
             spoke += 1
             done, _ = await asyncio.wait({self._task}, timeout=FILLER_EVERY if spoke else FILLER_AFTER)
 
@@ -85,6 +109,8 @@ class PaintingAssistant(Agent):
         log.info("assistant answered after %.1fs: %r", time.monotonic() - started, reply[:120])
         if reply:
             yield reply
+        if self.backend.end_call:
+            self.end_call = True                # the job is complete or the caller said goodbye: hang up after this
         language = self.backend.lang
         tts = getattr(self.session, "tts", None)
         if language and hasattr(tts, "update_options"):
@@ -123,9 +149,30 @@ async def entrypoint(ctx: agents.JobContext):
                           voice=voice, language="en",
                           extra_kwargs={"speed": float(os.environ.get("VOICE_TTS_SPEED", "0.95"))}),    # calm, not rushed
     )
+    assistant = PaintingAssistant(backend)
+    ending = {"started": False}
+
+    async def say_goodbye_and_hang_up():
+        """The conversation is over: say goodbye, let it finish playing, then end the call for the caller too."""
+        try:
+            handle = session.say(GOODBYE.get(backend.lang) or GOODBYE["en"], allow_interruptions=False,
+                                 add_to_chat_ctx=False)
+            await handle
+            await asyncio.sleep(1.0)
+        finally:
+            log.info("call finished: hanging up")
+            try:
+                await ctx.delete_room()
+            except Exception:
+                log.exception("could not end the call")
+                ctx.shutdown("call finished")
+
     @session.on("agent_state_changed")
     def _agent_state(event):
         log.info("agent: %s -> %s", event.old_state, event.new_state)
+        if event.new_state == "listening" and assistant.end_call and not ending["started"]:
+            ending["started"] = True            # the last answer has been spoken
+            asyncio.create_task(say_goodbye_and_hang_up())
 
     @session.on("user_state_changed")
     def _user_state(event):
@@ -150,7 +197,7 @@ async def entrypoint(ctx: agents.JobContext):
         relay.cancel()
         await backend.pending(end=True)            # answers to the chat go back to WhatsApp
 
-    await session.start(room=ctx.room, agent=PaintingAssistant(backend))
+    await session.start(room=ctx.room, agent=assistant)
     await backend.pending()                        # marks the call live: chat answers now come to the phone
     relay = asyncio.create_task(relay_chat())
     ctx.add_shutdown_callback(call_over)
