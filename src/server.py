@@ -30,6 +30,8 @@
     POST /api/vision/assess RUNPOD_VISION_ENDPOINT_ID vision model, one photo in, validated assessment out
     GET  /api/models/health                           worker and job counts for each model
   GET  /health
+  GET  /login, POST /login, POST /logout    the dashboard's password sign-in (DASHBOARD_PASSWORD), sets a cookie
+  GET  /, /app/...                          the built dashboard from ./dashboard (/app/... needs the sign-in)
 
 The model APIs are raw access to the models, so they are for internal use. Customer messages
 must go through /incoming, which applies the assistant's rules, screening and validation.
@@ -45,17 +47,18 @@ import logging
 import os
 import threading
 import time
+from urllib.parse import parse_qs, quote
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from pydantic import BaseModel, Field
 
 from . import persona as persona_module
-from . import views
+from . import views, webauth
 from .pdf import estimate_pdf
 from .events import from_flat, from_meta_payload
 from .runpod_client import RunPodClient, RunPodError, load_dotenv
@@ -169,7 +172,17 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
                                   transcriber=transcribe_voice if sender and transcriber else None)
     clients["text"] = clients["text"] or service.client
 
+    session_secret = (env.get("SESSION_SECRET") or env.get("INCOMING_API_KEY") or "").encode()
+    dashboard_password = env.get("DASHBOARD_PASSWORD") or ""
+    site = Path(env.get("DASHBOARD_DIR") or ROOT / "dashboard")
+    limiter = webauth.LoginLimiter()
+
+    def has_session(request):
+        return webauth.valid_cookie(session_secret, request.cookies.get(webauth.COOKIE))
+
     def require_key(request):
+        if has_session(request):                # the web dashboard: signed in with the password
+            return
         if not env.get("INCOMING_API_KEY"):
             raise HTTPException(503, "INCOMING_API_KEY is not configured")
         if not _same(request.headers.get("x-api-key"), env["INCOMING_API_KEY"]):
@@ -231,9 +244,15 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
                 running.discard(event.user_id)
             raise
 
-    @app.get("/", include_in_schema=False)
     @app.get("/health")
     def health():
+        return {"ok": True}
+
+    @app.get("/", include_in_schema=False)
+    def home():
+        """The landing page when the dashboard is built; otherwise a plain 200 for the host's health check."""
+        if (site / "index.html").is_file():
+            return FileResponse(site / "index.html", headers={"Cache-Control": "no-cache"})
         return {"ok": True}
 
     @app.get("/webhook")
@@ -496,5 +515,54 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
             except HTTPException as err:
                 report[name] = {"error": err.detail}
         return report
+
+    # --- the hosted dashboard: login, the built frontend, and its client-side routes -----------------
+    def client_id(request):
+        forwarded = request.headers.get("x-forwarded-for", "")
+        return forwarded.split(",")[0].strip() or (request.client.host if request.client else "?")
+
+    @app.get("/login")
+    def login_form(next: str = "/app"):
+        return HTMLResponse(webauth.login_page(webauth.safe_next(next), enabled=bool(dashboard_password)))
+
+    @app.post("/login")
+    async def login(request: Request):
+        form = {k: v[0] for k, v in parse_qs((await request.body()).decode("utf-8", "replace")).items()}
+        target = webauth.safe_next(form.get("next"))
+        who = client_id(request)
+        if not dashboard_password or not session_secret:
+            return HTMLResponse(webauth.login_page(target, enabled=False), status_code=503)
+        if limiter.blocked(who):
+            return HTMLResponse(webauth.login_page(target, "Too many wrong passwords. Try again in ten minutes."),
+                                status_code=429)
+        if not _same(form.get("password", ""), dashboard_password):
+            limiter.fail(who)
+            service.store.log_event("login_failed", who)
+            return HTMLResponse(webauth.login_page(target, "That password is not right."), status_code=401)
+        limiter.clear(who)
+        response = RedirectResponse(target, status_code=303)
+        secure = request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
+        response.set_cookie(webauth.COOKIE, webauth.make_cookie(session_secret), max_age=webauth.MAX_AGE,
+                            httponly=True, samesite="lax", secure=secure)
+        return response
+
+    @app.post("/logout")
+    def logout():
+        response = RedirectResponse("/", status_code=303)
+        response.delete_cookie(webauth.COOKIE)
+        return response
+
+    @app.get("/{path:path}")
+    def dashboard_site(path: str, request: Request):
+        if path.startswith("api/") or not (site / "index.html").is_file():
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+        if (path == "app" or path.startswith("app/")) and not has_session(request):
+            return RedirectResponse("/login?next=" + quote("/" + path, safe="/"), status_code=303)
+        target = (site / path).resolve()
+        if path and target.is_file() and site.resolve() in target.parents:
+            immutable = path.startswith("assets/")
+            return FileResponse(target, headers={"Cache-Control": "public, max-age=31536000, immutable" if immutable
+                                                 else "no-cache"})
+        return FileResponse(site / "index.html", headers={"Cache-Control": "no-cache"})     # client-side routes
 
     return app
