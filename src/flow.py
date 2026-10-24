@@ -121,10 +121,28 @@ NO_PREFERENCE = re.compile(
 def when_in(message):
     """The customer's answer to "when would you like us to come": a date or time, or flexible."""
     if _DATE_WORDS.search(message) or _ASAP.search(message):
-        return message.strip()[:120]
-    if _BARE_NO.match(message):
+        return " ".join(message.split())[:120]
+    if _BARE_NO.match(message) or NO_PREFERENCE.search(message) or _DONT_KNOW.search(message):
         return "flexible, no specific date"
     return None
+
+
+_DONT_KNOW = re.compile(r"\b(idk|dunno|don'?t know|do not know|no idea|tak tahu|entah|tak pasti)\b", re.I)
+_RESTART = re.compile(r"\b(start over|start again|restart|begin again|from the start|mulakan semula|mula semula|"
+                      r"mula balik)\b", re.I)
+
+
+def wants_restart(message):
+    return bool(_RESTART.search(message))
+
+
+def restart_job(state):
+    """The customer wants to begin the job from scratch (not a second job): drop the answers so far."""
+    state.verified = {k: v for k, v in state.verified.items() if k in ("customer_name", "phone")}
+    state.stage, state.quote, state.quote_status, state.photo_assessment = "job", None, "", None
+    state.estimated, state.pending_conflict, state.history, state.last_field = [], None, [], ""
+    state.waiting_count, state.attention, state.needs_human = 0, False, False
+    state.service_checked = state.greeted = True
 
 
 _QUESTION_START = re.compile(

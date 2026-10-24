@@ -298,7 +298,7 @@ class AssistantTests(unittest.TestCase):
 
     def test_measurement_without_unit_or_with_two_numbers_is_not_guessed(self):
         s = state_with(address="1 Main St", surfaces=["walls"])
-        self.run_turn(s, "4 long", reply("What unit?"))
+        self.run_turn(s, "12 long", reply("What unit?"))
         self.run_turn(s, "4 metres by 3 metres", reply("Thanks, noted."))
         self.assertNotIn("room_length_m", s.verified)
 

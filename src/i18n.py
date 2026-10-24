@@ -18,11 +18,11 @@ STRINGS = {
         "ask_phone": "What is the best phone number to reach you on?",
         "ask_email": "What is your email address?",
         "ask_surfaces": "Which surfaces would you like painted?",
-        "ask_room_length_m": "How long is the room?",
-        "ask_room_width_m": "How wide is the room?",
-        "ask_room_height_m": "How tall is the room?",
-        "ask_wall_length_m": "How long is the wall?",
-        "ask_wall_height_m": "How tall is the wall?",
+        "ask_room_length_m": "How long is the room (in metres)?",
+        "ask_room_width_m": "How wide is the room (in metres)?",
+        "ask_room_height_m": "How tall is the room (in metres)?",
+        "ask_wall_length_m": "How long is the wall (in metres)?",
+        "ask_wall_height_m": "How tall is the wall (in metres)?",
         "ask_surface_condition": "What condition are the surfaces in?",
         "ask_paint_tier": "What paint quality would you like: economy, standard or premium?",
         "ask_colour": "What colour would you like?",
@@ -79,11 +79,19 @@ STRINGS = {
         "ack_estimate": "Thanks, I'll use the larger figure to be safe.",
         "ack_fixed": "No problem, I've updated the {label} to {value}.",
         "new_job": "Happy to help with another job! ",
+        "restart": "No problem, let's start again.",
+        "duration": " We expect the work to take {text}.",
+        "booking_ask": "Good news: {owner} can do your job on {when}. We expect {text}. Does that work for you? Reply yes, or tell me which day suits you better.",
+        "booking_ok": "Great, you're booked in for {when}. {owner}'s team will see you then!",
+        "booking_no": "No problem, I've told {owner} and they'll suggest another time.",
+        "booking_remind": "Does {when} work for you? Please reply yes, or tell me a better day.",
+        "booking_moved": "Update: your job has moved to {when}. Reply if that does not work for you.",
+        "booking_cancelled": "Update: the slot we offered is no longer available. {owner} will suggest a new time.",
         "lang_ms": "Baik, saya akan bercakap dalam Bahasa Malaysia mulai sekarang.",
         "lang_en": "Sure, I'll continue in English.",
         "inspection_message": "This job needs an inspection before we can give a reliable price, so a member of our team will contact you to arrange it.",
         "inspection_wrap": "Thank you, I've passed everything to {owner}. {message}",
-        "approved": "Good news from {business}: based on the details you gave us, our estimate is {currency} {total:,.2f} (excluding any applicable tax). This is an estimate only: the final price is confirmed once our team has checked the actual measurements on site. A team member will contact you to confirm the appointment.",
+        "approved": "Good news from {business}: based on the details you gave us, our estimate is {currency} {total:,.2f} (excluding any applicable tax). This is an estimate only: the final price is confirmed once our team has checked the actual measurements on site.{duration} A team member will contact you to confirm the appointment.",
         "final": "Update from {business}: after checking on site, the final price for your job is {currency} {total:,.2f} (excluding any applicable tax). Thank you for choosing us!",
         "is_yes_words": "",
     },
@@ -95,11 +103,11 @@ STRINGS = {
         "ask_phone": "Apakah nombor telefon terbaik untuk menghubungi anda?",
         "ask_email": "Apakah alamat e-mel anda?",
         "ask_surfaces": "Permukaan mana yang anda ingin dicat?",
-        "ask_room_length_m": "Berapa panjang bilik itu?",
-        "ask_room_width_m": "Berapa lebar bilik itu?",
-        "ask_room_height_m": "Berapa tinggi bilik itu?",
-        "ask_wall_length_m": "Berapa panjang dinding itu?",
-        "ask_wall_height_m": "Berapa tinggi dinding itu?",
+        "ask_room_length_m": "Berapa panjang bilik itu (dalam meter)?",
+        "ask_room_width_m": "Berapa lebar bilik itu (dalam meter)?",
+        "ask_room_height_m": "Berapa tinggi bilik itu (dalam meter)?",
+        "ask_wall_length_m": "Berapa panjang dinding itu (dalam meter)?",
+        "ask_wall_height_m": "Berapa tinggi dinding itu (dalam meter)?",
         "ask_surface_condition": "Bagaimana keadaan permukaan itu?",
         "ask_paint_tier": "Apakah kualiti cat yang anda mahu: ekonomi, standard atau premium?",
         "ask_colour": "Apakah warna yang anda mahu?",
@@ -156,11 +164,19 @@ STRINGS = {
         "ack_estimate": "Terima kasih, saya akan guna angka yang lebih besar untuk selamat.",
         "ack_fixed": "Tiada masalah, saya telah kemas kini {label} kepada {value}.",
         "new_job": "Dengan senang hati saya bantu untuk kerja lain! ",
+        "restart": "Tiada masalah, kita mulakan semula.",
+        "duration": " Kami menjangka kerja ini mengambil masa {text}.",
+        "booking_ask": "Berita baik: {owner} boleh melakukan kerja anda pada {when}. Kami menjangka {text}. Adakah itu sesuai untuk anda? Balas ya, atau beritahu hari mana yang lebih sesuai.",
+        "booking_ok": "Baik, anda telah ditempah pada {when}. Pasukan {owner} akan datang pada masa itu!",
+        "booking_no": "Tiada masalah, saya telah beritahu {owner} dan mereka akan mencadangkan masa lain.",
+        "booking_remind": "Adakah {when} sesuai untuk anda? Sila balas ya, atau beritahu hari yang lebih baik.",
+        "booking_moved": "Makluman: kerja anda telah dialihkan ke {when}. Balas jika itu tidak sesuai untuk anda.",
+        "booking_cancelled": "Makluman: slot yang kami tawarkan tidak lagi tersedia. {owner} akan mencadangkan masa baharu.",
         "lang_ms": "Baik, saya akan bercakap dalam Bahasa Malaysia mulai sekarang.",
         "lang_en": "Sure, I'll continue in English.",
         "inspection_message": "Kerja ini memerlukan pemeriksaan sebelum kami boleh beri harga yang tepat, jadi seorang ahli pasukan kami akan menghubungi anda untuk mengaturnya.",
         "inspection_wrap": "Terima kasih, saya telah serahkan semuanya kepada {owner}. {message}",
-        "approved": "Berita baik daripada {business}: berdasarkan maklumat yang anda beri, anggaran kami ialah {currency} {total:,.2f} (tidak termasuk cukai jika berkenaan). Ini hanyalah anggaran: harga akhir disahkan selepas pasukan kami menyemak ukuran sebenar di tapak. Seorang ahli pasukan akan menghubungi anda untuk mengesahkan temujanji.",
+        "approved": "Berita baik daripada {business}: berdasarkan maklumat yang anda beri, anggaran kami ialah {currency} {total:,.2f} (tidak termasuk cukai jika berkenaan). Ini hanyalah anggaran: harga akhir disahkan selepas pasukan kami menyemak ukuran sebenar di tapak.{duration} Seorang ahli pasukan akan menghubungi anda untuk mengesahkan temujanji.",
         "final": "Maklumat daripada {business}: selepas semakan di tapak, harga akhir untuk kerja anda ialah {currency} {total:,.2f} (tidak termasuk cukai jika berkenaan). Terima kasih kerana memilih kami!",
         "is_yes_words": "",
     },
@@ -198,11 +214,11 @@ ENGLISH_WORDS = {
 }
 
 _ASK_MS = re.compile(
-    r"\b(malay|melayu|bahasa malaysia|bahasa melayu|\bbm\b|b\.?m\.?)\b", re.I)
-_ASK_EN = re.compile(r"\b(english|inggeris|bahasa inggeris)\b", re.I)
+    r"\b(malay|melayu|bahasa malaysia|bahasa melayu|bm)\b", re.I)
+_ASK_EN = re.compile(r"\b(english|eng|inggeris|bahasa inggeris|bi)\b", re.I)
 _ASK_VERB = re.compile(
-    r"\b(speak|talk|reply|answer|switch|change|use|say|write|please|can you|could you|cakap|bercakap|guna|"
-    r"gunakan|tukar|balas|boleh|cuba|sila|tulis)\b", re.I)
+    r"\b(speak|talk|reply|answer|switch|change|use|say|write|please|pls|plz|can you|could you|back to|go back|"
+    r"cakap|bercakap|guna|gunakan|tukar|balas|boleh|cuba|sila|tulis|balik)\b", re.I)
 
 
 def requested_language(message):

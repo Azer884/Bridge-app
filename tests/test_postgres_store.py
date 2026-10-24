@@ -29,7 +29,7 @@ class PostgresStoreTests(unittest.TestCase):
     def setUp(self):
         self.store = PostgresStore(URL)
         with self.store._conn() as conn:
-            for table in ("conversations", "processed_messages", "messages", "settings", "events"):
+            for table in ("conversations", "processed_messages", "messages", "settings", "events", "bookings", "audit"):
                 conn.execute(f"DELETE FROM {table}")
 
     def test_state_round_trip_keeps_everything(self):
@@ -46,6 +46,24 @@ class PostgresStoreTests(unittest.TestCase):
         self.store.save(state)                                  # upsert, not a duplicate row
         self.assertEqual([s.stage for s in self.store.conversations()], ["done"])
         self.assertEqual(self.store.load("nobody").conversation_id, "nobody")
+
+    def test_bookings_and_audit(self):
+        self.store.save_booking({"id": "b1", "user_id": "u1", "start": "2026-10-26T09:00:00+08:00", "status": "tentative"})
+        self.store.save_booking({"id": "b1", "user_id": "u1", "start": "2026-10-26T09:00:00+08:00", "status": "confirmed"})
+        self.store.save_booking({"id": "b2", "user_id": "u2", "start": "2026-10-25T09:00:00+08:00", "status": "confirmed"})
+        self.assertEqual([b["id"] for b in self.store.bookings()], ["b2", "b1"])             # by start time
+        self.assertEqual(self.store.get_booking("b1")["status"], "confirmed")
+        self.assertTrue(self.store.delete_booking("b2"))
+        self.assertFalse(self.store.delete_booking("b2"))
+        first = self.store.add_audit("u1", "ai", "ai_extraction", "read the job")
+        second = self.store.add_audit("u1", "owner", "override", "changed length", [{"field": "length_m", "from": "4", "to": "5"}])
+        self.assertEqual((first["seq"], second["seq"]), (1, 2))
+        self.assertNotEqual(first["hash"], second["hash"])
+        self.assertEqual([e["seq"] for e in self.store.audit("u1")], [2, 1])                 # newest first
+        self.store.log_message("u1", "in", "photo", "777")
+        message = self.store.messages("u1")[0]
+        self.assertEqual((message["media_id"], message["direction"]), ("777", "in"))
+        self.assertGreater(message["ts"], 1e9)
 
     def test_stats_report_the_backend(self):
         self.store.save(ConversationState("u1"))

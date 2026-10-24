@@ -426,5 +426,103 @@ class VoiceTests(unittest.TestCase):
         self.assertIsNotNone(Transcriber.from_env({}))
 
 
+class ChatLogRegressionTests(unittest.TestCase):
+    """Bugs seen in a real WhatsApp chat."""
+
+    def ceiling_state(self):
+        state = new_state()
+        state.greeted = state.service_checked = True
+        state.verified.update({"surfaces": ["ceiling"]})
+        return state
+
+    def test_four_by_five_fills_length_and_width_as_an_estimate(self):
+        state = self.ceiling_state()
+        handle_message(state, "4 by 5 ig im not sure tho", CONFIG, FakeClient(reply("Which?")))
+        self.assertEqual((state.verified["room_length_m"], state.verified["room_width_m"]), (4.0, 5.0))
+        self.assertEqual(state.estimated, ["room_length_m", "room_width_m"])
+
+    def test_feet_sized_numbers_are_not_assumed_to_be_metres(self):
+        state = self.ceiling_state()
+        handle_message(state, "10 by 12", CONFIG, FakeClient(reply("Is that in metres or feet?")))
+        self.assertNotIn("room_length_m", state.verified)
+        handle_message(state, "10 by 12 feet", CONFIG, FakeClient(reply("Thanks, which height?")))
+        self.assertAlmostEqual(state.verified["room_length_m"], 3.048)
+
+    def test_a_number_inside_a_sentence_answers_the_open_question(self):
+        state = self.ceiling_state()
+        state.verified.update({"room_length_m": 4.0})
+        handle_message(state, "I said 5 u idiot", CONFIG, FakeClient(reply("x?")))
+        self.assertEqual(state.verified["room_width_m"], 5.0)
+
+    def test_a_count_is_not_a_size(self):
+        state = new_state()
+        state.greeted = state.service_checked = True
+        handle_message(state, "I want to paint 2 walls", CONFIG, FakeClient(reply("Which?")))
+        self.assertNotIn("room_length_m", state.verified)
+
+    def test_dont_know_is_a_flexible_date_and_language_requests_survive_a_merged_message(self):
+        state = job_state()
+        state.stage = "job"
+        del state.verified["preferred_datetime"], state.verified["address"]
+        handle_message(state, "Idk", CONFIG, FakeClient(reply("x?")))
+        self.assertEqual(state.verified["preferred_datetime"], "flexible, no specific date")
+        state = job_state()
+        state.stage, state.lang = "job", "ms"
+        del state.verified["preferred_datetime"], state.verified["address"]
+        out = handle_message(state, "Back to eng pls" + chr(10) + "Any time", CONFIG, FakeClient(reply("x?")))
+        self.assertEqual(state.lang, "en")
+        self.assertEqual(state.verified["preferred_datetime"], "Any time")        # no stray request text
+        self.assertTrue(out.reply.startswith("Sure, I'll continue in English."))
+        self.assertIn("address", out.reply.lower())
+
+    def test_start_over(self):
+        state = job_state()
+        state.stage = "job"
+        del state.verified["address"]
+        out = handle_message(state, "ok start over", CONFIG, FakeClient())
+        self.assertEqual(state.verified.get("surfaces"), None)
+        self.assertEqual(state.stage, "job")
+        self.assertIn("start again", out.reply)
+        self.assertIn("surfaces", out.reply.lower())
+        self.assertEqual(state.orders, [])                                          # not a second job
+
+    def test_shared_location_is_text(self):
+        payload = {"entry": [{"changes": [{"value": {"messages": [
+            {"id": "l1", "from": "6012", "type": "location",
+             "location": {"latitude": 2.8345504, "longitude": 101.7020259, "name": "Home"}}]}}]}]}
+        event = from_meta_payload(payload)[0]
+        self.assertEqual(event.type, "text")
+        self.assertIn("2.83455, 101.70203", event.text)
+        state = job_state()
+        state.stage = "job"
+        del state.verified["address"]
+        handle_message(state, event.text, CONFIG, FakeClient(reply("Thanks!")))
+        self.assertIn("Home", state.verified["address"])
+
+    def test_photo_caption_is_read_as_a_message(self):
+        from src.assessment import ConditionAssessment
+        service = make_service(reply("Got it. How tall is the room?"))
+        service.photo_assessor = lambda media_id: ConditionAssessment("moderate", ("cracks",), (), 0.9, "vision")
+        state = new_state()
+        state.greeted = state.service_checked = True
+        state.verified.update({"surfaces": ["ceiling"], "room_length_m": 4.0})
+        service.store.save(state)
+        out = service.handle(IncomingEvent("p1", "u", type="image", text="5", media_id="123"))
+        self.assertEqual(len(out), 1)
+        self.assertIn("Thanks for the photo", out[0])
+        self.assertEqual(service.store.load("u").verified["room_width_m"], 5.0)
+        self.assertEqual(out[0].count("How wide"), 0)                               # not asked again
+
+    def test_voice_failures_are_recorded_for_the_sme(self):
+        def boom(media_id):
+            raise RuntimeError("No module named faster_whisper")
+
+        service = make_service(transcriber=boom)
+        service.handle(IncomingEvent("v1", "u", type="audio", media_id="1"))
+        events = service.store.events(5)
+        self.assertEqual(events[0]["kind"], "voice_failed")
+        self.assertIn("faster_whisper", events[0]["detail"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -39,6 +39,8 @@ class ConversationState:
     attention: bool = False        # an important follow-up the SME should look at
     created_at: float = 0.0        # when the current job started
     quote_stale: bool = False      # a size changed after pricing: the draft must be recalculated
+    overrides: dict = field(default_factory=dict)   # the owner's corrections from the dashboard form
+    pending_booking: dict = None   # a slot offered to the customer, waiting for their yes or no
 
     def required_fields(self, config):
         wanted = set(config["required_fields"])

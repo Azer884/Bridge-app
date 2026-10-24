@@ -21,6 +21,16 @@ def _text(value):
     return value if isinstance(value, str) else ""
 
 
+def _location_text(body):
+    """A shared WhatsApp location as text, so it can answer "what is the address?"."""
+    label = " ".join(x for x in (_text(body.get("name")), _text(body.get("address"))) if x)
+    try:
+        coords = f"{float(body['latitude']):.5f}, {float(body['longitude']):.5f}"
+    except (KeyError, TypeError, ValueError):
+        coords = ""
+    return f"{label} (location {coords})".strip() if coords else label
+
+
 def from_flat(data):
     """The flat JSON that n8n (or any other front door) posts. Raises ValueError if unusable."""
     if not isinstance(data, dict):
@@ -57,6 +67,8 @@ def from_meta_payload(payload):
                 kind = message.get("type")
                 body = message.get(kind) if isinstance(message.get(kind), dict) else {}
                 sender = str(message["from"])
+                if kind == "location" and _location_text(body):
+                    kind, body = "text", {"body": _location_text(body)}
                 events.append(IncomingEvent(
                     message_id=str(message["id"]), user_id=sender,
                     type=kind if kind in KNOWN_TYPES else "unsupported",

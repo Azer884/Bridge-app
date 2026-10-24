@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from . import contact, flow
 from .grounding import (GroundingError, estimate_in, ground_field, ground_measurement, numbers_in,
-                        unit_factors_in)
+                        sizes_in, unit_factors_in)
 from .guard import MAX_STRIKES, clip_message, screen_input
 from .i18n import STRINGS, TIER_WORDS, detect, metres, requested_language, t
 from .persona import greeting_line, render, text as persona_text
@@ -46,7 +46,19 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
     asked = requested_language(message)
     state.lang = asked or detect(message, state.lang)
     if asked:                           # "speak Malay" / "in English please": switch and carry on
+        rest = " ".join(part.strip() for part in re.split(r"[\n.!?]+", message)
+                        if part.strip() and not requested_language(part))
+        if rest and not screen_input(rest):     # "Back to English pls" + "Any time": answer the rest too
+            out = handle_message(state, rest, config, client, max_retries)
+            state.lang = asked
+            out.reply = f"{t('lang_' + asked, asked)} {out.reply}".strip()
+            return out
         return _finish(state, message, f"{t('lang_' + asked, asked)} {_current_question(state, config)}".strip(),
+                       Status.COLLECTING.value, record=False)
+    if flow.wants_restart(message):
+        flow.restart_job(state) if state.stage != "done" else flow.start_new_order(state)
+        first = ask_for(state.next_missing(config), state) if state.next_missing(config) else ""
+        return _finish(state, message, f"{t('restart', state.lang)} {first}".strip(),
                        Status.COLLECTING.value, record=False)
     if screen_input(message):
         return _refuse(state, message, config)
@@ -106,7 +118,8 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
     asked = state.next_missing(config)              # the question the customer is answering
     before, before_estimated = dict(state.verified), list(state.estimated)
     _prefill_job(state, message, config)
-    _prefill_measurement(state, message, config)
+    if "surfaces" not in changed_keys(before, state):         # a number next to "one wall" is a count
+        _prefill_measurement(state, message, config)
     changed = {k for k, v in state.verified.items() if before.get(k) != v}   # read by the backend this turn
     system_prompt = load_system_prompt()
     if persona and changed:
@@ -274,6 +287,10 @@ _TIERS = re.compile(r"\b(economy|ekonomi|standard|premium)\b", re.I)
 PHOTO_CONDITION = "see the customer's photo"
 
 
+def changed_keys(before, state):
+    return {k for k, v in state.verified.items() if before.get(k) != v}
+
+
 def _prefill_job(state, message, config):
     """Answers the backend can read without the model: which surfaces, when, the condition shown in a
     photo, and "no preference". Only the field being asked about (or a clearly stated surface) is filled,
@@ -318,6 +335,11 @@ def _prefill_job(state, message, config):
             state.verified[key] = previous
 
 
+# A plain number answering a size question is metres when it is a believable room size; 10 or 12 could
+# be feet, and a number next to "wall", "room", "coat"... is a count, so those are left to the model.
+PLAIN_METRES = (1.5, 8.0)
+_COUNT_NOUNS = re.compile(r"\b(walls?|ceilings?|rooms?|bedrooms?|doors?|windows?|coats?|floors?|dinding|siling|"
+                          r"bilik|pintu|tingkap)\b", re.I)
 _CUES = {"room_length_m": {"long", "length", "panjang"}, "room_width_m": {"wide", "width", "lebar"},
          "room_height_m": {"high", "tall", "height", "tinggi"}}
 
@@ -330,6 +352,23 @@ def _prefill_measurement(state, message, config):
     """
     missing = state.missing_required(config)
     open_fields = [k for k in missing if k in _CUES]
+    sizes = sizes_in(message)
+    if sizes and len(open_fields) >= len(sizes):
+        # "4 by 5": the next open measurements in order (length then width, or length then height for one wall)
+        if not unit_factors_in(message) and not all(PLAIN_METRES[0] <= n <= PLAIN_METRES[1] for n in sizes):
+            return                      # "10 by 12" could be feet: the model asks which
+        text = message if unit_factors_in(message) else f"{message} m"
+        try:
+            values = [ground_measurement(n, text) for n in sizes]
+        except GroundingError:
+            return
+        _, hedged = estimate_in(message)
+        for key, value in zip(open_fields, values):
+            state.verified[key] = value
+            state.last_field = key
+            if hedged and key not in state.estimated:
+                state.estimated.append(key)
+        return
     numbers = numbers_in(message)
     upper, estimated = estimate_in(message)
     if upper is not None:
@@ -348,7 +387,10 @@ def _prefill_measurement(state, message, config):
         return
     text = message if unit_factors_in(message) or upper is None else f"{message} m"
     try:
-        state.verified[key] = ground_measurement(numbers[0], text)
+        # the customer is answering this very question, so a plain number is metres ("I said 5")
+        assume = (key == missing[0] and PLAIN_METRES[0] <= numbers[0] <= PLAIN_METRES[1]
+                  and not _COUNT_NOUNS.search(message))
+        state.verified[key] = ground_measurement(numbers[0], text, assume_metres=assume)
     except GroundingError:
         return
     state.last_field = key

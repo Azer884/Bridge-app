@@ -322,7 +322,8 @@ class QuoteApiTests(unittest.TestCase):
         (draft,) = self.api.get("/api/quotes", headers=KEY).json()["quotes"]
         self.assertIn("Labour", draft["quote"]["breakdown"])
         res = self.api.post("/api/quotes/60123456789/approve", headers=KEY, json={"total": 1200})
-        self.assertEqual(res.json(), {"approved": True})
+        self.assertTrue(res.json()["approved"])
+        self.assertLessEqual(len(res.json()["slots"]), 3)                  # the best times to offer next
         ((to, text),) = self.sender.sent
         self.assertEqual(to, "60123456789")
         self.assertIn("MYR 1,200.00", text)

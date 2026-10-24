@@ -6,6 +6,16 @@
     POST /incoming         flat JSON from n8n or any other front door -> {"replies": [...]}
   GET  /api/events                        recent webhook, send and error events (x-api-key)
   GET  /api/storage                       which database is in use and its row counts (x-api-key)
+  Dashboard (x-api-key; the contract is frontend/shared/api.ts)
+    GET  /api/quotes/{id}                   one customer: job, quote, editable params, chat, photos, audit
+    POST /api/quotes/{id}/recalculate       {"params": {...}} the engine's price for the form values (not saved)
+    PUT  /api/quotes/{id}/params            save the owner's corrections (logged, draft re-priced)
+    POST /api/quotes/{id}/pdf               the customer's estimate letter as base64 (no breakdown)
+    POST /api/quotes/{id}/slots             {"busy": [...]} suggested start times, same-area jobs grouped
+    GET  /api/pipeline, GET /api/audit      every job by stage, and the recent audit trail
+    GET/POST /api/bookings, PATCH/DELETE /api/bookings/{id}   the calendar; an offer is sent to the customer
+    GET  /api/media/{id}                    a customer photo fetched from WhatsApp
+    GET/POST/DELETE /api/whatsapp/...       the linked number shown in the dashboard
   SME quotations (x-api-key; the dashboard will call these)
     GET  /api/quotes                        drafts waiting for approval, with the price breakdown
     POST /api/quotes/{user_id}/approve      optional {"total": n}; sends the customer the estimate only
@@ -35,14 +45,18 @@ import logging
 import os
 import threading
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
 from . import persona as persona_module
+from . import views
+from .pdf import estimate_pdf
 from .events import from_flat, from_meta_payload
 from .runpod_client import RunPodClient, RunPodError, load_dotenv
 from .service import IncomingService
@@ -73,6 +87,33 @@ class VisionRequest(BaseModel):
 
 class ActivePersona(BaseModel):
     id: str
+
+
+class ParamsBody(BaseModel):
+    params: dict
+
+
+class SlotsBody(BaseModel):
+    busy: list[dict] = []
+
+
+class BookingIn(BaseModel):
+    user_id: str
+    customer: str = ""
+    phone: str = ""
+    address: str = ""
+    start: str
+    end: str
+
+
+class BookingPatch(BaseModel):
+    start: str | None = None
+    end: str | None = None
+    status: Literal["confirmed", "tentative", "cancelled"] | None = None
+
+
+class LinkBody(BaseModel):
+    number: str = Field(min_length=6, max_length=20)
 
 
 class FinalRequest(BaseModel):
@@ -142,6 +183,13 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
             raise HTTPException(502, "model unavailable")
 
     app = FastAPI(title="Painting assistant")
+    origins = [o.strip() for o in (env.get("CORS_ORIGINS") or "").split(",") if o.strip()]
+    if origins:                                 # the web dashboard on another origin; native apps need none
+        app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["*"], allow_headers=["*"])
+
+    def notifier(user_id):
+        """send(text) to the customer; a missing sender just reports failure."""
+        return (lambda text: sender.send_text(user_id, text)) if sender else (lambda text: False)
 
     window = float(env.get("MESSAGE_WINDOW_SECONDS") or 2.0)    # messages this close together are read as one
     inbox, running, inbox_lock = {}, set(), threading.Lock()
@@ -272,7 +320,125 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
             raise HTTPException(409, str(err))
         if not sent:
             raise HTTPException(502, "could not send the quotation to the customer")
-        return {"approved": True}
+        return {"approved": True, "slots": service.slots(user_id)[:3]}      # the best times to offer next
+
+    @app.get("/api/quotes/{user_id}")
+    def quote_detail(user_id: str, request: Request):
+        require_key(request)
+        try:
+            return service.detail(user_id)
+        except KeyError:
+            raise HTTPException(404, "no such customer")
+
+    @app.post("/api/quotes/{user_id}/recalculate")
+    def recalculate(user_id: str, body: ParamsBody, request: Request):
+        require_key(request)
+        try:
+            return service.recalculate(user_id, body.params)
+        except ValueError as err:
+            raise HTTPException(409, str(err))
+
+    @app.put("/api/quotes/{user_id}/params")
+    def save_params(user_id: str, body: ParamsBody, request: Request):
+        require_key(request)
+        try:
+            return service.save_params(user_id, body.params)
+        except ValueError as err:
+            raise HTTPException(409, str(err))
+
+    @app.post("/api/quotes/{user_id}/pdf")
+    def quote_pdf(user_id: str, body: ParamsBody, request: Request):
+        """The customer's estimate letter (total and time only, no breakdown) for the form's current values."""
+        require_key(request)
+        try:
+            state = service.store.load(user_id)
+            quote = service.recalculate(user_id, body.params)["quote"]
+        except ValueError as err:
+            raise HTTPException(409, str(err))
+        data = estimate_pdf(service.config.get("business_name", ""), views.customer_name(state), views.job_view(state), quote)
+        return {"base64": base64.b64encode(data).decode(), "filename": f"estimate-{user_id}.pdf",
+                "generated_at": datetime.now(timezone.utc).isoformat()}
+
+    @app.post("/api/quotes/{user_id}/slots")
+    def quote_slots(user_id: str, body: SlotsBody, request: Request):
+        """Suggested start times: earliest free, and next to jobs in the same area to save travel."""
+        require_key(request)
+        return {"slots": service.slots(user_id, body.busy)}
+
+    @app.get("/api/pipeline")
+    def pipeline(request: Request):
+        require_key(request)
+        return {"quotes": service.pipeline()}
+
+    @app.get("/api/audit")
+    def audit(request: Request, limit: int = Query(20, ge=1, le=200)):
+        require_key(request)
+        return {"entries": service.audit_feed(limit)}
+
+    @app.get("/api/bookings")
+    def bookings(request: Request, from_: str = Query(None, alias="from"), to: str = None):
+        require_key(request)
+        return {"bookings": service.booking_list(from_, to)}
+
+    @app.post("/api/bookings")
+    def create_booking(body: BookingIn, request: Request):
+        require_key(request)
+        try:
+            booking, notified = service.create_booking(body.user_id, body.start, body.end, notifier(body.user_id))
+        except ValueError as err:
+            raise HTTPException(409, str(err))
+        return {**booking, "notified": notified}
+
+    @app.patch("/api/bookings/{booking_id}")
+    def patch_booking(booking_id: str, body: BookingPatch, request: Request):
+        require_key(request)
+        existing = service.store.get_booking(booking_id)
+        if existing is None:
+            raise HTTPException(404, "no such booking")
+        try:
+            return service.update_booking(booking_id, body.model_dump(exclude_none=True), notifier(existing["user_id"]))
+        except ValueError as err:
+            raise HTTPException(409, str(err))
+
+    @app.delete("/api/bookings/{booking_id}", status_code=204)
+    def remove_booking(booking_id: str, request: Request):
+        require_key(request)
+        existing = service.store.get_booking(booking_id)
+        if existing is None:
+            raise HTTPException(404, "no such booking")
+        service.delete_booking(booking_id, notifier(existing["user_id"]))
+        return Response(status_code=204)
+
+    @app.get("/api/media/{media_id}")
+    def media(media_id: str, request: Request):
+        """A photo the customer sent, fetched from WhatsApp for the dashboard."""
+        require_key(request)
+        if sender is None:
+            raise HTTPException(503, "WhatsApp sender is not configured")
+        try:
+            data, mime = sender.fetch_media(media_id)
+        except Exception:
+            raise HTTPException(404, "photo not available")
+        return Response(content=data, media_type=mime or "application/octet-stream")
+
+    @app.get("/api/whatsapp/status")
+    def whatsapp_status(request: Request):
+        require_key(request)
+        number = service.store.get_setting("whatsapp_number")
+        return {"number": number, "status": "linked" if sender else ("pending" if number else "unlinked")}
+
+    @app.post("/api/whatsapp/link")
+    def whatsapp_link(body: LinkBody, request: Request):
+        """Records the number shown in the dashboard. The real link is the WHATSAPP_* secrets on the server."""
+        require_key(request)
+        service.store.set_setting("whatsapp_number", body.number)
+        return {"number": body.number, "status": "linked" if sender else "pending"}
+
+    @app.delete("/api/whatsapp/link", status_code=204)
+    def whatsapp_unlink(request: Request):
+        require_key(request)
+        service.store.set_setting("whatsapp_number", None)
+        return Response(status_code=204)
 
     @app.post("/api/quotes/{user_id}/final")
     def final_price(user_id: str, body: FinalRequest, request: Request):

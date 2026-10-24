@@ -63,7 +63,7 @@ _HEDGES = {"about", "around", "roughly", "approximately", "approx", "maybe", "pe
            "just", "estimate", "estimation", "the", "a", "be", "would", "should", "might", "or", "so"}
 _RANGE = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:to|-|or|and)\s*(\d+(?:[.,]\d+)?)", re.I)
 ESTIMATE_WORDS = re.compile(
-    r"\b(maybe|about|around|roughly|approx\w*|say|guess|think|probably|estimat\w*|not sure|not exactly)\b",
+    r"\b(maybe|about|around|roughly|approx\w*|say|guess|ig|think|probably|estimat\w*|not sure|not exactly)\b",
     re.I)
 
 
@@ -75,6 +75,18 @@ def estimate_in(message):
     return None, bool(ESTIMATE_WORDS.search(str(message)))
 
 
+_SIZES = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:x|by|\*|kali)\s*(\d+(?:[.,]\d+)?)(?:\s*(?:x|by|\*|kali)\s*(\d+(?:[.,]\d+)?))?",
+                   re.I)
+
+
+def sizes_in(message):
+    """"4 by 5" or "3x4x2.5": the numbers, in the order written (two or three of them), else None."""
+    match = _SIZES.search(str(message))
+    if not match:
+        return None
+    return [float(g.replace(",", ".")) for g in match.groups() if g]
+
+
 def _bare_number(message):
     """The whole message is one number ("6", "five", "about 4.5") with no unit."""
     tokens = [t for t in _TOKEN.findall(str(message).lower()) if t not in _HEDGES]
@@ -82,7 +94,7 @@ def _bare_number(message):
         and len(numbers_in(message)) == 1
 
 
-def ground_measurement(value, message):
+def ground_measurement(value, message, assume_metres=False):
     """Return metres, or raise GroundingError if unsupported or the unit is unclear."""
     if isinstance(value, bool) or value is None:
         raise GroundingError("not a measurement")
@@ -97,8 +109,8 @@ def ground_measurement(value, message):
         raise GroundingError(f"{value!r} was not stated by the customer")
     if not factors:
         factors = unit_factors_in(message)
-    if not factors and _bare_number(message):
-        factors = {1.0}         # a bare number answers a question that asked for metres
+    if not factors and (_bare_number(message) or assume_metres):
+        factors = {1.0}         # a number answers a question that asked for metres
     if len(factors) != 1:
         raise GroundingError(f"unit unclear for {value!r}; ask the customer for the unit")
     metres = round(number * factors.pop(), 3)

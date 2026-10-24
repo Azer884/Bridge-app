@@ -87,9 +87,11 @@ def _schedule(area, coats, multiplier, prep_hours, pricing):
             "crew_size": crew, "hours_on_site": float(round(hours / crew, 1)), "working_days": days}
 
 
-def compute_quotation(verified, pricing, vision=None):
+def compute_quotation(verified, pricing, vision=None, overrides=None):
     """verified: the conversation's verified fields. pricing: config['pricing'].
-    vision: optional validated ConditionAssessment from a photo."""
+    vision: optional validated ConditionAssessment from a photo.
+    overrides: the owner's corrections from the dashboard: condition_level, coats, tier."""
+    overrides = overrides or {}
     one_wall = single_wall(verified.get("surfaces"))
     missing = [k for k in REQUIRED if k not in verified and not (one_wall and k == "room_width_m")]
     if missing:
@@ -130,18 +132,25 @@ def compute_quotation(verified, pricing, vision=None):
         level, issues, complexity = assessment.level, assessment.issues, assessment.complexity_flags
         if assessment.confidence < LOW_CONFIDENCE:
             flags.append(f"photo assessment has low confidence ({assessment.confidence:.2f})")
+    if overrides.get("condition_level") in pricing["condition_levels"]:
+        level, issues = overrides["condition_level"], ()
+        assumptions.append(f"surface condition set to '{level}' by the owner")
     condition = pricing["condition_levels"][level]
 
     # paint tier
     tier_text = str(verified.get("paint_tier", "")).lower()
     tier = next((t for t in pricing["paint_tiers"] if re.search(rf"\b{re.escape(t)}\b", tier_text)), None)
-    if tier is None:
+    if overrides.get("tier") in pricing["paint_tiers"]:
+        tier = overrides["tier"]
+    elif tier is None:
         tier = pricing["default_paint_tier"]
         assumptions.append(f"paint tier not specified; priced as '{tier}'")
     paint = pricing["paint_tiers"][tier]
 
     coats = int(pricing["coats"]) + sum(
         1 for f in complexity if f in pricing.get("extra_coat_flags", []))
+    if overrides.get("coats"):
+        coats = max(1, min(4, int(overrides["coats"])))
 
     # labour
     labour_rates = pricing["labour_per_m2_per_coat"]

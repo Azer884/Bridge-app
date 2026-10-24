@@ -5,6 +5,7 @@ customers do not share a connection. Calls for the same customer are serialised 
 SQLite is enough for local runs. On Replit the deployment's files are replaced on every republish, so there
 the same interface runs on Replit's PostgreSQL (PostgresStore): make_store() picks it when DATABASE_URL is set.
 """
+import hashlib
 import json
 import sqlite3
 import threading
@@ -26,6 +27,10 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages (conversation_id, id);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS events (id INTEGER PRIMARY KEY AUTOINCREMENT, ts REAL NOT NULL, kind TEXT NOT NULL, detail TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS bookings (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, data TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings (user_id);
+CREATE TABLE IF NOT EXISTS audit (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, ts REAL NOT NULL, data TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_audit_user ON audit (user_id, id);
 """
 
 
@@ -95,6 +100,52 @@ class SqliteStore:
 
     backend = "sqlite"
 
+    # --- bookings: one row per job slot; the calendar and the dashboard read them ------------------
+    def save_booking(self, booking):
+        with self._conn() as conn:
+            conn.execute("INSERT INTO bookings VALUES (?,?,?) ON CONFLICT(id) DO UPDATE SET data=excluded.data",
+                         (booking["id"], booking["user_id"], json.dumps(booking)))
+
+    def bookings(self, user_id=None):
+        with self._conn() as conn:
+            if user_id:
+                rows = conn.execute("SELECT data FROM bookings WHERE user_id=?", (user_id,)).fetchall()
+            else:
+                rows = conn.execute("SELECT data FROM bookings").fetchall()
+        return sorted((json.loads(row[0]) for row in rows), key=lambda b: b["start"])
+
+    def get_booking(self, booking_id):
+        with self._conn() as conn:
+            row = conn.execute("SELECT data FROM bookings WHERE id=?", (booking_id,)).fetchone()
+        return json.loads(row[0]) if row else None
+
+    def delete_booking(self, booking_id):
+        with self._conn() as conn:
+            return conn.execute("DELETE FROM bookings WHERE id=?", (booking_id,)).rowcount == 1
+
+    # --- audit: what the AI, the customer, the system and the owner did to a job -------------------
+    def add_audit(self, user_id, actor, kind, summary, changes=None):
+        """Append-only log per customer. Each entry carries a short hash chained to the previous one,
+        so an edited or removed entry shows up as a broken chain."""
+        with self._conn() as conn:
+            row = conn.execute("SELECT data FROM audit WHERE user_id=? ORDER BY id DESC LIMIT 1", (user_id,)).fetchone()
+            last = json.loads(row[0]) if row else {"seq": 0, "hash": ""}
+            entry = {"seq": last["seq"] + 1, "ts": time.time(), "actor": actor, "type": kind,
+                     "summary": summary[:300], "changes": changes or []}
+            entry["hash"] = hashlib.sha256((last["hash"] + json.dumps(entry, sort_keys=True)).encode()).hexdigest()[:10]
+            conn.execute("INSERT INTO audit (user_id, ts, data) VALUES (?,?,?)",
+                         (user_id, entry["ts"], json.dumps(entry)))
+        return entry
+
+    def audit(self, user_id=None, limit=50):
+        with self._conn() as conn:
+            if user_id:
+                rows = conn.execute("SELECT user_id, data FROM audit WHERE user_id=? ORDER BY id DESC LIMIT ?",
+                                    (user_id, limit)).fetchall()
+            else:
+                rows = conn.execute("SELECT user_id, data FROM audit ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+        return [{**json.loads(data), "user_id": uid} for uid, data in rows]
+
     def stats(self):
         """Which database is in use and how much it holds: the quick check that data survives a republish."""
         with self._conn() as conn:
@@ -126,10 +177,9 @@ class SqliteStore:
 
     def messages(self, conversation_id):
         with self._conn() as conn:
-            rows = conn.execute("SELECT direction, text, media_id FROM messages WHERE conversation_id=? "
+            rows = conn.execute("SELECT id, direction, text, media_id, created_at FROM messages WHERE conversation_id=? "
                                 "ORDER BY id", (conversation_id,)).fetchall()
-        return [{"direction": d, "text": t, "media_id": m} for d, t, m in rows]
-
+        return [{"id": i, "direction": d, "text": t, "media_id": m, "ts": c} for i, d, t, m, c in rows]
 
 PG_SCHEMA = [
     "CREATE TABLE IF NOT EXISTS conversations (conversation_id TEXT PRIMARY KEY, state TEXT NOT NULL, "
@@ -143,6 +193,11 @@ PG_SCHEMA = [
     "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS events (id BIGSERIAL PRIMARY KEY, ts DOUBLE PRECISION NOT NULL, "
     "kind TEXT NOT NULL, detail TEXT NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS bookings (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, data TEXT NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS idx_bookings_user ON bookings (user_id)",
+    "CREATE TABLE IF NOT EXISTS audit (id BIGSERIAL PRIMARY KEY, user_id TEXT NOT NULL, "
+    "ts DOUBLE PRECISION NOT NULL, data TEXT NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS idx_audit_user ON audit (user_id, id)",
 ]
 
 

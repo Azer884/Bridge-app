@@ -4,16 +4,17 @@ import time
 from dataclasses import asdict, replace
 
 from .assessment import LOW_CONFIDENCE, combine, from_dict
-from . import flow, persona as persona_module
+from . import contact, flow, persona as persona_module, scheduling, views
 from .assistant import PHOTO_CONDITION, handle_message
 from .guard import clean_profile_name, clean_profile_phone
 from .i18n import ISSUE_MS, STRINGS, t
 from .pricing import PricingError, compute_quotation
-from .quote_message import approved_quote_message, final_quote_message
+from .quote_message import approved_quote_message, duration_text, final_quote_message
 from .schema import ask_for
 
 PHOTO_REPLY = STRINGS["en"]["photo_reply"]
 UNSUPPORTED_REPLY = STRINGS["en"]["unsupported"]
+LEGACY_STATUS = {"final": "completed"}
 log = logging.getLogger("service")
 
 
@@ -39,10 +40,15 @@ class IncomingService:
         persona = persona_module.active(self.config, self.store)
         return {**self.config, "persona": persona} if persona else self.config
 
-    def _price(self, state):
+    def _owner(self, state):
+        return (self.config.get("owner") or {}).get("name") or ("pasukan kami" if state.lang == "ms" else "our team")
+
+    def _price(self, state, params=None):
+        """The estimate from the chat's answers plus the owner's corrections (`params` overrides the saved ones)."""
         photo = from_dict(state.photo_assessment) if state.photo_assessment else None
+        verified, overrides = views.engine_inputs(state, params)
         try:
-            quote = compute_quotation(state.verified, self.config["pricing"], photo)
+            quote = compute_quotation(verified, self.config["pricing"], photo, overrides)
         except PricingError:
             return None                     # the team prices it by hand
         if state.estimated:
@@ -52,39 +58,100 @@ class IncomingService:
                                  "real price after measuring on site")
         return quote
 
+    def _reprice(self, state, params=None):
+        quote = self._price(state, params)
+        if quote is None:
+            return None
+        state.quote = quote.to_dict()
+        state.quote_status = "needs_inspection" if quote.status == "needs_inspection" else "pending_approval"
+        state.quote_stale = False
+        return quote
+
     def _with_quote(self, state, reply):
         """When the job and contact details are complete, price once and keep the draft for the SME.
         The customer sees no number until the SME approves it. A size corrected afterwards re-prices the
         draft silently (until the SME has approved it)."""
         if "pricing" not in self.config or state.stage != "done":
             return reply
+        uid = state.conversation_id
         if state.quote is not None:
             if state.quote_stale and state.quote_status in ("pending_approval", "needs_inspection"):
-                quote = self._price(state)
+                quote = self._reprice(state)
                 if quote is not None:
-                    state.quote = quote.to_dict()
-                    state.quote_status = "needs_inspection" if quote.status == "needs_inspection" else "pending_approval"
+                    self.store.add_audit(uid, "system", "calculation", f"Draft recalculated after a corrected size: "
+                                         f"{quote.currency} {quote.total:,.2f}")
             state.quote_stale = False
             return reply
         quote = self._price(state)
         if quote is None:
             return reply
         state.quote = quote.to_dict()
+        fields = [{"field": k, "from": "", "to": str(v)} for k, v in state.verified.items()
+                  if k not in ("customer_name", "phone")][:12]
+        self.store.add_audit(uid, "ai", "ai_extraction", "The assistant collected the job details", fields)
+        self.store.add_audit(uid, "system", "calculation", f"Draft estimate calculated: {quote.currency} {quote.total:,.2f}")
         if quote.status == "needs_inspection":
             state.quote_status, state.needs_human = "needs_inspection", True
-            owner = (self.config.get("owner") or {}).get("name") or ("pasukan kami" if state.lang == "ms" else "our team")
             # replaces the closing line, which promised a quotation the customer will not get yet
-            return t("inspection_wrap", state.lang, owner=owner, message=t("inspection_message", state.lang))
+            return t("inspection_wrap", state.lang, owner=self._owner(state), message=t("inspection_message", state.lang))
         state.quote_status = "pending_approval"
         return reply
 
-    # --- the SME's side -------------------------------------------------------------------------
+    # --- the SME's side: quotes ------------------------------------------------------------------
     def quotes(self, status="pending_approval"):
-        """The SME's view: drafts with their breakdown. Every quote is an estimate until the site visit."""
-        return [{"user_id": s.conversation_id, "status": s.quote_status, "customer": s.channel, "lang": s.lang,
-                 "job": s.verified, "quote": s.quote, "is_estimate": True, "estimated_fields": s.estimated,
-                 "attention": s.attention, "followups": s.followups}
-                for s in self.store.conversations() if s.quote and s.quote_status == status]
+        """Customers as the dashboard lists them, by the frontend's status (collecting, pending_approval,
+        approved, needs_inspection, completed). Every price is an estimate until the site visit."""
+        status = LEGACY_STATUS.get(status, status)
+        booked = {b["user_id"] for b in self.store.bookings() if b["status"] == "confirmed"}
+        return [views.quote_item(s, s.conversation_id in booked) for s in self.store.conversations()
+                if (s.verified or s.quote) and views.front_status(s) == status]
+
+    def pipeline(self):
+        booked = {b["user_id"] for b in self.store.bookings() if b["status"] == "confirmed"}
+        return [views.quote_item(s, s.conversation_id in booked) for s in self.store.conversations()
+                if s.verified or s.quote]
+
+    def detail(self, user_id):
+        """The review screen: job, quote, editable parameters, chat, photos, audit trail."""
+        state = self.store.load(user_id)
+        if not state.verified and not state.quote and not state.history:
+            raise KeyError(user_id)
+        booked = any(b["status"] == "confirmed" for b in self.store.bookings(user_id))
+        return views.detail_view(state, self.store.messages(user_id), self.store.audit(user_id, 200), booked)
+
+    def recalculate(self, user_id, params):
+        """The engine's answer for the form's values, without saving them."""
+        state = self.store.load(user_id)
+        quote = self._price(state, params)
+        if quote is None:
+            raise ValueError("this job cannot be priced yet")
+        data = quote.to_dict()
+        return {"quote": views.quote_view(data), "duration_hours": (data.get("schedule") or {}).get("hours_on_site")}
+
+    def save_params(self, user_id, params):
+        """The owner's corrections: kept apart from what the assistant read, logged, and the draft re-priced."""
+        with self.store.lock(user_id):
+            state = self.store.load(user_id)
+            if state.quote_status in ("approved", "final"):
+                raise ValueError("this estimate was already sent; its values are locked")
+            before = {**views.ai_values(state), **state.overrides}
+            state.overrides = views.changed_params(state, params)
+            after = {**views.ai_values(state), **state.overrides}
+            changes = [{"field": k, "from": str(before.get(k)), "to": str(v)} for k, v in after.items()
+                       if before.get(k) != v]
+            quote = self._reprice(state)
+            if changes:
+                self.store.add_audit(user_id, "owner", "override", "The owner changed the job values", changes)
+                if quote is not None:
+                    self.store.add_audit(user_id, "system", "calculation",
+                                         f"Recalculated: {quote.currency} {quote.total:,.2f}")
+            self.store.save(state)
+            return views.detail_view(state, self.store.messages(user_id), self.store.audit(user_id, 200), False)
+
+    def audit_feed(self, limit=20):
+        names = {s.conversation_id: views.customer_name(s) for s in self.store.conversations()}
+        return [{**e, "customer": names.get(e["user_id"], e["user_id"]), "ts": views._iso(e["ts"])}
+                for e in self.store.audit(None, limit)]
 
     def customers(self):
         """Every customer with all their jobs (earlier ones and the current one), for order tracking."""
@@ -101,21 +168,24 @@ class IncomingService:
         return out
 
     def approve_quote(self, user_id, send, total=None):
-        """SME approval. Sends the customer the estimate only (never the breakdown); the quote is marked
-        approved only if the send worked. Raises ValueError when nothing is waiting for approval."""
+        """SME approval. Sends the customer the estimate and how long the job takes (never the breakdown);
+        the quote is marked approved only if the send worked. Raises ValueError when nothing is waiting."""
         with self.store.lock(user_id):
             state = self.store.load(user_id)
             if state.quote_status != "pending_approval":
                 raise ValueError("no quote is waiting for approval")
             amount = state.quote["total"] if total is None else total
-            message = approved_quote_message(amount, state.quote["currency"],
-                                             self.config.get("business_name", "us"), state.lang)
+            message = approved_quote_message(amount, state.quote["currency"], self.config.get("business_name", "us"),
+                                             state.lang, state.quote.get("schedule"))
             if not send(message):
                 return False
             state.quote["approved_total"], state.quote_status = amount, "approved"
             state.waiting_count, state.attention = 0, False
             self.store.save(state)
             self.store.log_message(user_id, "out", message)
+            self.store.add_audit(user_id, "owner", "state_change",
+                                 f"Estimate approved: {state.quote['currency']} {amount:,.2f}")
+            self.store.add_audit(user_id, "system", "send", "Estimate and duration sent to the customer on WhatsApp")
             return True
 
     def confirm_final(self, user_id, send, total):
@@ -125,16 +195,143 @@ class IncomingService:
             state = self.store.load(user_id)
             if state.quote_status != "approved":
                 raise ValueError("the estimate must be approved before a final price is confirmed")
-            message = final_quote_message(total, state.quote["currency"],
-                                          self.config.get("business_name", "us"), state.lang)
+            message = final_quote_message(total, state.quote["currency"], self.config.get("business_name", "us"),
+                                          state.lang)
             if not send(message):
                 return False
             state.quote["final_total"], state.quote_status = total, "final"
             self.store.save(state)
             self.store.log_message(user_id, "out", message)
+            self.store.add_audit(user_id, "owner", "state_change", f"Final price confirmed: {total:,.2f}")
             return True
 
+    # --- the calendar: slots, bookings and the customer's yes or no ---------------------------------
+    def _job_hours(self, state, fallback=4.0):
+        return ((state.quote or {}).get("schedule") or {}).get("hours_on_site") or fallback
+
+    def slots(self, user_id, busy=()):
+        """Suggested start times for this customer's job, best first. A slot next to a job in the same area
+        scores higher, so the crew's day stays compact. `busy` are events the dashboard already knows about."""
+        state = self.store.load(user_id)
+        return scheduling.suggest_slots(self.store.bookings(), self._job_hours(state), state.verified.get("address", ""),
+                                        extra_busy=[(b["start"], b["end"]) for b in busy], ignore_id=None)
+
+    def booking_list(self, start=None, end=None):
+        """Bookings overlapping [start, end] as the dashboard's Booking objects."""
+        low = scheduling.parse_time(start) if start else None
+        high = scheduling.parse_time(end) if end else None
+        out = []
+        for booking in self.store.bookings():
+            if (low and scheduling.parse_time(booking["end"]) < low) or (high and scheduling.parse_time(booking["start"]) > high):
+                continue
+            out.append(views.booking_view(booking, self.store.load(booking["user_id"])))
+        return out
+
+    def create_booking(self, user_id, start, end, send):
+        """Offer a slot to the customer: stored as tentative, asked on WhatsApp, confirmed on their yes.
+        Returns (booking view, whether the customer was messaged). Raises ValueError on a clash."""
+        with self.store.lock(user_id):
+            state = self.store.load(user_id)
+            hours = self._job_hours(state, fallback=max(
+                (scheduling.parse_time(end) - scheduling.parse_time(start)).total_seconds() / 3600, 1.0))
+            address = state.verified.get("address", "")
+            if scheduling.conflicts(self.store.bookings(), start, hours, address):
+                raise ValueError("that time overlaps another job")
+            booking = scheduling.new_booking(user_id, views.customer_name(state), views.job_view(state)["phone"], address,
+                                             start, hours, "tentative")
+            self.store.save_booking(booking)
+            when = scheduling.describe_when(booking["start"], state.lang)
+            work = duration_text((state.quote or {}).get("schedule"), state.lang) or (
+                f"{hours:g} jam kerja" if state.lang == "ms" else f"about {hours:g} hours of work")
+            message = t("booking_ask", state.lang, owner=self._owner(state), when=when, text=work)
+            notified = bool(send(message))
+            if notified:
+                self.store.log_message(user_id, "out", message)
+                state.pending_booking = {"id": booking["id"], "reminded": False}
+            self.store.save(state)
+            self.store.add_audit(user_id, "owner", "schedule", f"Slot offered: {when}" + ("" if notified else
+                                 " (customer could not be messaged)"))
+            return views.booking_view(booking, state), notified
+
+    def update_booking(self, booking_id, patch, send):
+        """Move, confirm or cancel a booking. The customer is told about a move or a cancellation."""
+        booking = self.store.get_booking(booking_id)
+        if booking is None:
+            raise KeyError(booking_id)
+        user_id = booking["user_id"]
+        with self.store.lock(user_id):
+            state = self.store.load(user_id)
+            booking = self.store.get_booking(booking_id)
+            message = None
+            if patch.get("start") and scheduling.parse_time(patch["start"]) != scheduling.parse_time(booking["start"]):
+                if scheduling.conflicts(self.store.bookings(), patch["start"], booking["hours"], booking["address"],
+                                        ignore_id=booking_id):
+                    raise ValueError("that time overlaps another job")
+                moved = scheduling.new_booking(user_id, booking["customer"], booking["phone"], booking["address"],
+                                               patch["start"], booking["hours"], booking["status"])
+                booking.update(start=moved["start"], end=moved["end"])
+                if booking["status"] == "confirmed":
+                    message = t("booking_moved", state.lang, when=scheduling.describe_when(booking["start"], state.lang))
+            status = patch.get("status")
+            if status in ("confirmed", "tentative", "cancelled") and status != booking["status"]:
+                if status == "confirmed":
+                    message = t("booking_ok", state.lang, when=scheduling.describe_when(booking["start"], state.lang),
+                                owner=self._owner(state))
+                elif status == "cancelled":
+                    message = t("booking_cancelled", state.lang, owner=self._owner(state))
+                booking["status"] = status
+                if state.pending_booking and state.pending_booking.get("id") == booking_id:
+                    state.pending_booking = None
+            self.store.save_booking(booking)
+            self.store.save(state)
+            if message and send(message):
+                self.store.log_message(user_id, "out", message)
+            self.store.add_audit(user_id, "owner", "schedule", f"Booking {booking['status']}: "
+                                 f"{scheduling.describe_when(booking['start'], 'en')}")
+            return views.booking_view(booking, state)
+
+    def delete_booking(self, booking_id, send):
+        booking = self.update_booking(booking_id, {"status": "cancelled"}, send)
+        self.store.delete_booking(booking_id)
+        return booking
+
+    def _booking_reply(self, state, text):
+        """The customer's answer to an offered slot: a yes books it, a no (or another day) hands it back to the
+        owner. None when the message is about something else."""
+        pending = state.pending_booking
+        booking = self.store.get_booking(pending["id"]) if pending else None
+        if not booking or booking["status"] != "tentative":
+            state.pending_booking = None
+            return None
+        uid, lang, owner = state.conversation_id, state.lang, self._owner(state)
+        when = scheduling.describe_when(booking["start"], lang)
+        if flow.is_yes(text):
+            booking["status"], state.pending_booking = "confirmed", None
+            self.store.save_booking(booking)
+            self.store.add_audit(uid, "customer", "schedule", f"Customer accepted {when}")
+            return t("booking_ok", lang, when=when, owner=owner)
+        words = set(contact._words(text))
+        if words & (contact.NEGATIVE | {"not"}) or flow._DATE_WORDS.search(text):
+            booking["status"], state.pending_booking, state.attention = "cancelled", None, True
+            if flow._DATE_WORDS.search(text):
+                state.verified["preferred_datetime"] = " ".join(text.split())[:120]
+            self.store.save_booking(booking)
+            self.store.add_audit(uid, "customer", "schedule", f"Customer declined {when}: {text[:120]}")
+            return t("booking_no", lang, owner=owner)
+        if not pending.get("reminded"):
+            pending["reminded"] = True
+            return t("booking_remind", lang, when=when)
+        return None
+
     # --- the customer's side -------------------------------------------------------------------
+    def _answer(self, state, text):
+        """The reply to one customer message, with the offered slot and the draft quote taken care of."""
+        if state.pending_booking and state.stage == "done":
+            reply = self._booking_reply(state, text)
+            if reply is not None:
+                return reply
+        return self._with_quote(state, self.handler(state, text, self._turn_config(), self.client).reply)
+
     def _photo_reply(self, state, media_id):
         assessment = None
         if self.photo_assessor and media_id:
@@ -154,12 +351,18 @@ class IncomingService:
         """The transcript of a voice note, or None with the reason: 'off' (no transcriber) or 'failed'."""
         if self.transcriber is None or not event.media_id:
             return None, "off"
+        started = time.time()
         try:
             result = self.transcriber(event.media_id)
-        except Exception:
+        except Exception as err:
             log.exception("voice note transcription failed for media %s", event.media_id)
+            self.store.log_event("voice_failed", f"{event.user_id}: {type(err).__name__}: {err}")
             return None, "failed"
         text = (result[0] if result else "").strip()
+        language = result[1] if result and len(result) > 1 else ""
+        self.store.log_event("voice_ok" if text else "voice_empty",
+                             f"{event.user_id}: {len(text)} chars, language {language or '?'}, "
+                             f"{time.time() - started:.1f}s")
         return (text, "") if text else (None, "failed")
 
     def handle(self, event):
@@ -200,7 +403,7 @@ class IncomingService:
 
         if event.type == "text" and event.text.strip():
             self.store.log_message(event.user_id, "in", event.text)
-            reply = self._with_quote(state, self.handler(state, event.text, self._turn_config(), self.client).reply)
+            reply = self._answer(state, event.text)
         elif event.type == "audio":
             self.store.log_message(event.user_id, "in", "[voice note]", event.media_id)
             text, problem = self._voice_text(event)
@@ -208,14 +411,20 @@ class IncomingService:
                 reply = t("voice_off" if problem == "off" else "voice_fail", state.lang)
             else:
                 self.store.log_message(event.user_id, "in", text)
-                answer = self._with_quote(state, self.handler(state, text, self._turn_config(), self.client).reply)
+                answer = self._answer(state, text)
                 heard = t("heard", state.lang, text=text[:200])
                 reply = f"{heard} {answer}".strip() if answer else ""
         elif event.type == "image":
             self.store.log_message(event.user_id, "in", event.text, event.media_id)
             reply = self._photo_reply(state, event.media_id)
+            caption = event.text.strip()
             nxt = state.next_missing(self.config) if state.stage == "job" else None
-            if nxt:
+            if caption and state.stage != "done":
+                # "<photo> 5 here is an image for it too": the words with the photo are a message as well
+                self.store.log_message(event.user_id, "in", caption)
+                answer = self._answer(state, caption)
+                reply = f"{reply} {answer}".strip()
+            elif nxt:
                 reply += " " + ask_for(nxt, state)
             elif state.stage == "job" and state.service_checked and self._turn_config().get("persona"):
                 reply += " " + flow.contact_intro(state)      # the photo answered the last open question
