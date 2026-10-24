@@ -13,7 +13,7 @@ The first version is built for Malaysian painting businesses.
 | **Team Name**          |  HRISSA                                     |
 | **Team Domain**        |  Domain 2                                   |
 | **Main SDG**           |SDG 8 - Descent work and economic growth     |
-|   **Sub SDG**          |SDG 9 - Industry, Innovation and Infrastructure|
+|   **Sub SDG**          |SDG 8.1: Economic Growth, SDG8.2 Diversification and Innovation, SDG 8.3: Enterprise Support|
 | **Team Leader**        | Azer Hamdaoui                               |
 | **University**         |Xiamen University Malaysia                   |
 | **Number of Members**  | 5                                           |
