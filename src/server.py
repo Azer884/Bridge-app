@@ -45,7 +45,7 @@ from . import persona as persona_module
 from .events import from_flat, from_meta_payload
 from .runpod_client import RunPodClient, RunPodError, load_dotenv
 from .service import IncomingService
-from .store import SqliteStore
+from .store import make_store
 from .transcribe import Transcriber
 from .vision import VisionError, assess_image
 from .whatsapp import WhatsAppSender, valid_signature
@@ -121,7 +121,7 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
 
     if service is None:
         config_path = env.get("BUSINESS_CONFIG") or ROOT / "config" / "business_config.example.json"
-        service = IncomingService(SqliteStore(env.get("DATABASE_PATH") or ROOT / "data" / "bridge.db"),
+        service = IncomingService(make_store(env, ROOT / "data" / "bridge.db"),
                                   json.loads(Path(config_path).read_text(encoding="utf-8")), text_client,
                                   photo_assessor=assess_photo if sender else None,
                                   transcriber=transcribe_voice if sender and transcriber else None)

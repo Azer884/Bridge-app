@@ -2,7 +2,8 @@
 
 Each call opens its own short-lived connection (WAL mode), so concurrent requests from many
 customers do not share a connection. Calls for the same customer are serialised with lock().
-SQLite is enough for a demo; the same interface can sit on Postgres later.
+SQLite is enough for local runs. On Replit the deployment's files are replaced on every republish, so there
+the same interface runs on Replit's PostgreSQL (PostgresStore): make_store() picks it when DATABASE_URL is set.
 """
 import json
 import sqlite3
@@ -100,7 +101,7 @@ class SqliteStore:
     def claim_message(self, message_id, conversation_id):
         """True the first time a message id is seen. WhatsApp retries webhooks, so repeats are dropped."""
         with self._conn() as conn:
-            cursor = conn.execute("INSERT OR IGNORE INTO processed_messages VALUES (?,?,?)",
+            cursor = conn.execute("INSERT INTO processed_messages VALUES (?,?,?) ON CONFLICT DO NOTHING",
                                   (message_id, conversation_id, time.time()))
             return cursor.rowcount == 1
 
@@ -119,3 +120,75 @@ class SqliteStore:
             rows = conn.execute("SELECT direction, text, media_id FROM messages WHERE conversation_id=? "
                                 "ORDER BY id", (conversation_id,)).fetchall()
         return [{"direction": d, "text": t, "media_id": m} for d, t, m in rows]
+
+
+PG_SCHEMA = [
+    "CREATE TABLE IF NOT EXISTS conversations (conversation_id TEXT PRIMARY KEY, state TEXT NOT NULL, "
+    "updated_at DOUBLE PRECISION NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS processed_messages (message_id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL, "
+    "received_at DOUBLE PRECISION NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS messages (id BIGSERIAL PRIMARY KEY, conversation_id TEXT NOT NULL, "
+    "direction TEXT NOT NULL, text TEXT NOT NULL, media_id TEXT NOT NULL DEFAULT '', "
+    "created_at DOUBLE PRECISION NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages (conversation_id, id)",
+    "CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+    "CREATE TABLE IF NOT EXISTS events (id BIGSERIAL PRIMARY KEY, ts DOUBLE PRECISION NOT NULL, "
+    "kind TEXT NOT NULL, detail TEXT NOT NULL)",
+]
+
+
+class _PgConnection:
+    """Gives a psycopg connection the small sqlite3-style surface the store uses: execute() with ? marks."""
+
+    def __init__(self, conn):
+        self.conn = conn
+
+    def execute(self, sql, params=()):
+        cursor = self.conn.cursor()
+        cursor.execute(sql.replace("?", "%s"), params)
+        return cursor
+
+
+class PostgresStore(SqliteStore):
+    """The same store on PostgreSQL (Replit's database). Needs `psycopg[binary]`."""
+
+    def __init__(self, url):
+        self.url = url
+        self._locks, self._guard = {}, threading.Lock()
+        self._pool = self._open_pool(url)
+        with self._conn() as conn:
+            for statement in PG_SCHEMA:
+                conn.execute(statement)
+
+    @staticmethod
+    def _open_pool(url):
+        """A small connection pool when psycopg_pool is installed (each store call otherwise pays a fresh
+        network connection to the database). Idle connections the server dropped are replaced."""
+        try:
+            from psycopg_pool import ConnectionPool
+        except ImportError:
+            return None
+        return ConnectionPool(url, min_size=1, max_size=5, timeout=15, check=ConnectionPool.check_connection,
+                              kwargs={"connect_timeout": 10}, open=True)
+
+    @contextmanager
+    def _conn(self):
+        if self._pool is not None:
+            with self._pool.connection() as conn:       # commits on success, rolls back on an exception
+                yield _PgConnection(conn)
+            return
+        import psycopg                      # optional dependency, only needed on Postgres
+        conn = psycopg.connect(self.url, connect_timeout=10)
+        try:
+            yield _PgConnection(conn)
+            conn.commit()                   # an exception skips this and closing rolls the work back
+        finally:
+            conn.close()
+
+
+def make_store(env, default_path):
+    """PostgreSQL when DATABASE_URL points at one (Replit sets it), else the SQLite file."""
+    url = env.get("DATABASE_URL") or ""
+    if url.startswith(("postgres://", "postgresql://")):
+        return PostgresStore(url)
+    return SqliteStore(env.get("DATABASE_PATH") or default_path)
