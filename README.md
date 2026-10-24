@@ -24,7 +24,7 @@
 | Replit Project    | https://replit.com/@your-username/your-project |
 | Live Demo         | https://your-project.replit.app                |
 | RunPod Endpoint   | https://api.runpod.ai/v2/ose8agxpb9p1mr/runsync|
-| Slide Deck        | https://example.com/slides                     |
+| Slide Deck        |https://canva.link/gesir-ai                     |
 | Demo Video        | https://example.com/demo-video                 |
 
 ---
