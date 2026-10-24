@@ -12,7 +12,7 @@ from src.validation import validate_response
 
 CONFIG = json.loads((Path(__file__).resolve().parent.parent / "config" / "business_config.example.json").read_text())
 # these tests were written for the six-field list; the example config now also asks for the condition
-CONFIG["required_fields"] = [f for f in CONFIG["required_fields"] if f != "surface_condition"]
+CONFIG["required_fields"] = [f for f in CONFIG["required_fields"] if f not in ("surface_condition", "paint_tier", "colour")]
 
 
 def reply(text="Thanks, noted.", fields=None, missing=None, status="collecting_information"):
@@ -141,8 +141,8 @@ class ValidationTests(unittest.TestCase):
 class StateAndPromptTests(unittest.TestCase):
     def test_next_missing_is_one_field_in_order(self):
         s = ConversationState("t")
-        self.assertEqual(s.next_missing(CONFIG), "address")
-        s.verified.update(address="1 Main St", surfaces=["walls"])
+        self.assertEqual(s.next_missing(CONFIG), "surfaces")
+        s.verified.update(surfaces=["walls"])
         self.assertEqual(s.next_missing(CONFIG), "room_length_m")
         s.verified["room_length_m"] = 4.0
         self.assertEqual(s.next_missing(CONFIG), "room_width_m")
@@ -205,7 +205,7 @@ class AssistantTests(unittest.TestCase):
         bad = reply("What colour?", {"customer_name": "John Smith"})
         out, client = self.run_turn(s, "I want to paint my bedroom", bad, bad, bad)
         self.assertEqual(len(client.calls), 3)
-        self.assertEqual(out.reply, "What is the address of the property?")   # not the model's text
+        self.assertEqual(out.reply, "Which surfaces would you like painted?")   # not the model's text
         self.assertFalse(s.needs_human)
         self.assertNotIn("customer_name", s.verified)                         # the invented value is never stored
 
@@ -220,7 +220,7 @@ class AssistantTests(unittest.TestCase):
         bundled = reply("Could you give me your address and the surfaces to paint?")
         out, client = self.run_turn(s, "I want to paint my bedroom", bundled, bundled, bundled)
         self.assertEqual(out.status, "collecting_information")
-        self.assertEqual(out.reply, "What is the address of the property?")
+        self.assertEqual(out.reply, "Which surfaces would you like painted?")
         self.assertFalse(s.needs_human)
 
     def test_runpod_failure_falls_back(self):
@@ -230,7 +230,7 @@ class AssistantTests(unittest.TestCase):
 
     def test_conflicting_answer_asks_one_clarifying_question(self):
         s = state_with(room_length_m=4.0)
-        out, _ = self.run_turn(s, "actually it is 6 metres long",
+        out, _ = self.run_turn(s, "it is 6 metres long",
                                reply("Thanks, noted.", {"room_length_m": "6 metres"}))
         self.assertEqual(out.status, "needs_clarification")
         self.assertEqual(out.reply.count("?"), 1)
@@ -238,7 +238,7 @@ class AssistantTests(unittest.TestCase):
 
     def test_conflict_is_resolved_by_next_answer(self):
         s = state_with(room_length_m=4.0)
-        self.run_turn(s, "actually it is 6 metres long", reply("Thanks, noted.", {"room_length_m": "6 metres"}))
+        self.run_turn(s, "it is 6 metres long", reply("Thanks, noted.", {"room_length_m": "6 metres"}))
         self.assertEqual(s.pending_conflict["new"], 6.0)
         self.run_turn(s, "yes 6 metres", reply("Thanks, noted.", {"room_length_m": "6 metres"}))
         self.assertEqual(s.verified["room_length_m"], 6.0)

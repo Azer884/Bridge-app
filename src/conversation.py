@@ -1,9 +1,15 @@
 """Per-customer conversation state and a simple JSON file store."""
 import json
+import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from .schema import FIELD_ORDER
+from .i18n import SURFACE_WORDS
+from .schema import FIELD_ORDER, single_wall
+
+SURFACE_TOKENS = {"wall", "walls", "ceiling", "ceilings", "trim", "door", "doors", "window", "windows",
+                  "skirting", "frame", "frames", "architrave", "cornice", "beam", "beams", "dinding", "siling",
+                  "pintu", "tingkap"}
 
 
 @dataclass
@@ -24,9 +30,20 @@ class ConversationState:
     photo_assessment: dict = None  # combined vision result of the customer's photos
     quote: dict = None             # draft quotation with breakdown (Quotation.to_dict()), SME-only
     quote_status: str = ""         # "" | pending_approval | approved | needs_inspection
+    estimated: list = field(default_factory=list)  # measurements the customer only estimated ("maybe 4 to 5 m")
+    lang: str = "en"               # en | ms: the language the customer writes in or asked for
+    last_field: str = ""           # the measurement answered last, so "nvm its 4m" knows what to fix
+    orders: list = field(default_factory=list)      # earlier jobs of the same customer (archived)
+    followups: list = field(default_factory=list)   # messages sent while waiting for the SME, for the SME
+    waiting_count: int = 0         # replies sent while waiting for the SME's confirmation
+    attention: bool = False        # an important follow-up the SME should look at
+    created_at: float = 0.0        # when the current job started
+    quote_stale: bool = False      # a size changed after pricing: the draft must be recalculated
 
     def required_fields(self, config):
         wanted = set(config["required_fields"])
+        if single_wall(self.verified.get("surfaces")):
+            wanted.discard("room_width_m")      # one wall: length x height is enough
         return [k for k in FIELD_ORDER if k in wanted]
 
     def missing_required(self, config, extra=None):
@@ -39,6 +56,13 @@ class ConversationState:
 
     def merge(self, accepted):
         for key, value in accepted.items():
+            if key == "surfaces":
+                items = value if isinstance(value, list) else [value]
+                items = [SURFACE_WORDS.get(str(v).lower().strip(), v) for v in items]
+                # "bedroom" is a room, not a surface: only walls, ceilings, trim and the like count
+                value = [v for v in items if SURFACE_TOKENS & set(re.findall(r"[a-z]+", str(v).lower()))]
+                if not value:
+                    continue
             if isinstance(value, list):
                 old = self.verified.get(key, [])
                 self.verified[key] = old + [v for v in value if v not in old]

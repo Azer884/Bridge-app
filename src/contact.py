@@ -5,19 +5,28 @@ to confirm them, to change them, or to supply whichever one the channel did not 
 """
 import re
 
+from .i18n import t
+
 AFFIRMATIVE = {"yes", "yeah", "yep", "yup", "ok", "okay", "sure", "correct", "right",
-               "confirm", "confirmed", "fine", "good", "perfect", "please", "ya", "yea"}
-NEGATIVE = {"no", "nope", "nah", "wrong", "different", "change"}
+               "confirm", "confirmed", "fine", "good", "perfect", "please", "ya", "yea",
+               "ye", "betul", "boleh", "setuju", "okey", "baik", "sila", "bagus", "tepat", "same", "sama"}
+NEGATIVE = {"no", "nope", "nah", "wrong", "different", "change", "tak", "tidak", "bukan", "salah", "tukar",
+            "lain", "taknak"}
 _NOT_NAMES = AFFIRMATIVE | NEGATIVE | {"the", "same", "my", "it", "a", "an", "this", "that", "thanks",
-                                       "thank", "you", "and", "number", "name", "phone"}
+                                       "thank", "you", "and", "number", "name", "phone", "sama", "nama",
+                                       "nombor", "terima", "kasih"}
 _ABUSIVE = {"fuck", "fucking", "shit", "bitch", "asshole", "dick", "pussy", "cunt", "bastard", "idiot",
-            "stupid"}
+            "stupid", "babi", "sial", "bodoh", "anjing", "pukimak", "puki", "celaka", "bangsat", "tolol",
+            "kimak", "lancau", "keparat"}
 # words customers send that are not a name (greetings, commands, laughter)
 _CHATTER = {"hello", "hi", "hey", "stop", "cancel", "lol", "haha", "hahaha", "what", "why", "how", "when",
             "where", "who", "help", "test", "testing", "baby", "bye", "hmm", "please", "later", "tomorrow",
-            "today", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"}
+            "today", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+            "helo", "hai", "apa", "kenapa", "bila", "mana", "siapa", "tolong", "esok", "lusa", "nanti",
+            "isnin", "selasa", "rabu", "khamis", "jumaat", "sabtu", "ahad", "sayang", "selamat"}
 _NAME_AFTER = re.compile(
-    r"(?:under|name is|name's|call me|i am|i'm|this is|in the name of|use)\s+"
+    r"(?:under|name is|name's|call me|i am|i'm|this is|in the name of|use|atas nama|nama saya|nama aku|"
+    r"panggil saya|saya ialah|guna)\s+"
     r"([^\W\d_][\w'\-]*(?:\s+[^\W\d_][\w'\-]*){0,2})", re.I)
 _PHONE = re.compile(r"\+?\d[\d\s().\-]{5,}\d")
 
@@ -39,13 +48,12 @@ def _prompt(state):
     name, phone = known_contact(state)
     if name and phone:
         state.contact_step = "confirm"
-        return (f"Shall I reserve this under {name} and {phone}? Reply yes, or send me the "
-                "name or number you'd like to use instead.")
+        return t("contact_confirm", state.lang, name=name, phone=phone)
     if not name:
         state.contact_step = "ask_name"
-        return "What name should the booking be under?"
+        return t("contact_ask_name", state.lang)
     state.contact_step = "ask_phone"
-    return "What phone number should we use for the booking?"
+    return t("contact_ask_phone", state.lang)
 
 
 def find_phone(message):
@@ -112,5 +120,4 @@ def handle_reply(state, message):
 def _finish(state, name, phone):
     state.verified["customer_name"], state.verified["phone"] = name, phone
     state.stage = "done"
-    return (f"Perfect, I've noted the booking under {name}, {phone}. We'll prepare your "
-            "quotation and a team member will confirm your appointment.")
+    return t("contact_done", state.lang, name=name, phone=phone)

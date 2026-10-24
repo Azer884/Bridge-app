@@ -16,6 +16,8 @@
     "room_width_m",
     "room_height_m",
     "surface_condition",
+    "paint_tier",
+    "colour",
     "preferred_datetime"
   ],
   "inspection_keywords": [
@@ -23,10 +25,17 @@
     "mold",
     "asbestos",
     "lead paint",
-    "structural"
+    "structural",
+    "kulat",
+    "berkulat",
+    "asbestos",
+    "cat plumbum",
+    "struktur",
+    "reput",
+    "bocor teruk"
   ],
   "pricing": {
-    "_note": "Malaysian market ESTIMATES in MYR for the demo, checked against public listings in 2025-26; replace with the SME's real rate card. Labour-only painter rate roughly RM0.35-0.45 per sq ft per coat (1 m2 = 10.76 sq ft). Economy ~ Dulux Pentalite class (5L ~ RM164), standard ~ Nippon interior emulsion (5L ~ RM235), premium ~ washable/anti-mould range (price estimated, not sourced). Prep rate ~ RM176 per 8-hour painter day. Prices exclude any applicable tax.",
+    "_note": "Malaysian market ESTIMATES in MYR for the demo, checked against public listings in 2025-26; replace with the SME's real rate card. Labour-only painter rate roughly RM0.35-0.45 per sq ft per coat (1 m2 = 10.76 sq ft). Economy ~ Dulux Pentalite class (5L ~ RM164), standard ~ Nippon interior emulsion (5L ~ RM235), premium ~ washable/anti-mould range (price estimated, not sourced). Prep rate ~ RM176 per 8-hour painter day. Prices exclude any applicable tax. Cross-check (Oct 2026, public Malaysian sources): interior wall/ceiling painting from about RM2.20 psf, premium whites about RM2.50 psf (recommend.my); supply-and-apply RM1.80-6.80 psf per coat (Qanvast); a 1,000 sq ft 3-bed apartment about RM3,500 for basic painting. This card works out to roughly RM2.2-2.5 per sq ft of painted surface. All figures are estimates: the SME replaces them with their real rate card, and the final price is confirmed on site.",
     "currency": "MYR",
     "coats": 2,
     "painting_m2_per_hour_per_painter": 9,
@@ -105,21 +114,30 @@
       "style": "warm, chatty and upbeat, like a friendly neighbour who happens to know paint; gentle humour, never pushy.",
       "greeting": "Hi there, I'm {name} from {business}!",
       "service_question": "What can we help you with today?",
-      "closing": "Wonderful, thank you! I've passed everything to {owner}, and your quotation will come right here once it's confirmed."
+      "closing": "Wonderful, thank you! I've passed everything to {owner}, and your price estimate will come right here once it's confirmed.",
+      "greeting_ms": "Hai, saya {name} dari {business}!",
+      "service_question_ms": "Apa yang boleh kami bantu hari ini?",
+      "closing_ms": "Bagus, terima kasih! Saya dah serahkan semuanya kepada {owner}, dan anggaran harga anda akan dihantar di sini selepas disahkan."
     },
     "ben": {
       "name": "Ben",
       "style": "calm, polite and professional; clear and efficient, with a light friendly touch.",
       "greeting": "Good day, this is {name} from {business}.",
       "service_question": "How may I help you today?",
-      "closing": "Thank you. I've handed your details to {owner}, who will confirm your quotation and send it here."
+      "closing": "Thank you. I've handed your details to {owner}, who will confirm your price estimate and send it here.",
+      "greeting_ms": "Selamat sejahtera, saya {name} dari {business}.",
+      "service_question_ms": "Bagaimana boleh saya bantu anda hari ini?",
+      "closing_ms": "Terima kasih. Saya telah serahkan maklumat anda kepada {owner}, yang akan mengesahkan anggaran harga dan menghantarnya di sini."
     },
     "mei": {
       "name": "Mei",
       "style": "cheerful and brief; short sentences, casual Malaysian-English warmth, no slang that could confuse.",
       "greeting": "Hello! Mei here from {business}.",
       "service_question": "What are you looking to paint?",
-      "closing": "Thanks so much! {owner} will check everything and your quotation will be sent here."
+      "closing": "Thanks so much! {owner} will check everything and your price estimate will be sent here.",
+      "greeting_ms": "Helo! Mei di sini dari {business}.",
+      "service_question_ms": "Apa yang anda nak cat?",
+      "closing_ms": "Terima kasih! {owner} akan semak semuanya dan anggaran harga akan dihantar di sini."
     }
   }
 }

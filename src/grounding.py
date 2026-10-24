@@ -4,12 +4,15 @@ import re
 ONES = {w: i for i, w in enumerate(
     "zero one two three four five six seven eight nine ten eleven twelve thirteen "
     "fourteen fifteen sixteen seventeen eighteen nineteen".split())}
+# Malay number words (satu .. sepuluh, sebelas); "dua belas" and bigger are left to digits
+ONES.update({"kosong": 0, "sifar": 0, "satu": 1, "dua": 2, "tiga": 3, "empat": 4, "lima": 5, "enam": 6,
+             "tujuh": 7, "lapan": 8, "sembilan": 9, "sepuluh": 10, "sebelas": 11})
 TENS = {w: 10 * i for i, w in enumerate(
     "_ _ twenty thirty forty fifty sixty seventy eighty ninety".split()) if w != "_"}
 UNIT_FACTORS = {
     "m": 1.0, "metre": 1.0, "metres": 1.0, "meter": 1.0, "meters": 1.0,
     "cm": 0.01, "centimetre": 0.01, "centimetres": 0.01, "centimeter": 0.01, "centimeters": 0.01,
-    "ft": 0.3048, "foot": 0.3048, "feet": 0.3048,
+    "ft": 0.3048, "foot": 0.3048, "feet": 0.3048, "kaki": 0.3048,
 }
 _TOKEN = re.compile(r"\d+(?:[.,]\d+)?|[a-z]+")
 
@@ -55,7 +58,21 @@ def norm(text):
     return re.sub(r"[^a-z0-9@+ ]+", " ", str(text).lower()).split()
 
 
-_HEDGES = {"about", "around", "roughly", "approximately", "approx"}
+_HEDGES = {"about", "around", "roughly", "approximately", "approx", "maybe", "perhaps", "probably", "say",
+           "lets", "let", "s", "its", "it", "is", "i", "think", "guess", "like", "around", "over", "under",
+           "just", "estimate", "estimation", "the", "a", "be", "would", "should", "might", "or", "so"}
+_RANGE = re.compile(r"(\d+(?:[.,]\d+)?)\s*(?:to|-|or|and)\s*(\d+(?:[.,]\d+)?)", re.I)
+ESTIMATE_WORDS = re.compile(
+    r"\b(maybe|about|around|roughly|approx\w*|say|guess|think|probably|estimat\w*|not sure|not exactly)\b",
+    re.I)
+
+
+def estimate_in(message):
+    """(upper_bound, is_estimate): "4 to 5 m" -> 5, so the quote is never short; hedged answers are flagged."""
+    match = _RANGE.search(str(message))
+    if match:
+        return max(float(match.group(1).replace(",", ".")), float(match.group(2).replace(",", "."))), True
+    return None, bool(ESTIMATE_WORDS.search(str(message)))
 
 
 def _bare_number(message):

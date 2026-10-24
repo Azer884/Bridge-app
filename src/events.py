@@ -1,14 +1,14 @@
 """Channel-neutral incoming message. WhatsApp's nested payload is flattened here, once."""
 from dataclasses import dataclass
 
-KNOWN_TYPES = {"text", "image"}
+KNOWN_TYPES = {"text", "image", "audio"}
 
 
 @dataclass(frozen=True)
 class IncomingEvent:
     message_id: str
     user_id: str                # the channel's stable id for the customer (WhatsApp wa_id)
-    type: str = "text"          # text | image | unsupported
+    type: str = "text"          # text | image | audio (a voice note) | unsupported
     text: str = ""
     profile_name: str = ""
     phone: str = ""
@@ -62,6 +62,6 @@ def from_meta_payload(payload):
                     type=kind if kind in KNOWN_TYPES else "unsupported",
                     text=_text(body.get("body") if kind == "text" else body.get("caption")),
                     profile_name=_text(names.get(sender)), phone="+" + sender,
-                    media_id=_text(body.get("id")) if kind == "image" else "",
+                    media_id=_text(body.get("id")) if kind in ("image", "audio") else "",
                     timestamp=int(message["timestamp"]) if str(message.get("timestamp", "")).isdigit() else 0))
     return events

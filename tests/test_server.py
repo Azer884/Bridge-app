@@ -22,7 +22,7 @@ from src.whatsapp import WhatsAppSender, valid_signature
 
 CONFIG = {"required_fields": ["address"]}
 SECRET = "app-secret"
-ENV = {"WHATSAPP_VERIFY_TOKEN": "verify-me", "WHATSAPP_APP_SECRET": SECRET, "INCOMING_API_KEY": "key"}
+ENV = {"WHATSAPP_VERIFY_TOKEN": "verify-me", "WHATSAPP_APP_SECRET": SECRET, "INCOMING_API_KEY": "key", "MESSAGE_WINDOW_SECONDS": "0"}
 
 
 def meta_body(text="hello", msg_id="wamid.1", kind="text", sender="60123456789"):
@@ -71,7 +71,7 @@ class EventTests(unittest.TestCase):
 
     def test_flat_event_validation(self):
         self.assertEqual(from_flat({"message_id": "m", "user_id": "u", "text": "hi"}).type, "text")
-        self.assertEqual(from_flat({"message_id": "m", "user_id": "u", "type": "audio"}).type, "unsupported")
+        self.assertEqual(from_flat({"message_id": "m", "user_id": "u", "type": "video"}).type, "unsupported")
         for bad in ({}, {"message_id": "m"}, {"message_id": 5, "user_id": "u"}, "x"):
             with self.assertRaises(ValueError):
                 from_flat(bad)
@@ -103,7 +103,7 @@ class ServiceTests(unittest.TestCase):
         service = make_service()
         reply = service.handle(IncomingEvent("m1", "u", type="image", media_id="x"))[0]
         self.assertIn("photo", reply)
-        self.assertIn("text messages", service.handle(IncomingEvent("m2", "u", type="unsupported"))[0])
+        self.assertIn("type it", service.handle(IncomingEvent("m2", "u", type="unsupported"))[0])
         self.assertEqual(service.handle(IncomingEvent("m3", "u", text="   ")), [])
 
     def photo_service(self, assessor):

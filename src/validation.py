@@ -3,6 +3,7 @@ import re
 from dataclasses import dataclass, field
 
 from .guard import reply_problem
+from .i18n import language_problem
 from .grounding import GroundingError, ground_field
 from .parsing import ParseError, extract_json
 from .schema import FIELDS, STATUS_VALUES, Status
@@ -62,6 +63,9 @@ def validate_response(raw_text, state, message, config):
         result.problems.append(bad_reply)
     if reply.count("?") > 1:
         result.soft_problems.append("reply asks more than one question; ask exactly one")
+    wrong_language = language_problem(reply, getattr(state, "lang", "en"))
+    if wrong_language:
+        result.soft_problems.append(wrong_language)
     if _PRICE.search(reply):
         result.problems.append("reply contains a price; the model must never quote prices")
     if _BOOKING_CLAIM.search(reply):

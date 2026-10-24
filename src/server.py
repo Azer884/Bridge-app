@@ -7,7 +7,9 @@
   GET  /api/events                        recent webhook, send and error events (x-api-key)
   SME quotations (x-api-key; the dashboard will call these)
     GET  /api/quotes                        drafts waiting for approval, with the price breakdown
-    POST /api/quotes/{user_id}/approve      optional {"total": n}; sends the customer the total only
+    POST /api/quotes/{user_id}/approve      optional {"total": n}; sends the customer the estimate only
+    POST /api/quotes/{user_id}/final        {"total": n}; after the site visit, sends the final price
+    GET  /api/customers                     every customer with all their jobs (earlier and current)
   Personas (x-api-key; the dashboard picks the character the assistant speaks as)
     GET  /api/personas                      all characters and the active one
     PUT  /api/personas/{id}                 create or edit a character
@@ -30,6 +32,8 @@ import hmac
 import json
 import logging
 import os
+import threading
+import time
 from pathlib import Path
 from typing import Literal
 
@@ -42,6 +46,7 @@ from .events import from_flat, from_meta_payload
 from .runpod_client import RunPodClient, RunPodError, load_dotenv
 from .service import IncomingService
 from .store import SqliteStore
+from .transcribe import Transcriber
 from .vision import VisionError, assess_image
 from .whatsapp import WhatsAppSender, valid_signature
 
@@ -69,6 +74,10 @@ class ActivePersona(BaseModel):
     id: str
 
 
+class FinalRequest(BaseModel):
+    total: float = Field(gt=0, le=1_000_000)
+
+
 class ApproveRequest(BaseModel):
     total: float | None = Field(None, gt=0, le=1_000_000)   # the SME may override the computed total
 
@@ -77,7 +86,7 @@ def _same(a, b):
     return bool(a) and bool(b) and hmac.compare_digest(a.encode(), b.encode())
 
 
-def create_app(service=None, sender=None, env=None, text_client=None, vision_client=None):
+def create_app(service=None, sender=None, env=None, text_client=None, vision_client=None, transcriber=None):
     if env is None:
         load_dotenv()
         env = dict(os.environ)
@@ -103,11 +112,19 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         assessment, _ = assess_image(model_client("vision"), image, mime)
         return assessment
 
+    if transcriber is None:
+        transcriber = Transcriber.from_env(env)
+
+    def transcribe_voice(media_id):
+        audio, mime = sender.fetch_media(media_id)
+        return transcriber.transcribe(audio, mime)
+
     if service is None:
         config_path = env.get("BUSINESS_CONFIG") or ROOT / "config" / "business_config.example.json"
         service = IncomingService(SqliteStore(env.get("DATABASE_PATH") or ROOT / "data" / "bridge.db"),
                                   json.loads(Path(config_path).read_text(encoding="utf-8")), text_client,
-                                  photo_assessor=assess_photo if sender else None)
+                                  photo_assessor=assess_photo if sender else None,
+                                  transcriber=transcribe_voice if sender and transcriber else None)
     clients["text"] = clients["text"] or service.client
 
     def require_key(request):
@@ -125,20 +142,45 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
 
     app = FastAPI(title="Painting assistant")
 
-    def process_and_send(event):
+    window = float(env.get("MESSAGE_WINDOW_SECONDS") or 2.0)    # messages this close together are read as one
+    inbox, running, inbox_lock = {}, set(), threading.Lock()
+
+    def deliver(user_id, events):
         try:
-            replies = service.handle(event)
+            replies = service.handle_batch(events)
         except Exception as err:
-            log.exception("failed to handle message %s", event.message_id)
-            service.store.log_event("handler_error", f"{event.user_id}: {type(err).__name__}: {err}")
+            log.exception("failed to handle messages %s", [e.message_id for e in events])
+            service.store.log_event("handler_error", f"{user_id}: {type(err).__name__}: {err}")
             return
         for reply in replies:
             if sender is None:
                 service.store.log_event("no_sender", "WHATSAPP_TOKEN or WHATSAPP_PHONE_NUMBER_ID is not set")
-            elif sender.send_text(event.user_id, reply):
-                service.store.log_event("sent", event.user_id)
+            elif sender.send_text(user_id, reply):
+                service.store.log_event("sent", user_id)
             else:
-                service.store.log_event("send_failed", f"{event.user_id}: {getattr(sender, 'last_error', '')}")
+                service.store.log_event("send_failed", f"{user_id}: {getattr(sender, 'last_error', '')}")
+
+    def process_and_send(event):
+        """Collect the customer's messages for a short window, then answer them together. One worker per
+        customer: a message arriving while it runs is picked up on its next round."""
+        with inbox_lock:
+            inbox.setdefault(event.user_id, []).append(event)
+            if event.user_id in running:
+                return
+            running.add(event.user_id)
+        try:
+            while True:
+                time.sleep(window)
+                with inbox_lock:
+                    batch = inbox.pop(event.user_id, [])
+                    if not batch:
+                        running.discard(event.user_id)
+                        return
+                deliver(event.user_id, batch)
+        except BaseException:
+            with inbox_lock:
+                running.discard(event.user_id)
+            raise
 
     @app.get("/", include_in_schema=False)
     @app.get("/health")
@@ -225,6 +267,24 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         if not sent:
             raise HTTPException(502, "could not send the quotation to the customer")
         return {"approved": True}
+
+    @app.post("/api/quotes/{user_id}/final")
+    def final_price(user_id: str, body: FinalRequest, request: Request):
+        require_key(request)
+        if sender is None:
+            raise HTTPException(503, "WhatsApp sender is not configured")
+        try:
+            sent = service.confirm_final(user_id, lambda text: sender.send_text(user_id, text), body.total)
+        except ValueError as err:
+            raise HTTPException(409, str(err))
+        if not sent:
+            raise HTTPException(502, "could not send the final price to the customer")
+        return {"final": True}
+
+    @app.get("/api/customers")
+    def customers(request: Request):
+        require_key(request)
+        return {"customers": service.customers()}
 
     @app.get("/api/personas")
     def list_personas(request: Request):

@@ -10,7 +10,7 @@ from src.validation import validate_response
 
 CONFIG = json.loads((Path(__file__).resolve().parent.parent / "config" / "business_config.example.json").read_text())
 # these tests were written for the six-field list; the example config now also asks for the condition
-CONFIG["required_fields"] = [f for f in CONFIG["required_fields"] if f != "surface_condition"]
+CONFIG["required_fields"] = [f for f in CONFIG["required_fields"] if f not in ("surface_condition", "paint_tier", "colour")]
 JOB_DONE = dict(address="1 Main St", surfaces=["walls"], room_length_m=4.0, room_width_m=3.0,
                 room_height_m=2.5, preferred_datetime="Tuesday 10am")
 
@@ -37,7 +37,7 @@ def contact_state(name="Sam Lee", phone="+21612345678"):
 class ContactFlowTests(unittest.TestCase):
     def test_name_and_phone_not_asked_during_job(self):
         s = ConversationState("t", channel={"name": "Sam Lee", "phone": "+21612345678"})
-        self.assertEqual(s.next_missing(CONFIG), "address")
+        self.assertEqual(s.next_missing(CONFIG), "surfaces")
         self.assertNotIn("customer_name", s.required_fields(CONFIG))
 
     def test_job_complete_triggers_backend_confirmation_not_model_reply(self):
@@ -132,7 +132,7 @@ class GuardTests(unittest.TestCase):
         self.assertEqual(client.calls, [])
         self.assertEqual(s.history, [])
         self.assertIn("painting", out.reply)
-        self.assertIn("address", out.reply.lower())   # goes straight back to the next question
+        self.assertIn("surfaces", out.reply.lower())   # goes straight back to the next question
 
     def test_three_strikes_escalate(self):
         s = ConversationState("t")
@@ -143,7 +143,7 @@ class GuardTests(unittest.TestCase):
 
     def test_long_messages_are_clipped(self):
         s = ConversationState("t")
-        client = FakeClient(reply("What is the address of the property?"))
+        client = FakeClient(reply("Which surfaces would you like painted?"))
         handle_message(s, "hello " * 1000, CONFIG, client)
         self.assertLessEqual(len(client.calls[0][-1]["content"]), 1000)
 

@@ -13,7 +13,14 @@ PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "painting_ass
 PRIMER = [
     {"role": "user", "content": "Hi, we just moved in and the hallway looks tired."},
     {"role": "assistant", "content": json.dumps({
-        "reply": "Congrats on the new place! Where is the property, so I can note the address?",
+        "reply": "Congrats on the new place! Which surfaces would you like painted?",
+        "extracted_fields": {}, "missing_fields": [], "status": "collecting_information"})},
+]
+
+PRIMER_MS = [
+    {"role": "user", "content": "Hai, kami baru pindah rumah dan lorong nampak lusuh."},
+    {"role": "assistant", "content": json.dumps({
+        "reply": "Tahniah dapat rumah baru! Permukaan mana yang anda mahu cat?",
         "extracted_fields": {}, "missing_fields": [], "status": "collecting_information"})},
 ]
 
@@ -29,6 +36,12 @@ def build_context(config, state):
     lines += [f"Policy: {p}" for p in config["policies"]]
     if config.get("persona"):
         lines.append(prompt_section(config["persona"]))
+    if getattr(state, "lang", "en") == "ms":
+        lines.append('Language: the customer writes Bahasa Malaysia. Write your "reply" in natural, everyday '
+                     "Bahasa Malaysia (Malaysian Malay, not Indonesian). Keep the JSON keys and the status "
+                     "values in English, and keep extracted values in the customer's own words.")
+    else:
+        lines.append('Language: write your "reply" in English, even if earlier messages were in another language.')
     lines.append("Use these exact keys in extracted_fields:")
     for key in state.required_fields(config):
         spec = FIELDS[key]
@@ -61,7 +74,7 @@ def build_messages(config, state, latest_message, rejection=None, system_prompt=
                    '\nReturn one corrected JSON object with exactly these four keys: "reply", '
                    '"extracted_fields", "missing_fields", "status". Put in extracted_fields only '
                    "values the customer wrote in their latest message.")
-    primer = PRIMER if config.get("persona") and not state.history else []
+    primer = (PRIMER_MS if getattr(state, "lang", "en") == "ms" else PRIMER)         if config.get("persona") and not state.history else []
     return ([{"role": "system", "content": system}] + primer
             + state.history_window()
             + [{"role": "user", "content": latest_message}])

@@ -18,7 +18,14 @@ def clean(data):
         if not isinstance(value, str) or not value.strip() or len(value) > limit:
             raise ValueError(f"{key} must be 1 to {limit} characters")
         persona[key] = value.strip()
-    if any(screen_input(text) for text in persona.values()):
+    for key, limit in TEXT_LIMITS.items():          # optional Malay versions: greeting_ms, closing_ms, ...
+        value = data.get(f"{key}_ms")
+        if value is None or value == "":
+            continue
+        if not isinstance(value, str) or len(value) > limit:
+            raise ValueError(f"{key}_ms must be at most {limit} characters")
+        persona[f"{key}_ms"] = value.strip()
+    if any(screen_input(value) for value in persona.values()):
         raise ValueError("persona text looks like an instruction to the model")
     return persona
 
@@ -44,8 +51,15 @@ def render(text, persona, config):
             .replace("{owner}", owner))
 
 
-def greeting_line(persona, config):
-    return render(persona["greeting"], persona, config)
+def text(persona, key, lang="en"):
+    """A persona sentence in the customer's language; Malay falls back to English when not written."""
+    if lang == "ms" and persona.get(f"{key}_ms"):
+        return persona[f"{key}_ms"]
+    return persona[key]
+
+
+def greeting_line(persona, config, lang="en"):
+    return render(text(persona, "greeting", lang), persona, config)
 
 
 def prompt_section(persona):

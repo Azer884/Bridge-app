@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 
 from .assessment import LEVELS, LOW_CONFIDENCE, classify_text, combine
+from .schema import single_wall
 
 CENT = Decimal("0.01")
 INSPECTION_ISSUES = {"damp", "mould", "water_damage"}
@@ -89,12 +90,13 @@ def _schedule(area, coats, multiplier, prep_hours, pricing):
 def compute_quotation(verified, pricing, vision=None):
     """verified: the conversation's verified fields. pricing: config['pricing'].
     vision: optional validated ConditionAssessment from a photo."""
-    missing = [k for k in REQUIRED if k not in verified]
+    one_wall = single_wall(verified.get("surfaces"))
+    missing = [k for k in REQUIRED if k not in verified and not (one_wall and k == "room_width_m")]
     if missing:
         raise PricingError(f"cannot price yet, missing: {missing}")
 
     flags, assumptions = [], []
-    length, width, height = (_d(verified[k]) for k in REQUIRED[:3])
+    length, width, height = (_d(verified.get(k, 0)) for k in REQUIRED[:3])
 
     walls, ceiling = False, False
     for surface in verified["surfaces"]:
@@ -108,7 +110,11 @@ def compute_quotation(verified, pricing, vision=None):
     if not walls and not ceiling:
         flags.append("no priceable surface (walls or ceiling) requested")
 
-    wall_area = 2 * (length + width) * height if walls else Decimal(0)
+    if one_wall:
+        wall_area = length * height                   # one wall; the width the customer gave is not used
+        assumptions.append("a single wall is painted: area = length x height")
+    else:
+        wall_area = 2 * (length + width) * height if walls else Decimal(0)
     ceiling_area = length * width if ceiling else Decimal(0)
     area = wall_area + ceiling_area
     assumptions.append("openings (doors, windows) are not deducted from the area")

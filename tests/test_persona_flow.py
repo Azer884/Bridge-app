@@ -17,7 +17,7 @@ from tests.test_core import CONFIG, FakeClient, reply
 
 AISHA = CONFIG["personas"]["aisha"]
 PERSONA_CONFIG = {**CONFIG, "persona": AISHA}
-ENV = {"INCOMING_API_KEY": "key"}
+ENV = {"INCOMING_API_KEY": "key", "MESSAGE_WINDOW_SECONDS": "0"}
 KEY = {"x-api-key": "key"}
 
 
@@ -74,8 +74,8 @@ class GreetingTests(unittest.TestCase):
 
     def test_no_persona_keeps_the_old_behaviour(self):
         state = fresh_state()
-        out = handle_message(state, "hi", CONFIG, FakeClient(reply("What is the address?")))
-        self.assertEqual(out.reply, "What is the address?")
+        out = handle_message(state, "hi", CONFIG, FakeClient(reply("Which surfaces would you like painted?")))
+        self.assertEqual(out.reply, "Which surfaces would you like painted?")
 
 
 class EndOfConversationTests(unittest.TestCase):
@@ -175,19 +175,20 @@ class AfterDoneTests(unittest.TestCase):
         self.config = {"owner": {"name": "Daniel Tan"}}
 
     def test_replies_vary(self):
+        self.state.quote_status = "approved"        # once confirmed the bot keeps answering
         seen = set()
         for _ in range(4):
-            seen.add(self.flow.after_done_reply(self.state, "ok thanks", self.config))
+            seen.add(self.flow.after_done(self.state, "ok thanks", self.config))
             self.state.history += [{"role": "user", "content": "x"}, {"role": "assistant", "content": "y"}]
         self.assertGreater(len(seen), 1)
 
     def test_date_question_asks_for_preference(self):
-        reply = self.flow.after_done_reply(self.state, "Give me a good date to come over", self.config)
+        reply = self.flow.after_done(self.state, "Give me a good date to come over", self.config)
         self.assertIn("Which day and time", reply)
         self.assertIn("Daniel Tan", reply)
 
     def test_new_date_is_recorded_as_preference_not_confirmed(self):
-        reply = self.flow.after_done_reply(self.state, "Friday 3pm works", self.config)
+        reply = self.flow.after_done(self.state, "Friday 3pm works", self.config)
         self.assertEqual(self.state.verified["preferred_datetime"], "Friday 3pm works")
         self.assertIn("confirmed by them", reply)
 

@@ -23,12 +23,18 @@ class ConditionAssessment:
 
 
 _TEXT_RULES = [  # checked in order; first hit wins
-    ("severe", r"\b(damp|leak\w*|water damage\w*|mou?ld|structural|rot(ten)?)\b"),
-    ("good", r"\b(good condition|no (damage|cracks|issues|problems|marks)|perfect|fine|clean|new)\b"),
-    ("moderate", r"\b(peeling|flaking|bubbling|cracks?|cracked|holes?|stains?|stained)\b"),
-    ("minor", r"\b(hairline|scuffs?|marks?|dirty|faded|worn|minor|small|dents?)\b"),
+    ("severe", r"\b(damp|leak\w*|water damage\w*|mou?ld|structural|rot(ten)?|lembap|bocor|berkulat|kulat|"
+                r"struktur|reput)\b"),
+    ("good", r"\b(good condition|no (damage|cracks|issues|problems|marks)|perfect|fine|clean|new|"
+             r"keadaan baik|elok|bersih|baru|tiada (kerosakan|retak|masalah))\b"),
+    ("moderate", r"\b(peeling|flaking|bubbling|cracks?|cracked|holes?|stains?|stained|mengelupas|retak|"
+                 r"berlubang|lubang|kotor teruk|bertompok)\b"),
+    ("minor", r"\b(hairline|scuffs?|marks?|dirty|faded|worn|minor|small|dents?|calar|kotor|pudar|haus|"
+              r"retak halus)\b"),
 ]
 _TEXT_ISSUES = {
+    "mengelupas": "peeling", "retak": "cracks", "lubang": "holes", "lembap": "damp", "kulat": "mould",
+    "bocor": "water_damage",
     "peeling": "peeling", "flaking": "flaking", "bubbling": "bubbling", "crack": "cracks",
     "hole": "holes", "stain": "stains", "damp": "damp", "mould": "mould", "mold": "mould",
     "leak": "water_damage", "water damage": "water_damage",

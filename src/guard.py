@@ -5,7 +5,9 @@ MAX_MESSAGE_CHARS = 1000
 MAX_REPLY_CHARS = 600
 MAX_STRIKES = 3
 
-REFUSAL = "I can only help with your painting job and quotation."
+from .i18n import STRINGS
+
+REFUSAL = STRINGS["en"]["refusal"]
 
 # Incoming messages that try to steer the model or use it for something else.
 _BLOCKED_INPUT = [re.compile(p, re.I) for p in [
@@ -18,6 +20,11 @@ _BLOCKED_INPUT = [re.compile(p, re.I) for p in [
     r"\b(python|javascript|typescript|java|c\+\+|sql|html|regex|bash|powershell)\b",
     r"```",
     r"^\s*(system|assistant)\s*:",
+    r"\b(abaikan|lupakan|langkau|ketepikan)\b.{0,40}\b(arahan|peraturan|prompt|panduan|sekatan)\b",
+    r"\b(arahan|prompt|mesej) (sistem|asal|tersembunyi|pembangun)\b",
+    r"\b(awak|anda|kamu) (sekarang|kini) (ialah|adalah|jadi)\b",
+    r"\bberpura-?pura\b",
+    r"\b(tulis|buat|beri|tunjuk)\b.{0,30}\b(kod|skrip|puisi|esei|lagu|jenaka|program)\b",
 ]]
 
 # Replies that must never reach a customer.
