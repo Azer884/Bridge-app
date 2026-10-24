@@ -140,7 +140,7 @@ def closing_reply(state, config):
     persona = config.get("persona")
     if persona:
         from .persona import render
-        return render(persona_text(persona, "closing", state.lang), persona, config)
+        return render(persona_text(persona, "closing", state.lang), persona, config, state.lang)
     return t("closing", state.lang)
 
 
@@ -386,6 +386,8 @@ def new_job_intent(message, state):
     """A customer who already finished a job asks for another one."""
     if not (_SUPPORTED.search(message) and _WANT.search(message)):
         return False
+    if (SWAP.search(message) or is_correction(message)) and not re.search(r"\b(another|new|second|next|lagi|baru)\b", message, re.I):
+        return False                    # "actually I want premium instead" changes this job, it is not a new one
     return bool(_AGAIN.search(message)) or state.quote_status in ("approved", "final")
 
 

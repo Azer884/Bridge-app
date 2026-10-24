@@ -42,7 +42,7 @@ def _current_question(state, config, service=False):
         return ""
     persona = config.get("persona")
     if service and persona and not state.service_checked:
-        return render(persona_text(persona, "service_question", state.lang), persona, config)
+        return render(persona_text(persona, "service_question", state.lang), persona, config, state.lang)
     nxt = state.next_missing(config)
     return ask_for(nxt, state) if nxt else ""
 
@@ -182,7 +182,7 @@ def _handle(state, message, config, client, max_retries=MAX_RETRIES):
             state.service_misses += 1
             kind = flow.smalltalk(message)
             side = flow.faq_answer(message, config, "job", state.lang, force=True)
-            question = render(persona_text(persona, "service_question", state.lang), persona, config)
+            question = render(persona_text(persona, "service_question", state.lang), persona, config, state.lang)
             if not side and ("?" in message or flow._QUESTION_START.match(message)) and kind is None:
                 side = t("faq_other", state.lang, owner=owner)      # a question we have no fixed answer for
             if side:                                        # a question before any job: answer it, then ask what they need
@@ -354,14 +354,47 @@ def _ask_again(state, message, config, result, asked, attempt):
     return _accept(state, message, config, result, attempt)
 
 
+_PRICED = ("room_length_m", "room_width_m", "room_height_m", "extra_rooms", "surfaces", "paint_tier",
+           "surface_condition")
+_NOTED = ("colour", "preferred_datetime", "address")
+
+
 def _after_done(state, message, config):
-    """The chat is complete and the SME has not (or has) confirmed: answer what matters, stay quiet otherwise."""
+    """The chat is complete and the SME has not (or has) confirmed: answer what matters, stay quiet otherwise.
+    A change to the job (another paint, a size, one more room) is applied even after the estimate was approved, and
+    the estimate goes back to the owner to approve again at the new price."""
+    before = {k: state.verified.get(k) for k in _PRICED + _NOTED}
+    before["extra_rooms"] = [dict(r) for r in state.verified.get("extra_rooms") or []] or None
     fixed = _correct_measurement(state, message) if flow.is_correction(message) else None
-    if fixed:
-        if state.quote_status in ("pending_approval", "needs_inspection"):
-            state.quote_stale = True            # the draft is recalculated from the corrected size
+    if not fixed:
+        state.stage = "job"                     # the readers below work on a job in progress
+        try:
+            _try_add_rooms(state, message, config)
+            _swap_answers(state, message, config)
+        finally:
+            state.stage = "done"
+    changed = [k for k in _PRICED + _NOTED if (state.verified.get(k) or None) != (before.get(k) or None)]
+    if fixed or changed:
+        priced = bool(fixed) or any(k in _PRICED for k in changed)
+        owner = (config.get("owner") or {}).get("name") or ("pasukan kami" if state.lang == "ms" else "our team")
         state.attention = True
-        return _finish(state, message, fixed, Status.READY.value, record=False)
+        if len(state.followups) < 50:
+            state.followups.append({"text": message[:300], "at": time.time()})
+        if priced and state.quote_status in ("pending_approval", "needs_inspection", "approved", "final"):
+            state.quote_stale = True            # re-priced by the service; an approved estimate goes back for approval
+        labels = []
+        for key in changed:
+            label = (t("change_sizes", state.lang) if key.startswith("room_") else
+                     t("change_rooms", state.lang) if key == "extra_rooms" else t(f"label_{key}", state.lang))
+            value = state.verified.get(key)
+            shown = f"{label}: {value}" if isinstance(value, str) else label
+            if shown not in labels:
+                labels.append(shown)
+        if fixed and not labels:
+            return _finish(state, message, fixed, Status.READY.value, record=False)
+        key = "job_updated" if priced and state.quote_status in ("approved", "final", "pending_approval") else "job_noted"
+        return _finish(state, message, t(key, state.lang, changes=", ".join(labels), owner=owner), Status.READY.value,
+                       record=False)
     reply = flow.after_done(state, message, config)
     if reply is None:                           # silence: the SME will confirm, nothing useful to add
         return _finish(state, message, "", Status.READY.value, record=False)
@@ -740,7 +773,7 @@ _PLACEHOLDERS = {"no preference", "i dont know", "i don't know", "any", "not des
 def _swap_answers(state, message, config):
     """A new answer to something already answered replaces it when the customer is plainly changing their mind
     ("actually premium", "change colour to blue", "make it Saturday", "sorry I meant 5 x 5")."""
-    if state.stage == "done" or "?" in message:
+    if "?" in message and not re.search(r"\b(change|switch|make it|instead|tukar|ubah)\b", message, re.I):
         return
     v, short = state.verified, len(message.split()) <= 4
     swap = bool(flow.SWAP.search(message) or flow.is_correction(message))

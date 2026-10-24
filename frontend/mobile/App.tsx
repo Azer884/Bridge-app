@@ -1,7 +1,9 @@
 import { ActivityIndicator, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
-import { DefaultTheme, NavigationContainer } from "@react-navigation/native";
+import { useEffect } from "react";
+import * as Notifications from "expo-notifications";
+import { createNavigationContainerRef, DefaultTheme, NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator, type NativeStackNavigationOptions } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -18,6 +20,7 @@ import QuotesScreen from "./src/screens/QuotesScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
 import StatusScreen from "./src/screens/StatusScreen";
 import { useAsync } from "./src/hooks";
+import { customerOf, registerForPush } from "./src/push";
 import { C, F, ThemeProvider, useTheme } from "./src/theme";
 import { ThemeButton } from "./src/ui";
 
@@ -29,6 +32,7 @@ configureApi({
 });
 
 const Tabs = createBottomTabNavigator();
+const navigation = createNavigationContainerRef<any>();
 const Quotes = createNativeStackNavigator();
 const Pipeline = createNativeStackNavigator();
 const Calendar = createNativeStackNavigator();
@@ -108,6 +112,16 @@ function Root() {
   const { mode } = useTheme();
   const [loaded] = useFonts({ Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold, BricolageGrotesque_700Bold });
   const pending = useAsync(() => api.listQuotes("pending_approval"), [], 20_000);
+  const tapped = Notifications.useLastNotificationResponse();
+
+  useEffect(() => { void registerForPush(); }, []);
+  useEffect(() => {
+    // a tapped notification opens that customer's quote
+    const who = customerOf(tapped ?? null);
+    if (who && navigation.isReady()) {
+      navigation.navigate("QuotesTab", { screen: "QuoteDetail", params: { userId: who.userId, name: who.name } });
+    }
+  }, [tapped]);
 
   if (!loaded) {
     return (
@@ -121,7 +135,7 @@ function Root() {
   return (
     <SafeAreaProvider>
       <StatusBar style={mode === "dark" ? "light" : "dark"} />
-      <NavigationContainer theme={{ ...DefaultTheme, dark: mode === "dark", colors: { ...DefaultTheme.colors, background: C.wall, card: C.paper, text: C.ink, border: C.line, primary: C.blue } }}>
+      <NavigationContainer ref={navigation} theme={{ ...DefaultTheme, dark: mode === "dark", colors: { ...DefaultTheme.colors, background: C.wall, card: C.paper, text: C.ink, border: C.line, primary: C.blue } }}>
         <Tabs.Navigator
           screenOptions={{
             headerShown: false,

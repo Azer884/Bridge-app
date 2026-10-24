@@ -63,6 +63,7 @@ from .pdf import estimate_pdf
 from .events import calls_from_meta_payload, from_flat, from_meta_payload
 from .i18n import t
 from .runpod_client import RunPodClient, RunPodError, load_dotenv
+from .push import PushNotifier
 from .service import IncomingService
 from .store import make_store
 from .transcribe import Transcriber
@@ -229,6 +230,9 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
             log.error("model call failed: %s", err)
             raise HTTPException(502, "model unavailable")
 
+    push = PushNotifier(service.store, env.get("EXPO_ACCESS_TOKEN"))
+    if getattr(service, "notify", None) is None:
+        service.notify = push.notify
     app = FastAPI(title="Painting assistant")
     if call_handler is None:
         from .whatsapp_calling import handle_call_event      # LiveKit is only imported when a call arrives
@@ -441,7 +445,9 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
             raise HTTPException(503, "WhatsApp sender is not configured")
         try:
             sent = service.approve_quote(user_id, lambda text: sender.send_text(user_id, text),
-                                         body.total if body else None)
+                                         body.total if body else None,
+                                         send_pdf=(lambda data, name: sender.send_document(user_id, data, name))
+                                         if hasattr(sender, "send_document") else None)
         except ValueError as err:
             raise HTTPException(409, str(err))
         if not sent:
@@ -517,6 +523,7 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
 
     @app.patch("/api/bookings/{booking_id}")
     def patch_booking(booking_id: str, body: BookingPatch, request: Request):
+        booking_id = booking_id.split("~")[0]          # "abc~d2" is day 2 of booking abc
         require_key(request)
         existing = service.store.get_booking(booking_id)
         if existing is None:
@@ -528,12 +535,42 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
 
     @app.delete("/api/bookings/{booking_id}", status_code=204)
     def remove_booking(booking_id: str, request: Request):
+        booking_id = booking_id.split("~")[0]
         require_key(request)
         existing = service.store.get_booking(booking_id)
         if existing is None:
             raise HTTPException(404, "no such booking")
         service.delete_booking(booking_id, notifier(existing["user_id"]))
         return Response(status_code=204)
+
+    @app.post("/api/demo/seed")
+    def demo_seed(request: Request):
+        """Fake customers, estimates and a busy calendar for filming a demo. Replaces earlier demo data only."""
+        require_key(request)
+        return service.seed_demo()
+
+    @app.delete("/api/demo/seed")
+    def demo_clear(request: Request):
+        require_key(request)
+        return {"removed": service.clear_demo()}
+
+    @app.post("/api/push/register")
+    def push_register(body: dict, request: Request):
+        """The mobile app's Expo push token: alerts for customers who need the owner go to that phone."""
+        require_key(request)
+        try:
+            push.register(body.get("token"), str(body.get("platform") or "")[:20])
+        except ValueError as err:
+            raise HTTPException(422, str(err))
+        return {"registered": True, "devices": len(push.tokens())}
+
+    @app.post("/api/push/test")
+    def push_test(request: Request):
+        require_key(request)
+        if not push.tokens():
+            raise HTTPException(404, "no phone has registered for notifications yet")
+        push.notify("Test notification", "Notifications from Gesir work on this phone.", {})
+        return {"sent": len(push.tokens())}
 
     @app.get("/api/media/{media_id}")
     def media(media_id: str, request: Request):

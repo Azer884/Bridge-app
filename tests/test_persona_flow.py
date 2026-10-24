@@ -95,13 +95,13 @@ class EndOfConversationTests(unittest.TestCase):
         state, _ = self.finish_job()
         wrap = handle_message(state, "yes", PERSONA_CONFIG, FakeClient())
         self.assertEqual(state.stage, "wrapup")
-        for text in ("Daniel Tan, our owner", "Address: 12 Jalan Bunga", "Surfaces: walls",
+        for text in ("Address: 12 Jalan Bunga", "Surfaces: walls",
                      "4 m long, 3 m wide, 2.5 m high", "Is everything correct?"):
             self.assertIn(text, wrap.reply)
         self.assertNotIn("MYR", wrap.reply)                      # still no price
         done = handle_message(state, "yes that's right", PERSONA_CONFIG, FakeClient())
         self.assertEqual((state.stage, done.status), ("done", "ready_for_estimate"))
-        self.assertIn("Daniel Tan", done.reply)
+        self.assertIn("our team", done.reply)
 
     def test_a_correction_at_wrapup_goes_back_through_the_job_flow_and_skips_contact(self):
         state, _ = self.finish_job()

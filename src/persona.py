@@ -50,8 +50,8 @@ def active(config, store):
     return all_personas(config, store).get(active_id(config, store))
 
 
-def render(text, persona, config):
-    owner = config.get("owner", {}).get("name") or "our team"
+def render(text, persona, config, lang="en"):
+    owner = config.get("owner", {}).get("name") or ("pasukan kami" if lang == "ms" else "our team")
     return (text.replace("{name}", persona["name"]).replace("{business}", config["business_name"])
             .replace("{owner}", owner))
 
@@ -64,7 +64,7 @@ def text(persona, key, lang="en"):
 
 
 def greeting_line(persona, config, lang="en"):
-    return render(text(persona, "greeting", lang), persona, config)
+    return render(text(persona, "greeting", lang), persona, config, lang)
 
 
 def prompt_section(persona):

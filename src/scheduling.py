@@ -143,22 +143,68 @@ def _wanted(pref, start, hours):
     return bonus, matched
 
 
+# Malaysia's Employment Act 1955: at most 8 working hours a day, never more than 5 hours in a row without a break of
+# at least 30 minutes, and at most 45 hours a week. The crew works 9:00-13:00 and 14:00-18:00 (8 hours, an hour's lunch
+# break) Monday to Friday and 9:00-13:00 on Saturday: 44 hours a week. A longer job continues on the next working day.
+LUNCH = (time(13, 0), time(14, 0))
+SATURDAY_CLOSE = time(13, 0)
+MAX_HOURS_PER_DAY = 8
+
+
+def work_windows(day, rules=RULES):
+    """The crew's working periods on `day` as (start, end) datetimes; [] on a day off."""
+    if day.weekday() not in rules.working_days:
+        return []
+    opening, close = rules.day_start, SATURDAY_CLOSE if day.weekday() == 5 else rules.day_end
+    windows = []
+    if opening < LUNCH[0] < close:
+        windows.append((opening, LUNCH[0]))
+        if LUNCH[1] < close:
+            windows.append((LUNCH[1], close))
+    else:
+        windows.append((opening, close))
+    out, total = [], 0.0
+    for a, b in windows:                               # never more than 8 hours in a day, whatever the rules say
+        start, end = datetime.combine(day, a, TZ), datetime.combine(day, b, TZ)
+        room = min((end - start).total_seconds() / 3600, MAX_HOURS_PER_DAY - total)
+        if room > 0:
+            out.append((start, start + timedelta(hours=room)))
+            total += room
+    return out
+
+
+def day_close(day, rules=RULES):
+    windows = work_windows(day, rules)
+    return windows[-1][1] if windows else None
+
+
 def day_segments(start, hours, rules=RULES):
-    """The working blocks of a job that starts at `start`: one block per day, a long job continues at the next
-    working day's opening time."""
+    """The working blocks of a job that starts at `start`: the morning and afternoon of each working day, with the
+    lunch break kept free. A job longer than a day continues the next working day at opening time."""
     segments, remaining, cursor = [], float(hours), start
-    while remaining > 1e-9:
-        close = datetime.combine(cursor.date(), rules.day_end, TZ)
-        room = max((close - cursor).total_seconds() / 3600, 0)
-        take = min(remaining, room) if room else 0
-        if take:
-            segments.append((cursor, cursor + timedelta(hours=take)))
-            remaining -= take
+    for _ in range(400):                               # a year of working days is more than any painting job
+        if remaining <= 1e-9:
+            break
+        for opening, close in work_windows(cursor.date(), rules):
+            if close <= cursor or remaining <= 1e-9:
+                continue
+            begin = max(opening, cursor)
+            take = min(remaining, (close - begin).total_seconds() / 3600)
+            if take > 1e-9:
+                segments.append((begin, begin + timedelta(hours=take)))
+                remaining -= take
         day = cursor.date() + timedelta(days=1)
-        while day.weekday() not in rules.working_days:
-            day += timedelta(days=1)
         cursor = datetime.combine(day, rules.day_start, TZ)
     return segments
+
+
+def working_days(segments):
+    """[(day start, day end)] per calendar day of the job: one block for each day the crew is there."""
+    days = {}
+    for start, end in segments:
+        first, last = days.get(start.date(), (start, end))
+        days[start.date()] = (min(first, start), max(last, end))
+    return [days[d] for d in sorted(days)]
 
 
 def booking_segments(booking, rules=RULES):
@@ -215,9 +261,11 @@ def suggest_slots(bookings, hours, address="", now=None, rules=RULES, extra_busy
         day = now.date() + timedelta(days=offset)
         if day.weekday() not in rules.working_days:
             continue
+        if not work_windows(day, rules):
+            continue
         opening = datetime.combine(day, rules.day_start, TZ)
-        starts = [opening]
-        close_of_day = datetime.combine(day, rules.day_end, TZ)
+        starts = [opening, datetime.combine(day, LUNCH[1], TZ)]
+        close_of_day = day_close(day, rules)
         if preference:                                  # start times that fit what the customer asked for
             latest = close_of_day - timedelta(hours=min(hours, 9))
             starts += [datetime.combine(day, time(13, 0), TZ), latest.replace(minute=latest.minute - latest.minute % 30)]
@@ -230,8 +278,8 @@ def suggest_slots(bookings, hours, address="", now=None, rules=RULES, extra_busy
                 starts.append(_round_up(seg_end + timedelta(minutes=TRAVEL_MINUTES[closeness(area, other["area"])]),
                                         rules.step_minutes))
         for start in starts:
-            close = datetime.combine(day, rules.day_end, TZ)
-            if start <= now or start < opening or start >= close:
+            close = close_of_day
+            if start <= now or start < opening or start >= close or LUNCH[0] <= start.time() < LUNCH[1]:
                 continue
             segments = day_segments(start, hours, rules)
             if start in candidates or not _free(segments, busy, extra, area, rules):

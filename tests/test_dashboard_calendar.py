@@ -84,7 +84,9 @@ class SchedulingTests(unittest.TestCase):
     def test_a_long_job_continues_on_the_next_working_day(self):
         start = datetime(2026, 10, 31, 15, 0, tzinfo=TZ)                         # a Saturday afternoon
         segments = scheduling.day_segments(start, 12)
-        self.assertEqual([(s.day, s.hour, e.hour) for s, e in segments], [(31, 15, 18), (2, 9, 18)])  # Sunday skipped
+        # Saturday closes at 13:00 and Sunday is off; each day is 9-13 and 14-18 with lunch kept free, 8 hours at most
+        self.assertEqual([(s.day, s.hour, e.hour) for s, e in segments], [(2, 9, 13), (2, 14, 18), (3, 9, 13)])
+        self.assertEqual(scheduling.working_days(segments)[0][1].hour, 18)
 
     def test_same_area_job_is_slotted_right_after_its_neighbour(self):
         day = monday()
@@ -93,7 +95,7 @@ class SchedulingTests(unittest.TestCase):
                                            4, "confirmed")]
         slots = scheduling.suggest_slots(existing, 3, "Jalan Sunsuria, 43900 Sepang", now=day - timedelta(days=1), limit=3)
         self.assertEqual(slots[0]["reason"], "Right after Siti, same postcode")
-        self.assertEqual(slots[0]["start"], iso(day, 13, 30))                    # 9 + 4h + 15 min travel gap, on the half hour
+        self.assertEqual(slots[0]["start"], iso(day, 14))                        # 9 + 4h + 15 min travel gap, after lunch
         self.assertEqual(slots[0]["score"], 100)
         self.assertTrue(all(slots[i]["score"] >= slots[i + 1]["score"] for i in range(len(slots) - 1)))
 
@@ -103,7 +105,9 @@ class SchedulingTests(unittest.TestCase):
         slots = scheduling.suggest_slots(far, 3, "Jalan Sunsuria, 43900 Sepang", now=day - timedelta(days=1), limit=2)
         self.assertEqual(slots[0]["reason"], "Earliest free time")
         self.assertTrue(scheduling.conflicts(far, iso(day, 10), 2, "x"))          # inside Ravi's job
-        self.assertTrue(scheduling.conflicts(far, iso(day, 13, 10), 2, "x"))      # too soon: travel gap of 45 minutes
+        self.assertFalse(scheduling.conflicts(far, iso(day, 13, 10), 2, "x"))     # starts after lunch, past the 45 minute gap
+        later = [scheduling.new_booking("c", "Ravi", "", "5 Jalan Z, 50450 Kuala Lumpur", iso(day, 14), 2, "confirmed")]
+        self.assertTrue(scheduling.conflicts(later, iso(day, 16, 30), 1, "x"))    # too soon: travel gap of 45 minutes
         self.assertFalse(scheduling.conflicts(far, iso(day, 14), 2, "x"))
         far[0]["status"] = "cancelled"
         self.assertFalse(scheduling.conflicts(far, iso(day, 10), 2, "x"))
@@ -215,7 +219,7 @@ class DurationMessageTests(unittest.TestCase):
         service = priced_service()
         sent = []
         service.approve_quote("u1", lambda text: sent.append(text) or True)
-        self.assertIn("We expect the work to take about", sent[0])
+        self.assertIn("Time needed: about", sent[0])
         self.assertIn("hours on site with a team of 2", sent[0])
         self.assertIn("estimate", sent[0])
         self.assertNotIn("Labour", sent[0])
@@ -227,7 +231,7 @@ class DurationMessageTests(unittest.TestCase):
         service.store.save(state)
         sent = []
         service.approve_quote("u1", lambda text: sent.append(text) or True)
-        self.assertIn("Kami menjangka kerja ini mengambil masa kira-kira", sent[0])
+        self.assertIn("Tempoh kerja: kira-kira", sent[0])
 
 
 class BookingFlowTests(unittest.TestCase):
@@ -287,8 +291,8 @@ class BookingFlowTests(unittest.TestCase):
         confirmed = self.api.patch(f"/api/bookings/{booking['id']}", headers=KEY, json={"status": "confirmed"}).json()
         self.assertEqual(confirmed["status"], "confirmed")
         self.assertIn("you're booked in", self.sender.sent[-1][1])
-        moved = self.api.patch(f"/api/bookings/{booking['id']}", headers=KEY, json={"start": iso(self.day, 13)}).json()
-        self.assertEqual(moved["start"], iso(self.day, 13))
+        moved = self.api.patch(f"/api/bookings/{booking['id']}", headers=KEY, json={"start": iso(self.day, 14)}).json()
+        self.assertEqual(moved["start"], iso(self.day, 14))
         self.assertIn("has moved to", self.sender.sent[-1][1])
         self.assertEqual(self.api.get("/api/quotes/u1", headers=KEY).json()["stage"], "requires_approval")
         self.service.approve_quote("u1", lambda text: True)

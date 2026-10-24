@@ -1,4 +1,4 @@
-﻿import { mockApi } from "./mock";
+import { mockApi } from "./mock";
 import type { AuditEntry, Interval, ParamValue, PdfPreview, PipelineRow, QuoteDetail, Recalculation, Slot } from "./types";
 import type {
   AppEvent,
@@ -32,6 +32,13 @@ export function configureApi(next: Partial<ApiConfig>) {
 
 export function apiMode(): "mock" | "live" {
   return config.mock ? "mock" : "live";
+}
+
+/** Where to load a customer photo from. The backend gives "/api/media/<id>", which the web dashboard loads with its
+ * session cookie; the mobile app needs the full server address and its API key on the image request. */
+export function mediaSource(url: string): { uri: string; headers?: Record<string, string> } {
+  const uri = /^https?:\/\//.test(url) || !config.baseUrl ? url : `${config.baseUrl.replace(/\/$/, "")}${url}`;
+  return config.apiKey ? { uri, headers: { "x-api-key": config.apiKey } } : { uri };
 }
 
 export class ApiError extends Error {
@@ -121,6 +128,12 @@ export const api = {
   approveQuote(userId: string, total?: number): Promise<unknown> {
     if (config.mock) return guard(() => mockApi.approveQuote(userId, total));
     return http("POST", `/api/quotes/${encodeURIComponent(userId)}/approve`, total != null ? { total } : undefined);
+  },
+
+  /** The phone tells the backend where to send push notifications (a customer needs the owner, a quote waits). */
+  registerPush(token: string, platform: string): Promise<unknown> {
+    if (config.mock) return guard(async () => ({ registered: true }));
+    return http("POST", "/api/push/register", { token, platform });
   },
 
   listPersonas(): Promise<PersonasResponse> {

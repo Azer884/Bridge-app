@@ -75,6 +75,20 @@ STRINGS = {
         "address_ask_again": "What is the full address of the property, for example 12 Jalan Bunga, Taman Melati?",
         "wrap_nochange": "No problem. Is there anything you'd like to change? If everything above is right, reply yes.",
         "photo_wait": "One moment, I'm looking at the photo you sent.",
+        "est_head": "Good news from {business}! Here is your estimate:",
+        "est_total": "Estimate: {currency} {total:,.2f} (excluding any applicable tax)",
+        "est_room": "{name}: {size}", "est_room_name": "Room {n}",
+        "est_surfaces": "Surfaces: {value}", "est_paint": "Paint: {value}", "est_colour": "Colour: {value}",
+        "est_time": "Time needed: {value}", "est_date": "Preferred date: {value}",
+        "est_note": "This is an estimate only: the final price is confirmed once our team has checked the measurements on site. A team member will contact you to confirm the appointment.",
+        "est_pdf": "Your estimate is attached as a PDF.",
+        "final_head": "Update from {business}: here is your final price after the site visit.",
+        "final_total": "Final price: {currency} {total:,.2f} (excluding any applicable tax)",
+        "final_note": "Thank you for choosing us!",
+        "job_updated": "Got it, I've updated your job ({changes}). {owner} will send you the updated estimate shortly.",
+        "job_noted": "Got it, I've noted that ({changes}) and let {owner} know.",
+        "estimate_updated_intro": "Your estimate has been updated with the changes you asked for.",
+        "change_rooms": "rooms", "change_sizes": "room size",
         "colour_not_yet": "I haven't received the photo yet. It can take a moment to arrive, and I'll tell you as soon as I see it.",
         "colour_need_photo": "Send me a photo of the room and I'll suggest a colour that suits it.",
         "colour_suggest": "From your photo, the walls look {current}. These colours would go well: {options}. Which one would you like?",
@@ -215,6 +229,20 @@ STRINGS = {
         "address_ask_again": "Apakah alamat penuh hartanah itu, contohnya 12 Jalan Bunga, Taman Melati?",
         "wrap_nochange": "Baik. Ada apa-apa yang anda mahu ubah? Jika semuanya betul, balas ya.",
         "photo_wait": "Sekejap ya, saya sedang melihat gambar yang anda hantar.",
+        "est_head": "Berita baik daripada {business}! Ini anggaran anda:",
+        "est_total": "Anggaran: {currency} {total:,.2f} (tidak termasuk cukai jika berkenaan)",
+        "est_room": "{name}: {size}", "est_room_name": "Bilik {n}",
+        "est_surfaces": "Permukaan: {value}", "est_paint": "Cat: {value}", "est_colour": "Warna: {value}",
+        "est_time": "Tempoh kerja: {value}", "est_date": "Tarikh pilihan: {value}",
+        "est_note": "Ini hanyalah anggaran: harga akhir disahkan selepas pasukan kami menyemak ukuran sebenar di tapak. Seorang ahli pasukan akan menghubungi anda untuk mengesahkan temujanji.",
+        "est_pdf": "Anggaran anda dilampirkan sebagai PDF.",
+        "final_head": "Maklumat daripada {business}: ini harga akhir anda selepas lawatan tapak.",
+        "final_total": "Harga akhir: {currency} {total:,.2f} (tidak termasuk cukai jika berkenaan)",
+        "final_note": "Terima kasih kerana memilih kami!",
+        "job_updated": "Baik, saya telah kemas kini kerja anda ({changes}). {owner} akan menghantar anggaran baharu tidak lama lagi.",
+        "job_noted": "Baik, saya telah catat ({changes}) dan beritahu {owner}.",
+        "estimate_updated_intro": "Anggaran anda telah dikemas kini mengikut perubahan yang anda minta.",
+        "change_rooms": "bilik", "change_sizes": "saiz bilik",
         "colour_not_yet": "Saya belum terima gambar itu. Ia mungkin mengambil sedikit masa, dan saya akan beritahu sebaik sahaja saya nampak.",
         "colour_need_photo": "Hantar gambar bilik itu dan saya akan cadangkan warna yang sesuai.",
         "colour_suggest": "Daripada gambar anda, dinding nampak {current}. Warna ini sesuai: {options}. Yang mana anda mahu?",
@@ -293,9 +321,15 @@ STRINGS = {
 }
 
 
+_SENTENCE_START = re.compile(r"(^|[.!?]\s+)([a-z])")
+
+
 def t(key, lang="en", **kwargs):
     text = STRINGS.get(lang, STRINGS["en"]).get(key) or STRINGS["en"][key]
-    return text.format(**kwargs) if kwargs else text
+    text = text.format(**kwargs) if kwargs else text
+    if "owner" in kwargs:           # "{owner} will confirm" with no owner's name is "Our team will confirm"
+        text = _SENTENCE_START.sub(lambda m: m.group(1) + m.group(2).upper(), text)
+    return text
 
 
 _SPELLING = [(re.compile(r"\bmetres\b"), "meters"), (re.compile(r"\bmetre\b"), "meter"),

@@ -89,7 +89,7 @@ class PricingTests(unittest.TestCase):
 class FaqTests(unittest.TestCase):
     def test_price_question_never_gives_a_number(self):
         answer = flow.faq_answer("How much does it cost?", CONFIG, "contact")
-        self.assertIn("Daniel Tan", answer)
+        self.assertIn("ur team", answer)
         self.assertNotRegex(answer, r"\d")
 
     def test_statements_are_not_faq(self):

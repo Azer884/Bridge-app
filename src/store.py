@@ -120,6 +120,13 @@ class SqliteStore:
             row = conn.execute("SELECT data FROM bookings WHERE id=?", (booking_id,)).fetchone()
         return json.loads(row[0]) if row else None
 
+    def delete_conversation(self, conversation_id):
+        """Remove a customer completely: their state, messages, bookings and audit trail (the demo data)."""
+        with self._conn() as conn:
+            for table, column in (("conversations", "conversation_id"), ("messages", "conversation_id"),
+                                  ("bookings", "user_id"), ("audit", "user_id")):
+                conn.execute(f"DELETE FROM {table} WHERE {column}=?", (conversation_id,))
+
     def delete_booking(self, booking_id):
         with self._conn() as conn:
             return conn.execute("DELETE FROM bookings WHERE id=?", (booking_id,)).rowcount == 1

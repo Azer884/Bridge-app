@@ -41,6 +41,7 @@ def job_view(state):
     return {"address": v.get("address"), "surfaces": ", ".join(v.get("surfaces") or []) or None,
             "room_length_m": v.get("room_length_m"), "room_width_m": v.get("room_width_m"),
             "room_height_m": v.get("room_height_m"), "extra_rooms": v.get("extra_rooms") or [],
+            "room_name": v.get("room_name") or "",
             "surface_condition": v.get("surface_condition"),
             "preferred_datetime": v.get("preferred_datetime"), "paint_tier": v.get("paint_tier"),
             "colour": v.get("colour"), "name": customer_name(state),
@@ -182,6 +183,23 @@ def booking_view(booking, state=None):
     out["status"] = booking["status"]
     out["quote_status"] = front_status(state) if state and state.quote else "none"
     out["quote_total"] = ((state.quote or {}).get("approved_total") or (state.quote or {}).get("total")) if state else None
+    return out
+
+
+def booking_days_view(booking, state=None):
+    """A job that runs over several working days, as one calendar entry per day ("Siti (day 2 of 3)"). The extra days
+    carry the booking's id with "~d2", "~d3"; the booking routes read the id before the "~"."""
+    from .scheduling import booking_segments, working_days
+    base = booking_view(booking, state)
+    days = working_days(booking_segments(booking))
+    if len(days) <= 1:
+        return [base]
+    out = []
+    for number, (start, end) in enumerate(days, start=1):
+        out.append({**base, "id": base["id"] if number == 1 else f"{base['id']}~d{number}",
+                    "customer": f"{base['customer']} (day {number} of {len(days)})",
+                    "start": start.isoformat(), "end": end.isoformat(), "day": number, "days": len(days),
+                    "booking_id": base["id"]})
     return out
 
 

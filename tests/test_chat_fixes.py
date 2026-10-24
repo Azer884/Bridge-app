@@ -72,7 +72,7 @@ class ConversationHandlingTests(unittest.TestCase):
         state = new_state()
         out = handle_message(state, "Can I speak with a live agent", CONFIG, FakeClient())
         self.assertTrue(state.needs_human and state.attention)
-        self.assertIn("Daniel Tan", out.reply)
+        self.assertIn("our team", out.reply)
         self.assertNotIn("What can we help you with today", out.reply)
         self.assertEqual(state.followups[0]["text"], "Can I speak with a live agent")
         for text in ("talk to the owner please", "I want a real person", "call me", "cakap dengan pemilik"):
@@ -84,7 +84,7 @@ class ConversationHandlingTests(unittest.TestCase):
         first = handle_message(state, "I need the exterior of my condo painted", CONFIG, FakeClient()).reply
         self.assertIn("interior", first)
         again = handle_message(state, "hello?", CONFIG, FakeClient()).reply
-        self.assertIn("passed your request to Daniel Tan", again)
+        self.assertIn("passed your request to our team", again)
         self.assertNotEqual(first, again)
         self.assertNotIn("What can we help you with today", again)
         handle_message(state, "test", CONFIG, FakeClient())

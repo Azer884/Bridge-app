@@ -35,12 +35,13 @@ def photo_summary(assessment, lang="en"):
 
 class IncomingService:
     def __init__(self, store, config, client, handler=handle_message, photo_assessor=None, transcriber=None,
-                 colour_assessor=None):
+                 colour_assessor=None, notify=None):
         """photo_assessor(media_id) -> ConditionAssessment or None; it may raise.
         transcriber(media_id) -> (text, language) for a voice note, or None; it may raise."""
         self.store, self.config, self.client, self.handler = store, config, client, handler
         self.photo_assessor, self.transcriber = photo_assessor, transcriber
         self.colour_assessor = colour_assessor      # colour_assessor(media_id) -> {"current", "suggestions"} or None
+        self.notify = notify                        # notify(title, body, data) -> push to the owner's phone
 
     def _turn_config(self):
         """The business config plus the persona the dashboard has selected right now."""
@@ -82,7 +83,15 @@ class IncomingService:
             return reply
         uid = state.conversation_id
         if state.quote is not None:
-            if state.quote_stale and state.quote_status in ("pending_approval", "needs_inspection"):
+            if state.quote_stale and state.quote_status in ("approved", "final"):
+                was = state.quote.get("final_total") or state.quote.get("approved_total") or state.quote.get("total")
+                quote = self._reprice(state)            # back to "waiting for approval" at the new price
+                if quote is not None:
+                    state.quote["previous_total"] = was
+                    self.store.add_audit(uid, "customer", "state_change",
+                                         f"The customer changed the job after the estimate was sent; re-priced at "
+                                         f"{quote.currency} {quote.total:,.2f} (was {quote.currency} {was:,.2f})")
+            elif state.quote_stale and state.quote_status in ("pending_approval", "needs_inspection"):
                 quote = self._reprice(state)
                 if quote is not None:
                     self.store.add_audit(uid, "system", "calculation", f"Draft recalculated after a corrected size: "
@@ -198,7 +207,7 @@ class IncomingService:
                         "orders": s.orders + ([current] if current else [])})
         return out
 
-    def approve_quote(self, user_id, send, total=None):
+    def approve_quote(self, user_id, send, total=None, send_pdf=None):
         """SME approval. Sends the customer the estimate and how long the job takes (never the breakdown);
         the quote is marked approved only if the send worked. Raises ValueError when nothing is waiting."""
         with self.store.lock(user_id):
@@ -207,7 +216,10 @@ class IncomingService:
                 raise ValueError("no quote is waiting for approval")
             amount = state.quote["total"] if total is None else total
             message = approved_quote_message(amount, state.quote["currency"], self.config.get("business_name", "us"),
-                                             state.lang, state.quote.get("schedule"))
+                                             state.lang, state.quote.get("schedule"), state.verified,
+                                             pdf=send_pdf is not None)
+            if state.quote.get("previous_total") is not None:
+                message = f"{t('estimate_updated_intro', state.lang)}\n\n{message}"
             if not send(message):
                 return False
             state.quote["approved_total"], state.quote_status = amount, "approved"
@@ -217,6 +229,14 @@ class IncomingService:
             self.store.add_audit(user_id, "owner", "state_change",
                                  f"Estimate approved: {state.quote['currency']} {amount:,.2f}")
             self.store.add_audit(user_id, "system", "send", "Estimate and duration sent to the customer on WhatsApp")
+            if send_pdf is not None:
+                from .pdf import estimate_pdf
+                data = estimate_pdf(self.config.get("business_name", ""), views.customer_name(state),
+                                    views.job_view(state), state.quote)
+                if send_pdf(data, f"estimate-{self.config.get('business_name', 'painting').split()[0].lower()}.pdf"):
+                    self.store.add_audit(user_id, "system", "send", "Estimate PDF sent to the customer on WhatsApp")
+                else:
+                    self.store.log_event("send_failed", f"{user_id}: the estimate PDF could not be sent")
             return True
 
     def confirm_final(self, user_id, send, total):
@@ -227,7 +247,7 @@ class IncomingService:
             if state.quote_status != "approved":
                 raise ValueError("the estimate must be approved before a final price is confirmed")
             message = final_quote_message(total, state.quote["currency"], self.config.get("business_name", "us"),
-                                          state.lang)
+                                          state.lang, state.verified)
             if not send(message):
                 return False
             state.quote["final_total"], state.quote_status = total, "final"
@@ -258,8 +278,27 @@ class IncomingService:
         for booking in self.store.bookings():
             if (low and scheduling.parse_time(booking["end"]) < low) or (high and scheduling.parse_time(booking["start"]) > high):
                 continue
-            out.append(views.booking_view(booking, self.store.load(booking["user_id"])))
+            for piece in views.booking_days_view(booking, self.store.load(booking["user_id"])):
+                if (low and scheduling.parse_time(piece["end"]) < low) or (high and scheduling.parse_time(piece["start"]) > high):
+                    continue
+                out.append(piece)
         return out
+
+    # --- demo data for filming: fake customers with quotes and a busy calendar ------------------------
+    def seed_demo(self, now=None):
+        """Replace any earlier demo data with a believable fortnight: customers in Klang Valley areas, their chats,
+        priced estimates and bookings (one of them over three days). Every id starts with "demo-"."""
+        from . import demo
+        self.clear_demo()
+        return demo.seed(self, now)
+
+    def clear_demo(self):
+        removed = 0
+        for state in self.store.conversations():
+            if state.conversation_id.startswith("demo-"):
+                self.store.delete_conversation(state.conversation_id)
+                removed += 1
+        return removed
 
     def create_booking(self, user_id, start, end, send):
         """Offer a slot to the customer: stored as tentative, asked on WhatsApp, confirmed on their yes.
@@ -472,8 +511,41 @@ class IncomingService:
                 self.store.release_message(event.message_id)
             raise
 
+    def _alert(self, state, before, event):
+        """Push the owner when something now needs them: an estimate to approve, a customer asking for a person or
+        changing the job, a booking answered. Only on the change, not on every later message."""
+        if not self.notify:
+            return
+        human, attention, status, booking_id = before
+        name = views.customer_name(state)
+        data = {"user_id": state.conversation_id, "name": name}
+        quote = state.quote or {}
+        if state.quote_status != status and state.quote_status in ("pending_approval", "needs_inspection"):
+            if state.quote_status == "needs_inspection":
+                title, body = "Inspection needed", f"{name} needs a site inspection before a price"
+            elif quote.get("previous_total") is not None and status in ("approved", "final"):
+                title = "Changed job: approve the new price"
+                body = (f"{name}: {quote.get('currency', '')} {quote.get('total', 0):,.2f} "
+                        f"(was {quote.get('previous_total'):,.2f})")
+            else:
+                title, body = "Estimate to approve", f"{name}: {quote.get('currency', '')} {quote.get('total', 0):,.2f}"
+        elif booking_id and not state.pending_booking:
+            booking = self.store.get_booking(booking_id) or {}
+            answer = "accepted" if booking.get("status") == "confirmed" else "declined"
+            title, body = f"Booking {answer}", f"{name} {answer} the time you offered"
+        elif (state.needs_human and not human) or (state.attention and not attention):
+            said = (event.text or "").strip() or f"[{event.type}]"
+            title, body = "A customer needs you", f"{name}: {said[:150]}"
+        else:
+            return
+        try:
+            self.notify(title, body, data)
+        except Exception:
+            log.exception("could not notify the owner")
+
     def _handle_locked(self, event):
         state = self.store.load(event.user_id)
+        before = (state.needs_human, state.attention, state.quote_status, (state.pending_booking or {}).get("id"))
         if not state.history and not state.channel:
             channel = {"name": clean_profile_name(event.profile_name),
                        "phone": clean_profile_phone(event.phone or "+" + event.user_id)}
@@ -538,4 +610,5 @@ class IncomingService:
         self.store.save(state)
         if reply:
             self.store.log_message(event.user_id, "out", reply)
+        self._alert(state, before, event)
         return [reply] if reply else []

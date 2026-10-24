@@ -5,7 +5,7 @@ The estimate letter shows the job and the estimated total only: the price breakd
 from datetime import datetime
 
 from .calendar_scheduler import TZ
-from .quote_message import duration_text
+from .quote_message import duration_text, job_lines
 
 
 def _escape(text):
@@ -21,7 +21,7 @@ def make_pdf(lines):
         for chunk in [text[i:i + 90] for i in range(0, max(len(text), 1), 90)]:
             body.append(f"BT /F{2 if bold else 1} {size} Tf 56 {y} Td ({_escape(chunk)}) Tj ET")
             y -= 0 if len(text) <= 90 else size + 2
-    stream = "\n".join(body).encode("latin-1")
+    stream = "\n".join(body).encode("latin-1", "replace")      # the built-in PDF fonts only have Latin-1
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
@@ -46,20 +46,19 @@ def make_pdf(lines):
 def estimate_pdf(business, customer, job, quote):
     """The estimate letter for one customer. `quote` is the engine's dict (its total and schedule are used)."""
     total = quote.get("approved_total") or quote["total"]
-    surfaces = job.get("surfaces") or "-"
-    size = (f"{job['room_length_m']:g} m long x {job['room_height_m']:g} m high" if job.get("room_width_m") is None
-             else f"{job['room_length_m']:g} x {job['room_width_m']:g} x {job['room_height_m']:g} m")
-    more = job.get("extra_rooms") or []
-    if more:
-        size += "".join(
-            f"; {e.get('name') or 'room'} {e['room_length_m']:g} x {e.get('room_width_m') or 0:g} x {e.get('room_height_m') or 0:g} m"
-            for e in more)
+    verified = {"surfaces": [s.strip() for s in (job.get("surfaces") or "").split(",") if s.strip()],
+                "room_length_m": job.get("room_length_m"), "room_width_m": job.get("room_width_m"),
+                "room_height_m": job.get("room_height_m"), "room_name": job.get("room_name") or "",
+                "extra_rooms": job.get("extra_rooms") or [], "paint_tier": job.get("paint_tier") or "standard",
+                "colour": job.get("colour")}
     lines = [(business, 20, True), ("Painting estimate", 14, True),
              (datetime.now(TZ).strftime("%d %b %Y"), 10, False), ("", 8, False),
-             (f"Customer: {customer}", 11, False), (f"Address: {job.get('address') or '-'}", 11, False),
-             (f"Surfaces: {surfaces}", 11, False), (f"Size: {size}", 11, False),
-             (f"Paint: {job.get('paint_tier') or 'standard'}", 11, False), ("", 8, False),
-             (f"Estimated total: {quote['currency']} {total:,.2f} (excluding any applicable tax)", 14, True)]
+             (f"Customer: {customer}", 11, False), (f"Address: {job.get('address') or '-'}", 11, False), ("", 6, False)]
+    lines += [("- " + line, 11, False) for line in job_lines(verified)]
+    if job.get("preferred_datetime"):
+        lines.append((f"- Preferred date: {job['preferred_datetime']}", 11, False))
+    lines += [("", 8, False),
+              (f"Estimated total: {quote['currency']} {total:,.2f} (excluding any applicable tax)", 14, True)]
     time_needed = duration_text(quote.get("schedule"))
     if time_needed:
         lines.append((f"Estimated time: {time_needed}", 11, False))

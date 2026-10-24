@@ -49,6 +49,48 @@ class WhatsAppSender:
             raise ValueError("media url is not https")
         return self._get(url, MAX_MEDIA), meta.get("mime_type", "")
 
+    def send_document(self, to, data, filename, caption=""):
+        """Upload a file (the estimate PDF) to WhatsApp and send it to the customer. True on success; failures are
+        logged, never raised."""
+        boundary = "----gesir" + hashlib.sha1(data[:64] + filename.encode()).hexdigest()[:16]
+        parts = []
+        for name, value in (("messaging_product", "whatsapp"), ("type", "application/pdf")):
+            parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode())
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="{filename}"\r\n'
+                     f"Content-Type: application/pdf\r\n\r\n".encode() + data + b"\r\n")
+        parts.append(f"--{boundary}--\r\n".encode())
+        upload = urllib.request.Request(
+            f"https://graph.facebook.com/{GRAPH_VERSION}/{self.phone_number_id}/media", data=b"".join(parts),
+            headers={"Authorization": f"Bearer {self.token}", "Content-Type": f"multipart/form-data; boundary={boundary}"})
+        try:
+            with urllib.request.urlopen(upload, timeout=30) as resp:
+                media_id = json.load(resp)["id"]
+        except (urllib.error.URLError, TimeoutError, KeyError, ValueError) as err:
+            detail = err.read()[:300].decode("utf-8", "replace") if isinstance(err, urllib.error.HTTPError) else str(err)
+            self.last_error = f"upload failed: {detail}"
+            log.error("WhatsApp document upload failed: %s", detail)
+            return False
+        body = {"messaging_product": "whatsapp", "to": to, "type": "document",
+                "document": {"id": media_id, "filename": filename, "caption": caption[:1000]}}
+        return self._post_message(body)
+
+    def _post_message(self, body):
+        req = urllib.request.Request(
+            f"https://graph.facebook.com/{GRAPH_VERSION}/{self.phone_number_id}/messages",
+            data=json.dumps(body).encode(),
+            headers={"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=20):
+                return True
+        except urllib.error.HTTPError as err:
+            self.last_error = f"HTTP {err.code} {err.read()[:500].decode('utf-8', 'replace')}"
+            log.error("WhatsApp send failed: %s", self.last_error)
+            return False
+        except (urllib.error.URLError, TimeoutError) as err:
+            self.last_error = str(err)
+            log.error("WhatsApp send failed: %s", err)
+            return False
+
     def send_text(self, to, text):
         """Returns True on success. Failures are logged, never raised: a failed send must not
         make the webhook fail and trigger duplicate deliveries."""

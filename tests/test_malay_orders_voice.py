@@ -262,7 +262,7 @@ class WaitingPeriodTests(unittest.TestCase):
         for text in ("ok", "ok", "ok"):
             handle_message(state, text, CONFIG, FakeClient())
         out = handle_message(state, "this is urgent, please call me", CONFIG, FakeClient())
-        self.assertIn("Daniel Tan", out.reply)
+        self.assertIn("ur team", out.reply)
         self.assertTrue(state.attention)
         self.assertTrue(any("urgent" in f["text"] for f in state.followups))
 

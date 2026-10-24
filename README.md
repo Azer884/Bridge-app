@@ -185,6 +185,10 @@ npx expo start           # scan the QR code with Expo Go, or press a for an Andr
 
 With `EXPO_PUBLIC_USE_MOCK=true` (the default in `.env.example`) the app runs on sample data and needs no backend. On a phone, `EXPO_PUBLIC_API_URL` must be a reachable URL (the Replit URL or your PC's LAN IP), not `localhost`.
 
+**Try the Android app**
+
+Download the dashboard app for Android: [Gesir dashboard APK](https://expo.dev/artifacts/eas/6ZV8hhM0K5X0U1nYQwdo0DmjPcMcjK6iT5dhvIhgdio.apk). Open the link on an Android phone, install the downloaded file, and allow "install unknown apps" if Android asks. It connects to the live backend at `https://Gesir-AI.replit.app`.
+
 **Build the APK** (cloud build with EAS, no Android SDK needed)
 
 ```bash
@@ -198,7 +202,7 @@ eas build -p android --profile preview
 
 `eas.json` defines the `preview` profile: it builds an `.apk`, turns sample data off, points at `https://Gesir-AI.replit.app` and enables live bookings. Change `EXPO_PUBLIC_API_URL` there if your backend is elsewhere. When the build finishes EAS prints a download link; open it on the phone and install the APK (allow "install unknown apps" if Android asks).
 
-**Security:** `EXPO_PUBLIC_` values are bundled into the app, so the `INCOMING_API_KEY` is inside the APK and can be extracted. Share the APK and its download link only with people you trust, and do not put the link in public places, until the backend has real per-user login.
+**Security:** `EXPO_PUBLIC_` values are bundled into the app, so the `INCOMING_API_KEY` is inside the APK and can be extracted. The download link above is public for the hackathon judging; rotate `INCOMING_API_KEY` (on Replit and in the EAS `preview` environment) and rebuild the app once judging is over, and add real per-user login before any production use.
 
 ---
 

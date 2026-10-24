@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Image, Linking, Modal, Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { api, explainError } from "../../../shared/api";
+import { api, explainError, mediaSource } from "../../../shared/api";
 import { phone } from "../../../shared/format";
 import type { ChatMessage, Photo } from "../../../shared/types";
 import { C, F } from "../theme";
@@ -21,7 +21,7 @@ function Thumb({ p, w, h, onPress }: { p: Photo; w: number; h: number; onPress: 
           <T v="foot" numberOfLines={2} style={{ textAlign: "center" }}>{p.caption}</T>
         </View>
       ) : (
-        <Image source={{ uri: p.url }} style={{ width: w, height: h }} resizeMode="cover" onError={() => setBad(true)} accessibilityLabel={p.caption} />
+        <Image source={mediaSource(p.url)} style={{ width: w, height: h }} resizeMode="cover" onError={() => setBad(true)} accessibilityLabel={p.caption} />
       )}
     </Pressable>
   );
@@ -53,7 +53,7 @@ export function PhotoViewer({ photos, index, onClose }: { photos: Photo[]; index
             {bad ? (
               <View style={{ width, alignItems: "center", padding: 32 }}><T style={{ color: "#EAF1F1" }}>{p.caption}</T></View>
             ) : (
-              <Image source={{ uri: p.url }} style={{ width: width * zoom, height: width * zoom * 0.75 }} resizeMode="contain" onError={() => setBad(true)} accessibilityLabel={p.caption} />
+              <Image source={mediaSource(p.url)} style={{ width: width * zoom, height: width * zoom * 0.75 }} resizeMode="contain" onError={() => setBad(true)} accessibilityLabel={p.caption} />
             )}
           </ScrollView>
         </ScrollView>
