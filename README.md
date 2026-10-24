@@ -25,7 +25,7 @@ The first version is built for Malaysian painting businesses.
 | GitHub Repository | https://github.com/Azer884/Bridge-app          |
 | Replit Project    | https://replit.com/@AzerHamdaoui/Bridge-app    |
 | Live Demo         | https://gesir-ai.replit.app (the dashboard is at `/app`; demo password: `TiJedWeldikYa5ra3fest3al5ra9omtnl9a5ryaBh8aElFarch`) |
-| RunPod Endpoints  | text model `ose8agxpb9p1mr`, vision model `m3a8r7m8ebibba` (`https://api.runpod.ai/v2/<id>/runsync`) |
+| RunPod Endpoints  | text model `ose8agxpb9p1mr`, vision model `m3a8r7m8ebibba`, speech-to-text (Faster Whisper) `nvnrh39cdxgymr` (`https://api.runpod.ai/v2/<id>/runsync`) |
 | Slide Deck        | https://canva.link/gesir-ai                    |
 | Demo Video        | https://example.com/demo-video                 |
 
@@ -131,6 +131,7 @@ Set these in Replit **Secrets**, or in a local `.env` (never commit it). `.env.e
 | -------- | ------- |
 | `RUNPOD_API_KEY`, `RUNPOD_ENDPOINT_ID` | chat model endpoint |
 | `RUNPOD_VISION_API_KEY`, `RUNPOD_VISION_ENDPOINT_ID` | photo model endpoint |
+| `STT_RUNPOD_ENDPOINT_ID`, `STT_RUNPOD_API_KEY` | voice-note transcription on RunPod's Faster Whisper endpoint; empty means the server transcribes on its own CPU |
 | `INCOMING_API_KEY` | key for the dashboard API and scripts (`x-api-key`) |
 | `DASHBOARD_PASSWORD`, `SESSION_SECRET` | dashboard sign-in and its cookie signing |
 | `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET` | receiving WhatsApp webhooks |
@@ -217,7 +218,7 @@ eas build -p android --profile preview
 
 ## How We Use RunPod *(Required)*
 
-- **Workload:** both AI models run on RunPod serverless GPU endpoints that use the vLLM worker: `Qwen/Qwen2.5-7B-Instruct` writes the conversation and `Qwen/Qwen2.5-VL-7B-Instruct` reads photos of the walls.
+- **Workload:** both AI models run on RunPod serverless GPU endpoints that use the vLLM worker: `Qwen/Qwen2.5-7B-Instruct` writes the conversation and `Qwen/Qwen2.5-VL-7B-Instruct` reads photos of the walls. Voice notes are transcribed on RunPod's Faster Whisper endpoint (`nvnrh39cdxgymr`).
 - **Integration:** `src/runpod_client.py` calls the endpoints with `RUNPOD_API_KEY` and the endpoint ids, and polls for the result when a worker is cold-starting (2 to 5 minutes). The dashboard's Status page shows each model's readiness.
 - **Cost control:** the endpoints scale to zero when idle. For a live demo, set Min Workers to 1.
 
