@@ -5,6 +5,7 @@
     POST /webhook          Meta messages, HMAC-verified, answered in the background
     POST /incoming         flat JSON from n8n or any other front door -> {"replies": [...]}
   GET  /api/events                        recent webhook, send and error events (x-api-key)
+  GET  /api/storage                       which database is in use and its row counts (x-api-key)
   SME quotations (x-api-key; the dashboard will call these)
     GET  /api/quotes                        drafts waiting for approval, with the price breakdown
     POST /api/quotes/{user_id}/approve      optional {"total": n}; sends the customer the estimate only
@@ -243,6 +244,11 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         if assessment is None:
             raise HTTPException(502, "vision model returned no usable assessment")
         return dataclasses.asdict(assessment)
+
+    @app.get("/api/storage")
+    def storage(request: Request):
+        require_key(request)
+        return service.store.stats()
 
     @app.get("/api/events")
     def recent_events(request: Request, limit: int = Query(50, ge=1, le=200)):

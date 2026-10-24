@@ -19,6 +19,7 @@ class MakeStoreTests(unittest.TestCase):
             store = make_store({}, os.path.join(directory, "a.db"))
             self.assertIsInstance(store, SqliteStore)
             self.assertNotIsInstance(store, PostgresStore)
+            self.assertEqual(store.stats(), {"backend": "sqlite", "conversations": 0, "messages": 0, "events": 0})
             store = make_store({"DATABASE_PATH": os.path.join(directory, "b.db"), "DATABASE_URL": "sqlite:///x"}, "unused")
             self.assertTrue(store.path.endswith("b.db"))
 
@@ -45,6 +46,11 @@ class PostgresStoreTests(unittest.TestCase):
         self.store.save(state)                                  # upsert, not a duplicate row
         self.assertEqual([s.stage for s in self.store.conversations()], ["done"])
         self.assertEqual(self.store.load("nobody").conversation_id, "nobody")
+
+    def test_stats_report_the_backend(self):
+        self.store.save(ConversationState("u1"))
+        stats = self.store.stats()
+        self.assertEqual((stats["backend"], stats["conversations"]), ("postgres", 1))
 
     def test_message_ids_are_claimed_once_and_can_be_released(self):
         self.assertTrue(self.store.claim_message("m1", "u1"))

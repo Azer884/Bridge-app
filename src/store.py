@@ -93,6 +93,15 @@ class SqliteStore:
             rows = conn.execute("SELECT ts, kind, detail FROM events ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
         return [{"ts": ts, "kind": kind, "detail": detail} for ts, kind, detail in rows]
 
+    backend = "sqlite"
+
+    def stats(self):
+        """Which database is in use and how much it holds: the quick check that data survives a republish."""
+        with self._conn() as conn:
+            counts = {table: conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+                      for table in ("conversations", "messages", "events")}
+        return {"backend": self.backend, **counts}
+
     def conversations(self):
         with self._conn() as conn:
             rows = conn.execute("SELECT state FROM conversations").fetchall()
@@ -151,6 +160,8 @@ class _PgConnection:
 
 class PostgresStore(SqliteStore):
     """The same store on PostgreSQL (Replit's database). Needs `psycopg[binary]`."""
+
+    backend = "postgres"
 
     def __init__(self, url):
         self.url = url
