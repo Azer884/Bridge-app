@@ -2,12 +2,55 @@ import type { ChatMessage, Photo } from "@shared/types";
 import { phone } from "@shared/format";
 import { Lightbox, PhotoGrid } from "./Lightbox";
 import { useState } from "react";
+import { api, explainError } from "@shared/api";
+import { useToast } from "../ui/Toast";
 
 const time = (iso: string) => new Date(iso).toLocaleString("en-MY", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 const WHO = { customer: "Customer", assistant: "Gesir", owner: "You" } as const;
 
-export function ChatPanel({ name, number, chat, photos }: { name: string; number: string; chat: ChatMessage[]; photos: Photo[] }) {
+interface ChatProps {
+  name: string;
+  number: string;
+  chat: ChatMessage[];
+  photos: Photo[];
+  userId: string;
+  needsHuman?: boolean;
+  humanActive?: boolean;
+  onSent: () => void;
+}
+
+export function ChatPanel({ name, number, chat, photos, userId, needsHuman, humanActive, onSent }: ChatProps) {
+  const toast = useToast();
   const [open, setOpen] = useState<number | null>(null);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function send() {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.sendOwnerMessage(userId, text.trim());
+      setText("");
+      toast(`Message sent to ${name}`);
+      onSent();
+    } catch (e) {
+      setErr(explainError(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resume() {
+    try {
+      await api.resumeAssistant(userId);
+      toast("The assistant is replying again");
+      onSent();
+    } catch (e) {
+      setErr(explainError(e));
+    }
+  }
   const byId = new Map(photos.map((p, i) => [p.id, i]));
 
   return (
@@ -45,6 +88,25 @@ export function ChatPanel({ name, number, chat, photos }: { name: string; number
             </div>
           ))}
         </div>
+        {needsHuman && !humanActive && <p className="alert warm" role="status">The assistant asked for a person. Write to {name} below.</p>}
+        {humanActive && (
+          <p className="hint" role="status">
+            You are replying by hand, so the assistant is paused for {name}. <button className="btn small" onClick={resume}>Let the assistant continue</button>
+          </p>
+        )}
+        <div className="composer">
+          <textarea
+            className="input"
+            rows={2}
+            maxLength={1000}
+            placeholder={`Write to ${name} on WhatsApp, in place of the assistant`}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            aria-label={`Message to ${name}`}
+          />
+          <button className="btn" onClick={send} disabled={busy || !text.trim()}>{busy ? "Sending…" : "Send"}</button>
+        </div>
+        {err && <div className="alert" role="alert">{err}</div>}
       </section>
       <section className="panel">
         <h2>Photos from the customer</h2>

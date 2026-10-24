@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Image, Linking, Modal, Pressable, ScrollView, useWindowDimensions, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { api, explainError } from "../../../shared/api";
 import { phone } from "../../../shared/format";
 import type { ChatMessage, Photo } from "../../../shared/types";
 import { C, F } from "../theme";
-import { Btn, Group, Row, T } from "../ui";
+import { Banner, Btn, Field, Group, Row, T, success } from "../ui";
 
 const time = (iso: string) => new Date(iso).toLocaleString("en-MY", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
 const WHO = { customer: "Customer", assistant: "Gesir", owner: "You" } as const;
@@ -67,8 +68,47 @@ export function PhotoViewer({ photos, index, onClose }: { photos: Photo[]; index
   );
 }
 
-export function ChatView({ name, number, chat, photos }: { name: string; number: string; chat: ChatMessage[]; photos: Photo[] }) {
+interface ChatProps {
+  name: string;
+  number: string;
+  chat: ChatMessage[];
+  photos: Photo[];
+  userId: string;
+  needsHuman?: boolean;
+  humanActive?: boolean;
+  onSent: () => void;
+}
+
+export function ChatView({ name, number, chat, photos, userId, needsHuman, humanActive, onSent }: ChatProps) {
   const [open, setOpen] = useState<number | null>(null);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<unknown>(null);
+
+  async function send() {
+    if (!text.trim() || busy) return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await api.sendOwnerMessage(userId, text.trim());
+      success();
+      setText("");
+      onSent();
+    } catch (e) {
+      setErr(e);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function resume() {
+    try {
+      await api.resumeAssistant(userId);
+      onSent();
+    } catch (e) {
+      setErr(e);
+    }
+  }
   const idx = new Map(photos.map((p, i) => [p.id, i]));
   const { width } = useWindowDimensions();
   const cell = Math.floor((width - 32 - 16) / 3);
@@ -102,6 +142,16 @@ export function ChatView({ name, number, chat, photos }: { name: string; number:
           );
         })}
       </View>
+
+      {needsHuman && !humanActive ? <Banner kind="warn" text={`The assistant asked for a person. Write to ${name} below.`} /> : null}
+      {humanActive ? <Banner kind="info" text={`You are replying by hand, so the assistant is paused for ${name}.`} action="Let the assistant continue" onAction={resume} /> : null}
+      <Group title="Reply on WhatsApp" footer="Sent from your number in place of the assistant. It stays quiet for 30 minutes after.">
+        <View style={{ padding: 12, gap: 10 }}>
+          <Field label={`Message to ${name}`} multiline maxLength={1000} placeholder="Write a message" value={text} onChangeText={setText} style={{ minHeight: 84, textAlignVertical: "top" }} />
+          {err != null ? <Banner text={explainError(err)} /> : null}
+          <Btn label="Send" busy={busy} disabled={!text.trim()} onPress={send} />
+        </View>
+      </Group>
 
       <View style={{ gap: 8 }}>
         <T v="label" style={{ paddingHorizontal: 16 }}>Photos from the customer</T>

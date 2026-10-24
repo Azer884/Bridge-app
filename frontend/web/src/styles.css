@@ -491,6 +491,8 @@ a.btn { text-decoration: none; }
 .checks { display: grid; gap: 10px; padding-left: 20px; margin: 0; }
 .checks .warnline { color: var(--danger-ink); font-weight: 600; }
 
+.composer { display: flex; gap: 8px; align-items: flex-end; margin-top: 12px; }
+.composer .input { flex: 1; resize: vertical; }
 .chat-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
 .chat { display: grid; gap: 10px; background: var(--muted); border-radius: 12px; padding: 14px; max-height: 520px; overflow: auto; }
 .bubble-row { display: flex; }

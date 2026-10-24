@@ -8,6 +8,7 @@ import { useAsync } from "../hooks";
 import { Modal } from "../ui/Modal";
 import { useToast } from "../ui/Toast";
 import { AuditLog } from "./AuditLog";
+import { FinalPrice } from "./FinalPrice";
 import { ChatPanel } from "./ChatPanel";
 import { ParamsForm } from "./ParamsForm";
 import { PdfPanel } from "./PdfPanel";
@@ -124,7 +125,11 @@ function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<voi
           <div>
             <h2>{d.job.name ?? "Unnamed customer"}</h2>
             <p className="num">{phone(d.job.phone ?? d.user_id)}</p>
-            <p className="muted">{d.job.address ?? "No address yet"}</p>
+            <p className="muted">
+              {d.job.address ?? "No address yet"}
+              {d.job.location && <> · <a href={d.job.location.maps_url} target="_blank" rel="noreferrer">Open in Maps</a></>}
+            </p>
+            {(d.needs_human || d.attention) && <p className="alert warm" role="status">Needs you: open the chat tab to reply.</p>}
           </div>
           <span className={`stage-chip s-${d.stage}`} title={stage?.hint}>{stage?.label}</span>
         </div>
@@ -136,7 +141,7 @@ function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<voi
         </div>
       </section>
 
-      {tab === "chat" && <ChatPanel name={d.job.name ?? "Customer"} number={d.job.phone ?? d.user_id} chat={d.chat} photos={d.photos} />}
+      {tab === "chat" && <ChatPanel name={d.job.name ?? "Customer"} number={d.job.phone ?? d.user_id} chat={d.chat} photos={d.photos} userId={d.user_id} needsHuman={d.needs_human} humanActive={d.human_active} onSent={() => void reload()} />}
 
       {tab === "activity" && (
         <section className="panel">
@@ -223,6 +228,10 @@ function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<voi
                 </div>
               )}
             </section>
+          )}
+
+          {quote && (d.status === "approved" || d.status === "completed") && (
+            <FinalPrice userId={d.user_id} name={d.job.name ?? "customer"} number={d.job.phone ?? d.user_id} quote={quote} open={d.status === "approved"} onSent={() => { onChanged(); void reload(); }} />
           )}
 
           {quote && params && (

@@ -13,6 +13,8 @@ export interface Job {
   preferred_datetime?: string;
   name?: string;
   phone?: string;
+  /** A location the customer shared on WhatsApp; maps_url opens it in Google Maps. */
+  location?: { lat: number; lon: number; name?: string; address?: string; maps_url: string } | null;
 }
 
 export interface QuoteLine {
@@ -35,6 +37,28 @@ export interface QuoteDraft {
   minimum_charge_applied: boolean;
   /** Set by the calculation engine. */
   labor_hours?: number;
+  /** What the customer was sent as the estimate, and later as the final price after the visit. */
+  approved_total?: number;
+  final_total?: number;
+}
+
+export interface CustomerOrder {
+  quote: QuoteDraft | null;
+  quote_status?: string;
+  created_at?: number;
+  open?: boolean;
+}
+
+/** One customer with every job they have had, for order tracking. */
+export interface Customer {
+  user_id: string;
+  name: string | null;
+  phone: string | null;
+  lang?: string;
+  stage?: string;
+  attention?: boolean;
+  needs_human?: boolean;
+  orders: CustomerOrder[];
 }
 
 export interface QuoteItem {
@@ -46,6 +70,11 @@ export interface QuoteItem {
   /** Not in the documented schema; shown when the backend sends it. */
   updated_at?: string;
   stage?: Stage;
+  /** The assistant asked for a human, or the customer wrote something important while waiting. */
+  needs_human?: boolean;
+  attention?: boolean;
+  /** The owner is replying by hand: the assistant is paused for this customer. */
+  human_active?: boolean;
 }
 
 export type ParamValue = string | number | boolean | null;

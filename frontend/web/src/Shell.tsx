@@ -1,4 +1,4 @@
-﻿import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet } from "react-router-dom";
 import { api, apiMode } from "@shared/api";
 import { useAsync } from "./hooks";
 import { ThemeToggle } from "./ui/ThemeToggle";
@@ -26,6 +26,10 @@ export default function Shell() {
           <NavLink to="/app/pipeline">
             <IconPipeline />
             Pipeline
+          </NavLink>
+          <NavLink to="/app/customers">
+            <IconPersona />
+            Customers
           </NavLink>
           <NavLink to="/app/calendar">
             <IconCalendar />

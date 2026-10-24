@@ -13,6 +13,7 @@ export default function SettingsScreen() {
     <Screen>
       <Group title="Gesir">
         <Row left={ic("logo-whatsapp")} title="WhatsApp number" subtitle="Link the number Gesir chats from" onPress={() => nav.navigate("Link")} />
+        <Row left={ic("people-outline")} title="Customers" subtitle="Everyone Gesir has talked to" onPress={() => nav.navigate("Customers")} />
         <Row left={ic("person-circle-outline")} title="Personas" subtitle="The character customers talk to" onPress={() => nav.navigate("Personas")} />
         <Row left={ic("pulse-outline")} title="Status" subtitle="Models and recent events" onPress={() => nav.navigate("Status")} />
       </Group>

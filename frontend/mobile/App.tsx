@@ -9,6 +9,7 @@ import { useFonts, Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold, F
 import { BricolageGrotesque_700Bold } from "@expo-google-fonts/bricolage-grotesque";
 import { api, configureApi } from "../shared/api";
 import CalendarScreen from "./src/screens/CalendarScreen";
+import CustomersScreen from "./src/screens/CustomersScreen";
 import LinkScreen from "./src/screens/LinkScreen";
 import PersonasScreen from "./src/screens/PersonasScreen";
 import PipelineScreen from "./src/screens/PipelineScreen";
@@ -86,6 +87,8 @@ function SettingsStack() {
       <Settings.Screen name="Link" component={LinkScreen} options={{ title: "WhatsApp number" }} />
       <Settings.Screen name="Personas" component={PersonasScreen} options={{ title: "Personas" }} />
       <Settings.Screen name="Status" component={StatusScreen} options={{ title: "Status" }} />
+      <Settings.Screen name="Customers" component={CustomersScreen} options={{ title: "Customers" }} />
+      <Settings.Screen name="QuoteDetail" component={QuoteDetailScreen} options={detail} />
     </Settings.Navigator>
   );
 }

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Linking, TextInput, View } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { api, explainError } from "../../../shared/api";
@@ -9,6 +9,7 @@ import { useAsync } from "../hooks";
 import { AuditList } from "../quote/AuditList";
 import { ChatView } from "../quote/ChatView";
 import { ParamsEditor } from "../quote/ParamsEditor";
+import { FinalCard } from "../quote/FinalCard";
 import { PdfCard } from "../quote/PdfCard";
 import { PriceCard, type CalcState } from "../quote/PriceCard";
 import { C, F, useTheme } from "../theme";
@@ -131,12 +132,15 @@ function Loaded({ d, reload }: { d: Detail; reload: () => Promise<void> }) {
         <Group>
           <Row title={d.job.name ?? "Unnamed customer"} subtitle={d.job.address ?? "No address yet"} right={<Pill status={d.stage} label={stage?.label} />} />
           <Row title="WhatsApp" value={phone(d.job.phone ?? d.user_id)} onPress={() => Linking.openURL(`https://wa.me/${(d.job.phone ?? d.user_id).replace(/\D/g, "")}`)} />
+          {d.job.location ? <Row title="Shared location" value={d.job.location.name ?? d.job.location.address ?? "Open in Maps"} onPress={() => Linking.openURL(d.job.location!.maps_url)} /> : null}
           {d.job.preferred_datetime ? <Row title="They asked for" value={d.job.preferred_datetime} chevron={false} /> : null}
         </Group>
 
+        {(d.needs_human || d.attention) && tab !== "chat" ? <Banner kind="warn" text="Needs you: open Chat to reply." action="Open chat" onAction={() => setTab("chat")} /> : null}
+
         <Segmented value={tab} onChange={setTab} options={[{ id: "quote", label: "Quote" }, { id: "chat", label: `Chat · ${d.photos.length} photos` }, { id: "activity", label: `Activity · ${d.audit.length}` }]} />
 
-        {tab === "chat" && <ChatView name={d.job.name ?? "Customer"} number={d.job.phone ?? d.user_id} chat={d.chat} photos={d.photos} />}
+        {tab === "chat" && <ChatView name={d.job.name ?? "Customer"} number={d.job.phone ?? d.user_id} chat={d.chat} photos={d.photos} userId={d.user_id} needsHuman={d.needs_human} humanActive={d.human_active} onSent={() => void reload()} />}
         {tab === "activity" && <AuditList entries={d.audit} />}
 
         {tab === "quote" && (
@@ -199,6 +203,10 @@ function Loaded({ d, reload }: { d: Detail; reload: () => Promise<void> }) {
                 />
                 {manual != null ? <Row title="Use calculated total" chevron={false} tint={C.blue} onPress={() => setManual(null)} /> : null}
               </Group>
+            )}
+
+            {quote && (d.status === "approved" || d.status === "completed") && (
+              <FinalCard userId={d.user_id} number={d.job.phone ?? d.user_id} quote={quote} open={d.status === "approved"} onSent={() => void reload()} />
             )}
 
             {quote && params && (

@@ -4,6 +4,7 @@ import type {
   AppEvent,
   Booking,
   BookingInput,
+  Customer,
   ModelHealth,
   Persona,
   PersonasResponse,
@@ -77,6 +78,10 @@ async function http<T>(method: string, path: string, body?: unknown): Promise<T>
     });
   } catch {
     throw new ApiError(0, "Network error");
+  }
+  if (res.status === 401 && !config.apiKey && !config.mock && typeof window !== "undefined" && typeof window.location?.assign === "function") {
+    // Hosted web dashboard: the session cookie is missing or expired, so go to the password page and come back.
+    window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname)}`);
   }
   if (!res.ok) {
     let msg = res.statusText;
@@ -165,6 +170,30 @@ export const api = {
   saveParams(userId: string, params: Record<string, ParamValue>): Promise<unknown> {
     if (config.mock) return guard(() => mockApi.saveParams(userId, params));
     return http("PUT", `/api/quotes/${encodeURIComponent(userId)}/params`, { params });
+  },
+
+  /** The owner writes to the customer in the assistant's place; the assistant then stays quiet for 30 minutes. */
+  sendOwnerMessage(userId: string, text: string): Promise<unknown> {
+    if (config.mock) return guard(async () => ({ sent: true }));
+    return http("POST", `/api/quotes/${encodeURIComponent(userId)}/message`, { text });
+  },
+
+  resumeAssistant(userId: string): Promise<unknown> {
+    if (config.mock) return guard(async () => ({ resumed: true }));
+    return http("POST", `/api/quotes/${encodeURIComponent(userId)}/resume`);
+  },
+
+  /** After the site visit: sends the customer the final price. The backend refuses unless the estimate was approved. */
+  confirmFinal(userId: string, total: number): Promise<unknown> {
+    if (config.mock) return guard(() => mockApi.confirmFinal(userId, total));
+    return http("POST", `/api/quotes/${encodeURIComponent(userId)}/final`, { total });
+  },
+
+  /** Every customer with all their jobs, earlier and current. */
+  async listCustomers(): Promise<Customer[]> {
+    if (config.mock) return guard(() => mockApi.listCustomers());
+    const r = await http<{ customers: Customer[] }>("GET", "/api/customers");
+    return r.customers;
   },
 
   pdfPreview(userId: string, params: Record<string, ParamValue>): Promise<PdfPreview> {

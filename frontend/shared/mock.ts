@@ -5,6 +5,7 @@ import type {
   AppEvent,
   Booking,
   BookingInput,
+  Customer,
   ModelHealth,
   PersonasResponse,
   QuoteItem,
@@ -389,6 +390,33 @@ export const mockApi = {
     await wait(500);
     const hours = detailStore[userId]?.duration ?? 2;
     return stubSlots(hours, bookings, busy, userId);
+  },
+
+  async confirmFinal(userId: string, total: number): Promise<{ final: true }> {
+    await wait(600);
+    const q = quotes.find((x) => x.user_id === userId);
+    if (!q || q.status !== "approved" || !q.quote) throw new MockError(409, "The estimate must be approved before a final price is confirmed");
+    if (!(total > 0)) throw new MockError(422, "Total must be above zero");
+    q.quote.approved_total = q.quote.total ?? undefined;
+    q.quote.final_total = total;
+    q.quote.total = total;
+    q.status = "completed";
+    q.updated_at = new Date().toISOString();
+    appendAudit(userId, "owner", "state_change", `Final price confirmed: ${total.toFixed(2)}`);
+    return { final: true };
+  },
+
+  async listCustomers(): Promise<Customer[]> {
+    await wait();
+    return quotes.map((q) => ({
+      user_id: q.user_id,
+      name: q.job.name ?? null,
+      phone: q.job.phone ?? q.user_id,
+      stage: q.stage,
+      attention: q.attention,
+      needs_human: q.needs_human,
+      orders: q.quote ? [{ quote: JSON.parse(JSON.stringify(q.quote)), quote_status: q.status, open: q.status !== "completed" }] : [],
+    }));
   },
 
   async listQuotes(status?: QuoteStatus): Promise<QuoteItem[]> {
