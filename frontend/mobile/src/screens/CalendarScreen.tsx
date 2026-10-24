@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Linking, Pressable, ScrollView, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -9,7 +9,7 @@ import { findConflicts } from "../../../shared/params";
 import type { Booking, Interval, QuoteItem, Slot } from "../../../shared/types";
 import { loadAllQuotes } from "../data";
 import { useAsync } from "../hooks";
-import { C, useTheme } from "../theme";
+import { C, F, useTheme } from "../theme";
 import { Banner, Btn, Chip, Field, Group, Pill, Row, Screen, Segmented, Sheet, T, success } from "../ui";
 
 type View_ = "month" | "week" | "day";
@@ -176,7 +176,7 @@ export default function CalendarScreen() {
                   return (
                     <Pressable key={d.toISOString()} accessibilityRole="button" accessibilityLabel={`${d.toDateString()}, ${n} booked${hasSug ? ", suggested time" : ""}`} onPress={() => setSelected(sod(d))} style={{ width: `${100 / 7}%`, height: 50, alignItems: "center", justifyContent: "center" }}>
                       <View style={{ width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", backgroundColor: sel ? C.blue : "transparent", borderWidth: hasSug && !sel ? 2 : 0, borderColor: C.ok, borderStyle: "dashed" }}>
-                        <T style={{ color: sel ? C.white : dim ? C.ink3 : same(d, new Date()) ? C.blue : C.ink, fontWeight: same(d, new Date()) ? "700" : "400" }}>{d.getDate()}</T>
+                        <T style={{ color: sel ? C.white : dim ? C.ink3 : same(d, new Date()) ? C.blue : C.ink, fontFamily: same(d, new Date()) ? F.bold : F.sys }}>{d.getDate()}</T>
                       </View>
                       <View style={{ flexDirection: "row", gap: 2, height: 5 }}>
                         {Array.from({ length: Math.min(n, 3) }, (_, i) => <View key={i} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: C.ink3 }} />)}

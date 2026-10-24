@@ -2,7 +2,7 @@ import { useState } from "react";
 import { View } from "react-native";
 import { money } from "../../../shared/format";
 import type { QuoteDraft } from "../../../shared/types";
-import { C } from "../theme";
+import { C, F } from "../theme";
 import { Banner, Group, Row, T } from "../ui";
 
 export type CalcState = { status: "idle" | "loading" | "error"; message?: string };
@@ -24,7 +24,7 @@ function split(q: QuoteDraft) {
 function Delta({ now, before, cur }: { now: number; before: number; cur: string }) {
   const d = Math.round((now - before) * 100) / 100;
   if (d === 0) return null;
-  return <T v="foot" style={{ color: d > 0 ? C.ink : C.okInk, fontWeight: "600" }}>{d > 0 ? "+" : "−"}{money(Math.abs(d), cur).replace(/^\D+/, "")}</T>;
+  return <T v="foot" style={{ color: d > 0 ? C.ink : C.okInk, fontFamily: F.semi }}>{d > 0 ? "+" : "−"}{money(Math.abs(d), cur).replace(/^\D+/, "")}</T>;
 }
 
 export function PriceCard({ quote, before, calc, durationHours }: { quote: QuoteDraft; before: QuoteDraft; calc: CalcState; durationHours: number | null }) {

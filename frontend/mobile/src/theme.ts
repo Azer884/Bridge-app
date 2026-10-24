@@ -1,4 +1,4 @@
-﻿import { createContext, createElement, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, createElement, useContext, useEffect, useState, type ReactNode } from "react";
 import { Appearance, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -54,12 +54,15 @@ const DARK: typeof LIGHT = {
 /** Mutated in place when the theme changes. Screens call useTheme() so they re-render and read the new values. */
 export const C = { ...LIGHT };
 
-const sys = Platform.select({ ios: "System", android: "sans-serif", default: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }) as string;
 
-/** System type for text and controls, the condensed face only for large titles and amounts. */
+
+/** Figtree for text and controls, Bricolage Grotesque for large titles and amounts. */
 export const F = {
-  sys,
-  display: "BarlowCondensed_700Bold",
+  sys: "Figtree_400Regular",
+  medium: "Figtree_500Medium",
+  semi: "Figtree_600SemiBold",
+  bold: "Figtree_700Bold",
+  display: "BricolageGrotesque_700Bold",
 };
 
 export const BREAKDOWN = ["#129A8D", "#59C793", "#083C57", "#3FB5C8", "#E9B949", "#6B8290"];

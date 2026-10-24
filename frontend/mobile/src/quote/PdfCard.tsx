@@ -3,7 +3,7 @@ import { Linking, Platform, View } from "react-native";
 import { api, explainError } from "../../../shared/api";
 import { money } from "../../../shared/format";
 import type { ParamValue, PdfPreview, QuoteDraft } from "../../../shared/types";
-import { C } from "../theme";
+import { C, F } from "../theme";
 import { Banner, Btn, Group, Row, Sheet, T, success } from "../ui";
 
 interface Props {
@@ -63,7 +63,7 @@ export function PdfCard({ userId, customer, quote, params, version, blocked, onP
         <Row
           title="Quote PDF"
           subtitle={seen == null ? "Not previewed yet" : stale ? "Out of date: values changed" : "Matches current values"}
-          right={seen != null ? <T v="foot" style={{ color: stale ? C.dangerInk : C.okInk, fontWeight: "600" }}>{stale ? "Out of date" : "Up to date"}</T> : undefined}
+          right={seen != null ? <T v="foot" style={{ color: stale ? C.dangerInk : C.okInk, fontFamily: F.semi }}>{stale ? "Out of date" : "Up to date"}</T> : undefined}
         />
         {seen != null ? <Row title="Open preview" onPress={() => setOpen(true)} /> : null}
       </Group>

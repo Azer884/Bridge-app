@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Pressable, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { showValue } from "../../../shared/params";
@@ -38,7 +38,7 @@ export function ParamsEditor({ params, values, errors, readOnly, onChange, onRes
 
           const notes = (
             <View style={{ gap: 4 }}>
-              {err ? <T v="foot" style={{ color: C.dangerInk, fontWeight: "600" }}>{err}</T> : null}
+              {err ? <T v="foot" style={{ color: C.dangerInk, fontFamily: F.semi }}>{err}</T> : null}
               {!err && f.help ? <T v="foot">{f.help}</T> : null}
               {!readOnly && low ? <T v="foot" style={{ color: C.ink2 }}>Gesir is not sure ({Math.round(conf * 100)}%). Check the photos.</T> : null}
               {!readOnly && changed && !waiting ? (
@@ -51,7 +51,7 @@ export function ParamsEditor({ params, values, errors, readOnly, onChange, onRes
                     if (f.type === "number") setRaw((r) => ({ ...r, [f.key]: ai == null ? "" : String(ai) }));
                   }}
                 >
-                  <T v="foot" style={{ color: C.ink2 }}>Gesir read: {showValue(f, ai)}. <T v="foot" style={{ color: C.blue, fontWeight: "600" }}>Use Gesir's value</T></T>
+                  <T v="foot" style={{ color: C.ink2 }}>Gesir read: {showValue(f, ai)}. <T v="foot" style={{ color: C.blue, fontFamily: F.semi }}>Use Gesir's value</T></T>
                 </Pressable>
               ) : null}
             </View>

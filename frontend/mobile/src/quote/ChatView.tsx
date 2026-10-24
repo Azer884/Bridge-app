@@ -3,7 +3,7 @@ import { Image, Linking, Modal, Pressable, ScrollView, useWindowDimensions, View
 import { Ionicons } from "@expo/vector-icons";
 import { phone } from "../../../shared/format";
 import type { ChatMessage, Photo } from "../../../shared/types";
-import { C } from "../theme";
+import { C, F } from "../theme";
 import { Btn, Group, Row, T } from "../ui";
 
 const time = (iso: string) => new Date(iso).toLocaleString("en-MY", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
@@ -86,7 +86,7 @@ export function ChatView({ name, number, chat, photos }: { name: string; number:
           return (
             <View key={m.id} style={{ alignItems: mine ? "flex-end" : "flex-start" }}>
               <View style={{ maxWidth: "86%", padding: 10, gap: 4, borderRadius: 16, borderBottomRightRadius: mine ? 4 : 16, borderBottomLeftRadius: mine ? 16 : 4, backgroundColor: m.role === "assistant" ? "#D9FDD3" : m.role === "owner" ? C.blueWash : C.paper }}>
-                <T v="foot" style={{ fontWeight: "600", color: m.role === "assistant" ? "#2F6B4C" : C.ink3 }}>{WHO[m.role]}</T>
+                <T v="foot" style={{ fontFamily: F.semi, color: m.role === "assistant" ? "#2F6B4C" : C.ink3 }}>{WHO[m.role]}</T>
                 <T style={{ color: m.role === "assistant" ? "#041B2D" : C.ink }}>{m.text}</T>
                 {m.photo_ids?.length ? (
                   <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>

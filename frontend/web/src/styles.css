@@ -1,4 +1,4 @@
-﻿:root {
+:root {
   --wall: #eaf1f1;
   --paper: #f6faf9;
   --ink: #041b2d;
@@ -23,8 +23,8 @@
   --side: #0a3550;
   --radius: 14px;
   --radius-sm: 8px;
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, system-ui, sans-serif;
-  --display: "Barlow Condensed", "Barlow", system-ui, sans-serif;
+  --font: "Figtree", system-ui, sans-serif;
+  --display: "Bricolage Grotesque", "Figtree", system-ui, sans-serif;
   color-scheme: light;
 }
 
@@ -94,7 +94,7 @@ h1, h2, h3, h4, p { margin: 0; }
   padding: 120px clamp(16px, 5vw, 72px) 72px;
 }
 .hero h1 {
-  font-size: clamp(44px, 7.4vw, 112px); line-height: .95; letter-spacing: -.01em;
+  font-size: clamp(40px, 6vw, 88px); line-height: 1; letter-spacing: -.02em;
   font-weight: 800; 
   max-width: 11ch;
 }
@@ -134,10 +134,10 @@ h1, h2, h3, h4, p { margin: 0; }
   background-size: 100% 22px, 100% 40px; background-repeat: no-repeat; background-position: 0 100%, 0 100%; will-change: transform; }
 .tapesec.live .tape-end { display: block; position: absolute; left: 0; bottom: calc(12% - 8px); width: 18px; height: 72px; z-index: 4; background: #041b2d; border-radius: 3px; will-change: transform; }
 .hazard { height: 22px; background: repeating-linear-gradient(-45deg, #e9b949 0 22px, #041b2d 22px 44px); }
-.tape-fill h2 { font-size: clamp(40px, 8vw, 128px); line-height: .95; letter-spacing: -.01em; font-weight: 800;  max-width: 12ch; color: #fff; }
+.tape-fill h2 { font-size: clamp(38px, 6.4vw, 100px); line-height: 1; letter-spacing: -.02em; font-weight: 800;  max-width: 12ch; color: #fff; }
 .tape-fill p { margin-top: 24px; max-width: 44ch; font-size: clamp(17px, 1.6vw, 21px); color: #cfeee9; }
 .tape-base { background: var(--wall); display: grid; align-content: center; padding: 64px clamp(16px, 6vw, 96px); color: var(--ink); }
-.tape-base h2 { font-size: clamp(40px, 8vw, 128px); line-height: .95; letter-spacing: -.01em; font-weight: 800;  max-width: 12ch; }
+.tape-base h2 { font-size: clamp(38px, 6.4vw, 100px); line-height: 1; letter-spacing: -.02em; font-weight: 800;  max-width: 12ch; }
 
 .flow { background: #041b2d; color: #eaf1f1; position: relative; overflow: hidden; }
 .flow-inner { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: clamp(24px, 5vw, 80px); align-items: center; padding: 72px clamp(16px, 6vw, 96px); }
@@ -165,7 +165,7 @@ h1, h2, h3, h4, p { margin: 0; }
 .final-bubble strong { display: block; font-size: clamp(40px, 6vw, 72px); letter-spacing: -.03em; line-height: 1; margin-top: 6px; }
 
 .cta { padding: clamp(80px, 14vw, 180px) clamp(16px, 6vw, 96px) 56px; }
-.cta h2 { font-size: clamp(40px, 8vw, 120px); line-height: .95; letter-spacing: -.01em; font-weight: 800;  max-width: 12ch; }
+.cta h2 { font-size: clamp(38px, 6.4vw, 96px); line-height: 1; letter-spacing: -.02em; font-weight: 800;  max-width: 12ch; }
 .cta .hero-actions { margin-top: 36px; }
 .foot { margin-top: 96px; display: flex; justify-content: space-between; flex-wrap: wrap; gap: 12px; color: var(--ink-3); font-size: 14px; }
 
@@ -396,7 +396,7 @@ td.r, th.r { text-align: right; padding-right: 0; }
 /* display face: condensed, sign-painter weight */
 h1, h2, h3, .brand, .cal-title, .row-chip .amt, .persona-card .swatch, .final-bubble strong, .bubble strong, .total-input input { font-family: var(--display); }
 h1, h2, h3 { font-weight: 700; }
-.hero h1, .tape-fill h2, .tape-base h2, .cta h2 { font-weight: 800; letter-spacing: -.005em; }
+.hero h1, .tape-fill h2, .tape-base h2, .cta h2 { font-weight: 800; letter-spacing: -.02em; }
 
 .phone-field { display: grid; grid-template-columns: minmax(150px, 240px) minmax(0, 1fr); gap: 8px; }
 @media (max-width: 560px) { .phone-field { grid-template-columns: 1fr; } }

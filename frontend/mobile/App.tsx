@@ -1,11 +1,12 @@
-﻿import { ActivityIndicator, View } from "react-native";
+import { ActivityIndicator, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { DefaultTheme, NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator, type NativeStackNavigationOptions } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { useFonts, BarlowCondensed_700Bold } from "@expo-google-fonts/barlow-condensed";
+import { useFonts, Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold } from "@expo-google-fonts/figtree";
+import { BricolageGrotesque_700Bold } from "@expo-google-fonts/bricolage-grotesque";
 import { api, configureApi } from "../shared/api";
 import CalendarScreen from "./src/screens/CalendarScreen";
 import LinkScreen from "./src/screens/LinkScreen";
@@ -102,7 +103,7 @@ export default function App() {
 
 function Root() {
   const { mode } = useTheme();
-  const [loaded] = useFonts({ BarlowCondensed_700Bold });
+  const [loaded] = useFonts({ Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold, BricolageGrotesque_700Bold });
   const pending = useAsync(() => api.listQuotes("pending_approval"), [], 20_000);
 
   if (!loaded) {
@@ -124,7 +125,7 @@ function Root() {
             tabBarActiveTintColor: C.blue,
             tabBarInactiveTintColor: C.ink3,
             tabBarStyle: { backgroundColor: C.paper, borderTopColor: C.line },
-            tabBarLabelStyle: { fontFamily: F.sys, fontSize: 11, fontWeight: "600" },
+            tabBarLabelStyle: { fontFamily: F.semi, fontSize: 11 },
             tabBarBadgeStyle: { backgroundColor: C.tape, color: "#041B2D" },
           }}
         >

@@ -1,4 +1,4 @@
-﻿import { Children, Fragment, isValidElement, type ReactNode } from "react";
+import { Children, Fragment, isValidElement, type ReactNode } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -26,11 +26,11 @@ type Variant = "large" | "title" | "headline" | "body" | "sub" | "foot" | "label
 const buildText = (): Record<Variant, TextStyle> => ({
   large: { fontFamily: F.display, fontSize: 40, lineHeight: 42, color: C.ink },
   title: { fontFamily: F.display, fontSize: 26, lineHeight: 30, color: C.ink },
-  headline: { fontFamily: F.sys, fontWeight: "600", fontSize: 17, lineHeight: 22, color: C.ink },
+  headline: { fontFamily: F.semi, fontSize: 17, lineHeight: 22, color: C.ink },
   body: { fontFamily: F.sys, fontSize: 17, lineHeight: 22, color: C.ink },
   sub: { fontFamily: F.sys, fontSize: 15, lineHeight: 20, color: C.ink2 },
   foot: { fontFamily: F.sys, fontSize: 13, lineHeight: 18, color: C.ink3 },
-  label: { fontFamily: F.sys, fontWeight: "600", fontSize: 13, lineHeight: 18, color: C.ink3 },
+  label: { fontFamily: F.semi, fontSize: 13, lineHeight: 18, color: C.ink3 },
   money: { fontFamily: F.display, fontSize: 22, lineHeight: 26, color: C.ink },
 });
 let TEXT = buildText();
@@ -141,7 +141,7 @@ export function Btn({ label, onPress, kind = "primary", disabled, busy, small, i
       {busy ? <ActivityIndicator color={fg} /> : (
         <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
           {icon ? <Ionicons name={icon} size={small ? 18 : 20} color={fg} /> : null}
-          <Text style={{ fontFamily: F.sys, fontWeight: "600", fontSize: small ? 15 : 17, color: fg }}>{label}</Text>
+          <Text style={{ fontFamily: F.semi, fontSize: small ? 15 : 17, color: fg }}>{label}</Text>
         </View>
       )}
     </Pressable>
@@ -156,7 +156,7 @@ export function Chip({ label, on, onPress, count }: { label: string; on?: boolea
       onPress={() => { tap(); onPress(); }}
       style={[s.chip, on && { backgroundColor: C.ink, borderColor: C.ink }]}
     >
-      <Text style={{ fontFamily: F.sys, fontWeight: "600", fontSize: 15, color: on ? C.wall : C.ink2 }}>
+      <Text style={{ fontFamily: F.semi, fontSize: 15, color: on ? C.wall : C.ink2 }}>
         {label}{count != null ? `  ${count}` : ""}
       </Text>
     </Pressable>
@@ -168,7 +168,7 @@ export function Segmented<K extends string>({ value, options, onChange }: { valu
     <View style={s.seg} accessibilityRole="tablist">
       {options.map((o) => (
         <Pressable key={o.id} accessibilityRole="tab" accessibilityState={{ selected: value === o.id }} onPress={() => { tap(); onChange(o.id); }} style={[s.segItem, value === o.id && { backgroundColor: C.paper }]}>
-          <Text numberOfLines={1} style={{ fontFamily: F.sys, fontWeight: value === o.id ? "600" : "500", fontSize: 14, color: value === o.id ? C.ink : C.ink2 }}>{o.label}</Text>
+          <Text numberOfLines={1} style={{ fontFamily: value === o.id ? F.semi : F.medium, fontSize: 14, color: value === o.id ? C.ink : C.ink2 }}>{o.label}</Text>
         </Pressable>
       ))}
     </View>
@@ -205,7 +205,7 @@ export function Pill({ status, label }: { status: string; label?: string }) {
   const p = pills()[status] ?? { bg: C.chip, fg: C.ink2, label: status };
   return (
     <View style={{ backgroundColor: p.bg, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 3, alignSelf: "flex-start" }}>
-      <Text style={{ fontFamily: F.sys, fontWeight: "600", fontSize: 12, color: p.fg }}>{label ?? p.label}</Text>
+      <Text style={{ fontFamily: F.semi, fontSize: 12, color: p.fg }}>{label ?? p.label}</Text>
     </View>
   );
 }
