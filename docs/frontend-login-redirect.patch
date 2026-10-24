@@ -1,0 +1,13 @@
+--- a/frontend/shared/api.ts	2026-10-24 18:00:48.013918400 +0800
++++ b/frontend/shared/api.ts	2026-10-24 18:00:54.791594600 +0800
+@@ -78,6 +78,10 @@
+   } catch {
+     throw new ApiError(0, "Network error");
+   }
++  if (res.status === 401 && !config.apiKey && !config.mock && typeof window !== "undefined" && typeof window.location?.assign === "function") {
++    // Hosted web dashboard: the session cookie is missing or expired, so go to the password page and come back.
++    window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname)}`);
++  }
+   if (!res.ok) {
+     let msg = res.statusText;
+     try {
