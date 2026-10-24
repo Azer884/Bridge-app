@@ -38,8 +38,11 @@ async def _handle_with_livekit(event, env):
                 wait_until_answered=wait,       # if the agent is not running the call fails instead of staying silent
             ))
         elif event["event"] == "terminate":
+            if not env.get("WHATSAPP_TOKEN"):
+                raise RuntimeError("WHATSAPP_TOKEN is not configured")
             await livekit.connector.disconnect_whatsapp_call(api.DisconnectWhatsAppCallRequest(
                 whatsapp_call_id=call_id,
+                whatsapp_api_key=env["WHATSAPP_TOKEN"],       # LiveKit refuses a hang-up without it
                 disconnect_reason=api.DisconnectWhatsAppCallRequest.USER_INITIATED,
             ))
     finally:

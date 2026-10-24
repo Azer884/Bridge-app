@@ -18,3 +18,7 @@ logs/
 
 # Conversation data
 data/
+
+# Local secrets and virtual environments
+.env.local
+.venv*/

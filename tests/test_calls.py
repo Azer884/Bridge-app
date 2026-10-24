@@ -213,6 +213,7 @@ class LiveKitHandOffTests(unittest.TestCase):
         with patched:
             handle_call_event({"id": "wacid.1", "event": "terminate"}, self.ENV)
             self.assertEqual(calls["disconnect"]["whatsapp_call_id"], "wacid.1")
+            self.assertEqual(calls["disconnect"]["whatsapp_api_key"], "tok")            # LiveKit refuses it without
             with self.assertRaises(ValueError):
                 handle_call_event({"id": "c", "event": "connect", "sdp": "", "sdp_type": "offer"}, self.ENV)
             with self.assertRaises(RuntimeError):

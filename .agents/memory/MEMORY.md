@@ -1,1 +1,0 @@
-- [Python packaging with uv](python-package-setup.md) — the user chose uv after repeated automatic pip installation failures during publishing.

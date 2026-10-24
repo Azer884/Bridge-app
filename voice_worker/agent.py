@@ -13,6 +13,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from collections.abc import AsyncIterable
 
 from dotenv import load_dotenv
@@ -28,7 +29,7 @@ log = logging.getLogger("voice-agent")
 AGENT_NAME = os.environ.get("WHATSAPP_LIVEKIT_AGENT_NAME", "orbyte-whatsapp")
 GREETING = os.environ.get("VOICE_GREETING", "Hello, thanks for calling. How can I help you today?")
 FILLER = os.environ.get("VOICE_FILLER", "One moment please.")
-FILLER_AFTER = float(os.environ.get("VOICE_FILLER_AFTER_SECONDS", "6"))      # a slow answer gets a short "one moment"
+FILLER_AFTER = float(os.environ.get("VOICE_FILLER_AFTER_SECONDS", "4"))      # a slow answer gets a short "one moment"
 GIVE_UP_AFTER = float(os.environ.get("VOICE_GIVE_UP_AFTER_SECONDS", "90"))
 SORRY = os.environ.get("VOICE_SORRY", "Sorry, I am having trouble right now. A team member will get back to you.")
 
@@ -49,15 +50,19 @@ class PaintingAssistant(Agent):
                 break
         if not heard:
             return
+        started = time.monotonic()
+        log.info("caller said: %r", heard[:120])
         task = asyncio.create_task(self.backend.ask(heard))
         done, _ = await asyncio.wait({task}, timeout=FILLER_AFTER)
         if not done:
+            log.info("the assistant is slow (%.1fs): saying a filler", time.monotonic() - started)
             yield FILLER
         try:
             reply = await asyncio.wait_for(task, timeout=GIVE_UP_AFTER)
         except Exception:
             log.exception("the assistant did not answer in time")
             reply = SORRY
+        log.info("assistant answered after %.1fs: %r", time.monotonic() - started, reply[:120])
         if reply:
             yield reply
         language = self.backend.lang
@@ -79,13 +84,32 @@ async def entrypoint(ctx: agents.JobContext):
     backend = Backend(os.environ["VOICE_BACKEND_URL"], os.environ["INCOMING_API_KEY"],
                       meta.get("user_id") or f"call-{call_id}", call_id)
     session = AgentSession(
+        # One backend call per finished turn. Preemptive generation would send a message to the assistant for every
+        # partial transcript ("Hello?", "Hello? I want to paint...") and each one is stored as a customer message.
+        preemptive_generation=False,
+        min_endpointing_delay=float(os.environ.get("VOICE_MIN_ENDPOINTING_DELAY", "0.7")),
+        max_endpointing_delay=float(os.environ.get("VOICE_MAX_ENDPOINTING_DELAY", "3.0")),
+        min_interruption_words=2,                  # one stray word or an echo of the agent does not cut it off
         stt=inference.STT(model=os.environ.get("VOICE_STT_MODEL", "deepgram/nova-3"),
                           language=os.environ.get("VOICE_STT_LANGUAGE", "multi")),     # English and Malay together
         llm=inference.LLM(model=os.environ.get("VOICE_UNUSED_LLM", "openai/gpt-4.1-mini")),   # llm_node replaces it
         tts=inference.TTS(model=os.environ.get("VOICE_TTS_MODEL", "cartesia/sonic-3.5"),
                           voice=os.environ["VOICE_TTS_VOICE"], language="en"),
     )
+    @session.on("agent_state_changed")
+    def _agent_state(event):
+        log.info("agent: %s -> %s", event.old_state, event.new_state)
+
+    @session.on("user_state_changed")
+    def _user_state(event):
+        log.info("caller: %s -> %s", event.old_state, event.new_state)
+
+    @session.on("error")
+    def _session_error(event):
+        log.error("session error: %s", getattr(event, "error", event))
+
     await session.start(room=ctx.room, agent=PaintingAssistant(backend))
+    await asyncio.sleep(1.0)                       # let the caller's audio path settle before the greeting
     await session.say(GREETING)
 
 

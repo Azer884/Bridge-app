@@ -35,6 +35,14 @@ Because the agent is told the caller's WhatsApp number, the call continues that 
    Speech models are LiveKit Inference strings, billed through LiveKit Cloud: `VOICE_STT_MODEL` (default `deepgram/nova-3`,
    language `multi` covers English and Malay), `VOICE_TTS_MODEL` (default `cartesia/sonic-3.5`).
 
+## Run it on your own computer (Windows)
+1. `python -m venv .venv-voice` then `.venv-voice\Scripts\python -m pip install -r voice_worker/requirements.txt` (once).
+2. Fill the empty lines in `.env.local` (it is git-ignored): the LiveKit key and secret, `INCOMING_API_KEY`, `VOICE_TTS_VOICE`.
+3. Double-click `voice_worker/run_local.cmd`, or run `.venv-voice\Scripts\python -m voice_worker.check` and then
+   `.venv-voice\Scripts\python -m voice_worker.agent dev`. The check says what is missing, whether the assistant answers,
+   whether `INCOMING_API_KEY` is accepted and whether LiveKit accepts the keys. Leave the window open: calls are only answered
+   while the worker runs.
+
 ## First-call checklist (this has not been run end to end yet)
 1. `GET /api/events` on the web app should show `webhook ... 1 call event(s)` then `call_handled connect ...` when someone calls.
    `call_error` has the reason (missing LiveKit secrets, no agent running, call outside the call hours).
