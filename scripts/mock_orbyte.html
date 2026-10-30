@@ -1,112 +1,178 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Orbyte (local mock)</title><style>
-:root{--bg:#f4f7fb;--card:#fff;--ink:#1f2a3d;--mute:#68758a;--line:#e2e8f1;--brand:#1769e0;--ok:#1a7f4b;--bad:#b3261e}
-*{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--ink);display:flex;height:100vh}
-nav{width:240px;flex:none;background:var(--card);border-right:1px solid var(--line);padding:16px;overflow:auto}
-nav h1{font-size:20px;margin:0 0 4px;color:var(--brand)}nav small{color:var(--mute)}
-nav .group{margin:16px 0 4px;color:var(--mute);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
-nav a{display:block;padding:8px 10px;border-radius:8px;color:var(--ink);cursor:pointer}
-nav a.on{background:#e8f0fd;color:var(--brand);font-weight:600}nav a.dim{color:var(--mute);cursor:default}
-.wrap{flex:1;display:flex;flex-direction:column;min-width:0}
-header{display:flex;gap:16px;align-items:center;padding:10px 24px;background:var(--card);border-bottom:1px solid var(--line);flex-wrap:wrap}
-header label{color:var(--mute);font-size:12px;display:flex;gap:6px;align-items:center}
-select,input{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
-.wal{margin-left:auto;font-weight:600}
-main{flex:1;overflow:auto;padding:24px}main h2{margin:0 0 4px;font-size:24px}main p.sub{margin:0 0 20px;color:var(--mute)}
+<title>Orbyte (simulated hub)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f4f8ff;--ink:rgba(28,49,83,.9);--mute:rgba(28,49,83,.6);--line:rgba(28,49,83,.12);--brand:#0767e8;--brand-wash:rgba(7,103,232,.094);--card:#fff;--ok:#1a7f4b;--ok-wash:#e3f5ea;--warn:#9a5a00;--warn-wash:#fff3df;--bad:#b3261e;--bad-wash:#fde7e5}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.45 "Public Sans",system-ui,sans-serif;color:var(--ink);background:var(--bg);display:flex;height:100vh;overflow:hidden}
+aside{width:272px;flex:none;display:flex;flex-direction:column;background:var(--bg);border-right:1px solid var(--line)}
+.brand{display:flex;align-items:center;gap:10px;padding:18px 18px 8px}.brand svg{width:34px;height:34px}.brand b{font-size:24px;font-weight:800;letter-spacing:-.02em}.brand small{margin-left:auto;font-size:11px;color:var(--mute);border:1px solid var(--line);border-radius:99px;padding:1px 8px}
+.org{margin:8px 14px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);display:flex;flex-direction:column}
+.org label{font-size:11px;color:var(--mute)}.org select{border:0;background:transparent;font:inherit;font-weight:700;color:var(--ink);padding:0;outline:0}
+.search{margin:6px 14px;position:relative}.search input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);font:inherit}
+.menu{flex:1;overflow:auto;padding:4px 14px}
+.menu .label{font-size:13px;color:var(--mute);margin:10px 4px 4px}
+.menu .grp{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;font-weight:500;cursor:pointer}
+.menu .grp.dim,.menu .item.dim{color:var(--mute);cursor:default}
+.menu .item{display:block;padding:8px 10px 8px 34px;border-radius:8px;cursor:pointer;margin:1px 0}
+.menu .item.on,.menu .grp.on{background:var(--brand-wash);color:var(--brand)}
+.menu .item:not(.dim):not(.on):hover{background:rgba(28,49,83,.05)}
+.user{border-top:1px solid var(--line);padding:12px 14px;display:flex;gap:10px;align-items:center;cursor:pointer;position:relative}
+.av{width:34px;height:34px;border-radius:50%;background:#cfe3ff;color:var(--brand);font-weight:700;display:flex;align-items:center;justify-content:center;flex:none}
+.user b{display:block;font-size:14px}.user small{color:var(--mute);font-size:12px}
+.pop{position:absolute;bottom:62px;left:12px;right:12px;background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px -12px rgba(0,0,0,.3);padding:6px;z-index:5}
+.pop .h{font-size:12px;color:var(--mute);padding:6px 8px}.pop div.o{padding:8px;border-radius:8px;cursor:pointer;display:flex;justify-content:space-between}.pop div.o:hover{background:rgba(28,49,83,.05)}
+main{flex:1;overflow:auto;padding:24px 28px;min-width:0}
+main.embed{padding:10px}
+h1{margin:0;font-size:28px;font-weight:500;letter-spacing:-.01em}.sub{margin:2px 0 18px;color:var(--mute);font-size:14px}
+.head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
 .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
-.row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);flex-wrap:wrap}.row:first-of-type{border-top:0}
-.pill{background:#fff3df;color:#9a5a00;border-radius:99px;padding:2px 10px;font-size:12px;white-space:nowrap}.pill.ok{background:#e3f5ea;color:var(--ok)}.pill.bad{background:#fde7e5;color:var(--bad)}
-button{background:var(--brand);color:#fff;border:0;border-radius:8px;padding:7px 14px;cursor:pointer;font:inherit}
-button.ghost{background:transparent;color:var(--brand);border:1px solid var(--brand)}button.danger{background:var(--bad)}button:disabled{opacity:.5;cursor:default}
-iframe{width:100%;height:100%;border:0;border-radius:12px;background:#fff}main.embed{padding:12px}
-.err{color:var(--bad)}.mute{color:var(--mute)}.big{font-size:28px;font-weight:700}.log td{padding:4px 10px 4px 0;vertical-align:top}
-.log{border-collapse:collapse;width:100%;font-size:13px}.log tr{border-top:1px solid var(--line)}
-.reason{display:flex;gap:6px;width:100%;justify-content:flex-end}.reason input{flex:1;max-width:360px}
-code{background:#eef2f8;padding:1px 5px;border-radius:5px;font-size:12px}
+.btn{background:var(--brand);color:#fff;border:0;border-radius:6px;padding:8px 14px;font:inherit;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(7,103,232,.3)}
+.btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line);box-shadow:none;font-weight:600}.btn.danger{background:var(--bad);box-shadow:none}.btn:disabled{opacity:.5;cursor:default}
+.btn.sm{padding:4px 10px;font-size:13px}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}.tab{padding:6px 12px;border-radius:8px;border:1px solid transparent;cursor:pointer;font-weight:600;font-size:14px}.tab.on{background:var(--brand-wash);border-color:rgba(7,103,232,.4);color:var(--ink)}
+.tab.review{color:#8a5a14}.tab.approve{color:#1a7f4b}.tab.dim{color:var(--mute);cursor:default}
+.filters{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}.filters label{display:flex;flex-direction:column;font-size:12px;font-weight:700;gap:4px}
+input,select,textarea{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+table{width:100%;border-collapse:collapse}th{font-size:13px;font-weight:800;text-align:left;padding:8px;background:#fff;border-bottom:1px solid var(--line)}
+td{padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle;font-size:14px}tr:last-child td{border-bottom:0}
+.pill{display:inline-block;border-radius:99px;padding:2px 10px;font-size:12px;font-weight:600;white-space:nowrap}
+.pill.warn{background:var(--warn-wash);color:var(--warn)}.pill.ok{background:var(--ok-wash);color:var(--ok)}.pill.bad{background:var(--bad-wash);color:var(--bad)}.pill.mute{background:rgba(28,49,83,.07);color:var(--mute)}.pill.info{background:var(--brand-wash);color:var(--brand)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line);flex-wrap:wrap}.row:first-of-type{border-top:0}
+.row b{display:block}.row small{color:var(--mute)}
+.link{color:var(--brand);font-weight:700;cursor:pointer;font-size:14px}
+.empty{text-align:center;padding:42px 0;color:var(--mute)}.empty b{display:block;color:var(--ink);font-size:18px;margin-bottom:4px}
+.big{font-size:56px;font-weight:700;line-height:1.1}.grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:16px}@media(max-width:1000px){.grid2{grid-template-columns:1fr}}
+.err{color:var(--bad)}.mute{color:var(--mute)}code{background:#eef2f8;padding:1px 5px;border-radius:5px;font-size:12px}
+iframe{width:100%;height:calc(100vh - 20px);border:0;border-radius:12px;background:#fff}
+.drawer{position:fixed;inset:0;background:rgba(10,20,40,.35);display:flex;justify-content:flex-end;z-index:20}
+.drawer .panel{width:min(560px,100%);background:var(--bg);height:100%;overflow:auto;padding:22px;border-left:1px solid var(--line)}
+.kv{display:grid;grid-template-columns:140px 1fr;gap:6px 12px;font-size:14px}.kv span:nth-child(odd){color:var(--mute)}
+.reason{display:flex;gap:8px;margin-top:10px}.reason input{flex:1}
+.note{font-size:12px;color:var(--mute);margin-top:6px}
 </style></head><body>
-<nav><h1>Orbyte</h1><small>local mock hub</small>
-<div class="group">Navigation</div><a data-p="dash">Dashboard</a>
-<div class="group">Organization</div><a data-p="clients">Clients</a><a class="dim">Projects</a><a class="dim">Users</a><a data-p="wallet">Wallet</a>
-<div class="group">Modules</div><a data-p="gesir">Quotes &amp; Customer Chat</a><a data-p="sent">Sent estimates</a>
-<div class="group">Reports</div><a data-p="activity">Activity log</a><a data-p="events">Module events</a><a data-p="benefit">Business benefit</a></nav>
-<div class="wrap"><header>
-<label>Business <select id="tenant"></select></label>
-<label>Signed in as <input id="user" value="Azer" size="8"></label>
-<label>Role <select id="role"><option>admin</option><option>approver</option><option>reviewer</option></select></label>
-<span class="wal" id="wal"></span></header>
-<main id="m"></main></div>
+<aside>
+ <div class="brand"><svg viewBox="0 0 36 36"><rect width="36" height="36" rx="9" fill="#0767e8"/><path d="M10 12h9a4 4 0 010 8h-9zm0 8h11a4 4 0 010 8H10z" fill="#fff" opacity=".92"/></svg><b>Orbyte</b><small>simulated</small></div>
+ <div class="org"><label>Current organization</label><select id="org"></select></div>
+ <div class="search"><input id="msearch" placeholder="Search menu..." autocomplete="off"></div>
+ <div class="menu" id="menu"></div>
+ <div class="user" id="userbox"></div>
+</aside>
+<main id="m"></main>
 <script>
 const $=s=>document.querySelector(s), m=$('#m');
-let T=null,page='dash',timer=null,tenants=[];
-const hd=()=>({'x-hub-role':$('#role').value,'x-hub-user':$('#user').value||'user','content-type':'application/json'});
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const when=t=>t?new Date(t*1000).toLocaleString([], {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+const money=(c,v)=>v==null?'-':`${c||'MYR'} ${Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+let ORG=null, ORGS=[], USERS=[], ME=localStorage.getItem('hub_user')||'azer', page='dash', timer=null, tab='all', menuOpen={org:true,work:false};
+const hd=()=>({'x-hub-user':ME,'content-type':'application/json'});
 const j=async(u,o={})=>{const r=await fetch(u,{...o,headers:{...hd(),...(o.headers||{})}});
  if(!r.ok){let d=r.status;try{d=(await r.json()).detail||d}catch(e){}throw new Error(d)}return r.json()};
-const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const when=t=>t?new Date(t*1000).toLocaleTimeString():'';
-const money=(c,v)=>v==null?'-':`${c||'MYR'} ${Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-async function loadTenants(){tenants=await j('/hub/tenants');
- $('#tenant').innerHTML=tenants.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
- if(!T)T=tenants[0].id;$('#tenant').value=T;
- const cur=tenants.find(t=>t.id===T);$('#wal').textContent=`Wallet: ${cur.credits} credits`}
-function show(p){page=p;clearInterval(timer);
- document.querySelectorAll('nav a[data-p]').forEach(a=>a.classList.toggle('on',a.dataset.p===p));
- m.className=p==='gesir'?'embed':'';render();
- if(['dash','sent','activity','events'].includes(p))timer=setInterval(()=>{if(!document.activeElement||document.activeElement.tagName!=='INPUT')render(true)},4000)}
-const pages={dash,clients,gesir,sent,activity,events,benefit,wallet};
-function render(quiet){loadTenants().then(()=>pages[page](quiet)).catch(e=>m.innerHTML=`<p class="err">${esc(e.message)}</p>`)}
-document.querySelectorAll('nav a[data-p]').forEach(a=>a.onclick=()=>show(a.dataset.p));
-$('#tenant').onchange=e=>{T=e.target.value;render()};$('#role').onchange=()=>render();
+const me=()=>USERS.find(u=>u.id===ME)||USERS[0];
 
-async function dash(quiet){
- const q=await j(`/hub/${T}/pending`),cur=tenants.find(t=>t.id===T);
- if(quiet&&m.querySelector('.reason'))return;
- const keep=quiet&&$('#msg')?$('#msg').innerHTML:'';
- m.innerHTML=`<h2>Dashboard</h2><p class="sub">${esc(cur.name)}: here's what needs your attention today.</p>
- <div class="card"><b>Pending Actions</b> <span class="pill">${q.length}</span>
- ${q.length?q.map(x=>`<div class="row" data-id="${esc(x.id)}"><div><b>Approve estimate for ${esc(x.customer||x.id)}</b><br>
- <small class="mute">${money(x.currency,x.total)} ${x.status==='needs_inspection'?'· needs inspection':''}</small></div>
- <div><span class="pill">Pending approval</span> <button class="ghost" data-a="review">Review</button>
- <button data-a="approve">Approve</button> <button class="danger" data-a="rejectform">Reject</button></div></div>`).join(''):'<p class="mute">Nothing waiting.</p>'}</div>
- <p class="mute">Acting as <b>${esc($('#user').value)}</b> (${esc($('#role').value)}). Only admin and approver may approve or reject; a reviewer gets a refusal from the module.</p>
- <div id="msg">${keep}</div>`}
-m.addEventListener('click',async e=>{const b=e.target.closest('button[data-a]');if(!b)return;const row=b.closest('[data-id]'),id=row&&row.dataset.id,a=b.dataset.a;
- if(a==='review')return show('gesir');
- const say=(t,bad)=>{const el=$('#msg');if(el)el.innerHTML=`<p class="${bad?'err':''}">${esc(t)}</p>`};
- if(a==='rejectform'){row.querySelector('div:last-child').insertAdjacentHTML('afterend',
-   '<div class="reason"><input placeholder="Reason (required, e.g. check the height)"><button class="danger" data-a="reject">Confirm reject</button></div>');b.disabled=true;return}
- b.disabled=true;
- try{if(a==='approve'){await j(`/hub/${T}/approve/${id}`,{method:'POST'});say('Approved. The customer was sent the estimate and 1 credit was charged.')}
-  if(a==='reject'){const reason=row.querySelector('.reason input').value;await j(`/hub/${T}/reject/${id}`,{method:'POST',body:JSON.stringify({reason})});say('Rejected. Nothing was sent to the customer and the reason is in the activity log.')}
-  if(a==='esign'){await j(`/hub/${T}/esign/${id}`,{method:'POST'});return render()}
-  await loadTenants();const msg=$('#msg').innerHTML;await dash();$('#msg').innerHTML=msg}
- catch(err){b.disabled=false;say('Refused: '+err.message,true)}});
+const NAV=[
+ {k:'dash',label:'Dashboard',leaf:true},
+ {g:'org',label:'Organization',items:[['clients','Clients'],['projects','Projects'],['users','Users'],[null,'Profile Change Requests'],['wallet','Wallet'],['orgsettings','Organization Settings'],[null,'Email Broadcast']]},
+ {g:'work',label:'Workspace',items:[[null,'My Tasks'],[null,'Project Focus'],[null,'DevOps Tasks'],[null,'Meeting Summary'],[null,'User Tracker'],['notifs','Settings & Notifications'],[null,'Recap Task Subscriptions'],['gesir','Gesir Quotes']]},
+ {g:null,label:'Talent Hub',dim:true},{g:null,label:'Reports',dim:true},{g:null,label:'Settings',dim:true},{g:null,label:'Orbyte eSign',dim:true}];
+function drawMenu(){
+ const f=($('#msearch').value||'').toLowerCase();
+ $('#menu').innerHTML='<div class="label">Navigation</div>'+NAV.map(n=>{
+  if(n.leaf) return `<div class="grp ${page===n.k?'on':''}" data-p="${n.k}">${n.label}</div>`;
+  if(n.dim) return `<div class="grp dim">${n.label}<span>&rsaquo;</span></div>`;
+  const items=n.items.filter(([k,l])=>!f||l.toLowerCase().includes(f));
+  if(f&&!items.length) return '';
+  const open=menuOpen[n.g]||f;
+  return `<div class="grp" data-g="${n.g}">${n.label}<span>${open?'&#8964;':'&rsaquo;'}</span></div>`+(open?items.map(([k,l])=>k?`<div class="item ${page===k?'on':''}" data-p="${k}">${l}</div>`:`<div class="item dim">${l}</div>`).join(''):'');
+ }).join('');
+}
+$('#menu').addEventListener('click',e=>{const g=e.target.closest('[data-g]'),p=e.target.closest('[data-p]');
+ if(g){menuOpen[g.dataset.g]=!menuOpen[g.dataset.g];drawMenu()} if(p) show(p.dataset.p)});
+$('#msearch').oninput=drawMenu;
+function drawUser(){const u=me();$('#userbox').innerHTML=`<div class="av">${esc(u.name.split(' ').map(x=>x[0]).join('').slice(0,2))}</div><div><b>${esc(u.name)}</b><small>${esc(u.email)}</small></div><div class="pop" id="pop" hidden><div class="h">Signed in as (simulated)</div>${USERS.map(x=>`<div class="o" data-u="${x.id}"><span>${esc(x.name)}</span><span class="mute">${esc(x.role==='Company Admin'?'Company Admin':x.approver?'Approver':'Reviewer')}</span></div>`).join('')}</div>`}
+$('#userbox').addEventListener('click',e=>{const o=e.target.closest('[data-u]');if(o){ME=o.dataset.u;localStorage.setItem('hub_user',ME);drawUser();show(page);return}
+ const p=$('#pop');p.hidden=!p.hidden});
+$('#org').onchange=e=>{ORG=e.target.value;show(page)};
 
-async function clients(){const c=await j(`/hub/${T}/clients`);
- m.innerHTML=`<h2>Client List</h2><p class="sub">Clients created by the Gesir module.</p><div class="card">${c.map(x=>`<div class="row"><div><b>${esc(x.name||x.id)}</b><br><small class="mute">${esc(x.phone||'')}</small></div>
- <span>${x.orders.length} job(s) · ${x.orders.map(o=>esc((o.quote||{}).total?money((o.quote||{}).currency,(o.quote||{}).total):'no price')).join(', ')}</span></div>`).join('')||'<p>No Record</p>'}</div>`}
-function gesir(){m.innerHTML=`<iframe src="${tenants.find(t=>t.id===T).url}/app" title="Gesir module"></iframe>`}
-async function sent(){const s=await j(`/hub/${T}/sent`);
- m.innerHTML=`<h2>Sent estimates</h2><p class="sub">Approved estimates. Orbyte eSign here is a mock; no provider is called.</p><div class="card">${s.map(x=>`<div class="row" data-id="${esc(x.id)}"><div><b>${esc(x.customer)}</b><br><small class="mute">${money('MYR',x.total)}</small></div>
- <div><span class="pill ok">${esc(x.status)}</span> ${x.esign?'<span class="pill ok">Sent for signature</span>':'<button class="ghost" data-a="esign">Send for signature</button>'}</div></div>`).join('')||'<p class="mute">None yet.</p>'}</div>`}
-async function activity(){const a=await j(`/hub/${T}/audit`);
- m.innerHTML=`<h2>Activity log</h2><p class="sub">Every action on a job: who, what, when. Written as it happens in the module.</p><div class="card"><table class="log">
- <tr class="mute"><td>Time</td><td>Who</td><td>What</td><td>Job</td></tr>${a.map(e=>`<tr><td>${when(e.ts)}</td><td>${esc(e.actor)}</td><td>${esc(e.summary)}</td><td><small class="mute">${esc((e.customer||e.user_id||'').toString().slice(0,18))}</small></td></tr>`).join('')}</table></div>`}
-async function events(){const e=await j('/hub/events');
- m.innerHTML=`<h2>Module events</h2><p class="sub">Signed webhooks the module sends to the hub (<code>x-orbyte-signature</code>, HMAC-SHA256).</p><div class="card"><table class="log">
- <tr class="mute"><td>Time</td><td>Event</td><td>Signature</td><td>Data</td></tr>${e.map(x=>`<tr><td>${when(x.at)}</td><td><b>${esc(x.type)}</b></td><td>${x.ok?'<span class="pill ok">valid</span>':'<span class="pill bad">invalid</span>'}</td><td><small class="mute">${esc(JSON.stringify(x.data||{}).slice(0,120))}</small></td></tr>`).join('')||'<tr><td colspan="4" class="mute">No events yet. Approve or reject something.</td></tr>'}</table></div>`}
-async function benefit(){const b=await j(`/hub/${T}/benefit`);const v=k=>+(localStorage.getItem('hub_'+k)||{manual:15,assisted:3}[k]);
- const saved=b.approved*(v('manual')-v('assisted'));
- m.innerHTML=`<h2>Business benefit</h2><p class="sub">Measured from this business's own records, with the assumptions shown.</p>
- <div class="grid"><div class="card"><div class="big">${b.approved}</div>estimates approved</div><div class="card"><div class="big">${b.rejected}</div>estimates rejected</div>
- <div class="card"><div class="big">${saved} min</div>owner time saved (${(saved/60).toFixed(1)} h)</div></div>
- <div class="card"><b>Assumptions</b> (edit to see the effect; these are team estimates, not measurements)
- <p>Quote by hand today: <input id="am" type="number" value="${v('manual')}" size="3"> min per job (chat back-and-forth, sizing, price, schedule)<br>
- With Gesir: <input id="aa" type="number" value="${v('assisted')}" size="3"> min per job (review and approve)</p>
- <p class="mute">Formula: approved estimates × (manual − assisted) = ${b.approved} × (${v('manual')} − ${v('assisted')}) = ${saved} min. Steps removed per job: asking each detail, measuring by message, calculating, writing the quote, proposing times.</p></div>`;
- $('#am').onchange=e=>{localStorage.setItem('hub_manual',e.target.value);benefit()};$('#aa').onchange=e=>{localStorage.setItem('hub_assisted',e.target.value);benefit()}}
-async function wallet(){const cur=tenants.find(t=>t.id===T);
- m.innerHTML=`<h2>Wallet</h2><p class="sub">Organization credits for ${esc(cur.name)}.</p><div class="card"><div class="big">${cur.credits} credits</div>
- <p class="mute">Usage-based pricing: each approved estimate costs 1 credit. Rejected and drafted estimates cost nothing.</p></div>`}
-loadTenants().then(()=>show('dash'));
+async function boot(){[ORGS,USERS]=await Promise.all([j('/hub/tenants'),j('/hub/users')]);ORG=ORG||ORGS[0].id;
+ $('#org').innerHTML=ORGS.map(o=>`<option value="${o.id}" ${o.id===ORG?'selected':''}>${esc(o.name)}</option>`).join('');drawUser();show('dash')}
+function show(p){page=p;clearInterval(timer);drawMenu();m.className=p==='gesir'?'embed':'';render();
+ if(['dash','projects'].includes(p)) timer=setInterval(()=>{if(!document.querySelector('.drawer')&&!(document.activeElement&&document.activeElement.tagName==='INPUT'))render(true)},5000)}
+function render(){const f={dash,clients,projects,users,wallet,orgsettings,notifs,gesir}[page];Promise.resolve(f()).catch(e=>m.innerHTML=`<p class="err">${esc(e.message)}</p>`)}
+
+const roleOf=u=>u.role==='Company Admin'?'Company Admin':'Member';
+const pill=p=>({pending_approval:'warn',needs_inspection:'warn',approved:'ok',completed:'ok',rejected:'bad',collecting:'mute'}[p.status]||'mute');
+
+async function dash(){
+ const rows=await j(`/hub/${ORG}/pending`),u=me(),canApprove=u.role==='Company Admin'||u.approver;
+ const approve=canApprove?rows:[],review=canApprove?[]:rows;
+ const shown=tab==='approve'?approve:tab==='review'?review:tab==='submit'?[]:rows;
+ const cnt=(n)=>`(${n})`;
+ m.innerHTML=`<h1>Dashboard</h1><p class="sub">${new Date().toLocaleDateString([], {weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p>
+ <p style="margin:0 0 14px"><b>Good day, ${esc(u.name.split(' ')[0])}.</b> Here's what needs your attention today.</p>
+ <div class="card"><b style="font-size:18px">Pending Actions</b>
+ <div class="tabs" style="margin:12px 0">
+  <span class="tab ${tab==='all'?'on':''}" data-t="all">All ${cnt(rows.length)}</span><span class="tab dim ${tab==='submit'?'on':''}" data-t="submit">Submit ${cnt(0)}</span>
+  <span class="tab review ${tab==='review'?'on':''}" data-t="review">Review ${cnt(review.length)}</span><span class="tab approve ${tab==='approve'?'on':''}" data-t="approve">Approve ${cnt(approve.length)}</span></div>
+ ${shown.length?`<div class="mute" style="font-size:12px;padding:6px 0">${canApprove?'To approve':'To review'} <span class="pill mute">${shown.length}</span> from Gesir</div>`+shown.map(x=>`<div class="row"><div><b>${canApprove?'Approve':'Review'} estimate for ${esc(x.client)}</b><small>${esc(x.id)}</small></div>
+  <div class="mute">${esc(u.name)}</div><span class="pill warn">${x.status==='needs_inspection'?'Needs inspection':'Pending Approval'}</span><span class="mute">${money(x.currency,x.amount)}</span>
+  <span class="link" data-open="${esc(x.id)}">Go to ${canApprove?'approval':'review'} &#8599;</span></div>`).join(''):`<div class="empty"><b>No pending items</b>Nothing is waiting for you.</div>`}</div>`}
+m.addEventListener('click',e=>{const t=e.target.closest('[data-t]');if(t){tab=t.dataset.t;dash();return}
+ const o=e.target.closest('[data-open]');if(o)openProject(o.dataset.open)});
+
+async function projects(){
+ const rows=await j(`/hub/${ORG}/projects`);window.__rows=rows;
+ const st=[...new Set(rows.map(r=>r.status))];
+ m.innerHTML=`<div class="head"><div><h1>Project List</h1><p class="sub">Manage project records and tasks.</p></div><button class="btn ghost" id="sync">&#8635; Sync all</button></div>
+ <div class="card"><div class="filters"><label style="flex:1">Search<input id="q" placeholder="Search projects"></label>
+ <label>Status<select id="fs"><option value="">All statuses</option>${st.map(s=>`<option value="${s}">${esc(rows.find(r=>r.status===s).status_label)}</option>`).join('')}</select></label>
+ <label>Source<select id="fr"><option value="">All sources</option><option>Gesir</option></select></label></div></div>
+ <div class="card" id="plist"></div>`;
+ const draw=()=>{const q=($('#q').value||'').toLowerCase(),s=$('#fs').value,r=$('#fr').value;
+  const list=rows.filter(x=>(!q||(x.name+x.client).toLowerCase().includes(q))&&(!s||x.status===s)&&(!r||x.source===r));
+  $('#plist').innerHTML=list.length?`<table><tr><th>Project</th><th>Client</th><th>Status</th><th>Source</th><th>Amount</th><th>Updated</th><th></th></tr>${list.map(x=>`<tr><td><b>${esc(x.name)}</b></td><td>${esc(x.client)}</td><td><span class="pill ${pill(x)}">${esc(x.status_label)}</span></td><td>${esc(x.source)}</td><td>${money(x.currency,x.amount)}</td><td class="mute">${esc((x.updated||'').slice(0,10))}</td><td><span class="link" data-open="${esc(x.id)}">Open</span></td></tr>`).join('')}</table>`:`<div class="empty"><b>No Record</b>There is no record available to display in this table.</div>`};
+ draw();['q','fs','fr'].forEach(i=>$('#'+i).oninput=draw);$('#sync').onclick=()=>render()}
+
+async function openProject(id){
+ const d=await j(`/hub/${ORG}/project/${encodeURIComponent(id)}`),p=d.project,job=d.job||{},open=['pending_approval','needs_inspection'].includes(p.status);
+ const box=document.createElement('div');box.className='drawer';
+ box.innerHTML=`<div class="panel"><div class="head"><div><h1 style="font-size:22px">${esc(p.name)}</h1><p class="sub">${esc(p.id)} · <span class="pill ${pill(p)}">${esc(p.status_label)}</span></p></div><button class="btn ghost sm" id="x">Close</button></div>
+ <div class="card kv"><span>Client</span><span>${esc(p.client)}</span><span>Phone</span><span>${esc(p.phone||'-')}</span><span>Address</span><span>${esc(job.address||'-')}</span><span>Surfaces</span><span>${esc(job.surfaces||'-')}</span><span>Amount</span><span>${money(p.currency,p.amount)}</span><span>Source</span><span>${esc(p.source)}</span>${d.reason?`<span>Rejected because</span><span>${esc(d.reason)}</span>`:''}</div>
+ ${open?`<div class="card"><b>Approval</b><p class="mute" style="margin:4px 0 10px">Approving sends the estimate to the customer on WhatsApp and uses ${1} credit.</p>
+  <button class="btn" id="ap">Approve</button> <button class="btn danger" id="rf">Reject</button><div id="rbox"></div><div id="msg" class="note"></div></div>`:''}
+ <div class="card"><b>Activity</b><table style="margin-top:8px"><tr><th>When</th><th>Who</th><th>What</th></tr>${(d.audit||[]).map(e=>`<tr><td class="mute">${esc(e.at||e.ts||'')}</td><td>${esc(e.actor)}</td><td>${esc(e.summary||e.text||'')}</td></tr>`).join('')||'<tr><td colspan=3 class="mute">No activity yet.</td></tr>'}</table></div>
+ <button class="btn ghost" id="mod">Open in Gesir</button></div>`;
+ document.body.appendChild(box);
+ const close=()=>{box.remove();render()};
+ box.querySelector('#x').onclick=close;box.onclick=e=>{if(e.target===box)close()};
+ box.querySelector('#mod').onclick=()=>{box.remove();show('gesir')};
+ const say=(t,bad)=>{const el=box.querySelector('#msg');if(el)el.innerHTML=`<span class="${bad?'err':''}">${esc(t)}</span>`};
+ const ap=box.querySelector('#ap');if(ap)ap.onclick=async()=>{ap.disabled=true;try{await j(`/hub/${ORG}/approve/${encodeURIComponent(id)}`,{method:'POST'});box.remove();ORGS=await j('/hub/tenants');render()}catch(e){ap.disabled=false;say('Refused: '+e.message,true)}};
+ const rf=box.querySelector('#rf');if(rf)rf.onclick=()=>{rf.disabled=true;box.querySelector('#rbox').innerHTML='<div class="reason"><input id="why" placeholder="Reason (required)"><button class="btn danger" id="go">Confirm reject</button></div>';
+  box.querySelector('#go').onclick=async()=>{try{await j(`/hub/${ORG}/reject/${encodeURIComponent(id)}`,{method:'POST',body:JSON.stringify({reason:box.querySelector('#why').value})});box.remove();render()}catch(e){say('Refused: '+e.message,true)}}}}
+
+async function clients(){const c=await j(`/hub/${ORG}/clients`);
+ m.innerHTML=`<h1>Client List</h1><p class="sub">Manage client records and open each client project workspace.</p><div class="card">${c.length?`<table><tr><th>Client</th><th>Phone</th><th>Projects</th></tr>${c.map(x=>`<tr><td><b>${esc(x.name||x.id)}</b></td><td>${esc(x.phone||'')}</td><td>${x.projects}</td></tr>`).join('')}</table>`:'<div class="empty"><b>No Record</b>There is no record available to display in this table.</div>'}</div>`}
+
+function usersTable(extra){return `<table><tr><th>User</th><th>Email</th><th>Role</th><th>Approver</th><th>Reviewer</th>${extra?'<th>Notification recipients</th><th>Status</th>':''}</tr>${USERS.map(u=>`<tr><td><div style="display:flex;gap:10px;align-items:center"><div class="av" style="width:30px;height:30px;font-size:12px">${esc(u.name.split(' ').map(x=>x[0]).join('').slice(0,2))}</div><div><b>${esc(u.name)}</b><br><small class="mute">${esc(u.email)}</small></div></div></td><td>${esc(u.email)}</td><td>${roleOf(u)}</td><td>${u.approver?'Yes':'-'}</td><td>${u.reviewer?'Yes':'-'}</td>${extra?`<td>${u.approver||u.role==='Company Admin'?esc(u.email):'-'}</td><td><span class="pill ok">ACTIVE</span></td>`:''}</tr>`).join('')}</table>`}
+async function users(){m.innerHTML=`<h1>Users</h1><p class="sub">Manage employee records and open each user's context.</p><div class="card">${usersTable(false)}</div><p class="note">Users and roles are simulated. A Company Admin or an Approver can approve or reject Gesir estimates; anyone else can only read them. The module enforces this itself.</p>`}
+async function notifs(){m.innerHTML=`<h1>Settings &amp; Notifications</h1><p class="sub">Manage access, notification preferences and linked devices for users.</p><div class="card">${usersTable(true)}</div>`}
+
+async function wallet(){const w=await j(`/hub/${ORG}/wallet`);
+ m.innerHTML=`<h1>Wallet</h1><p class="sub">Manage your organization credits and review payment activity.</p>
+ <div class="grid2"><div class="card"><div class="head"><div><small class="mute" style="font-weight:700">WALLET BALANCE</small><br><span class="mute">Shared organization credits</span></div><span class="pill ok">Active</span></div><p class="mute" style="margin:14px 0 0">Available credits</p><div class="big">${w.credits}</div><p class="mute" style="margin:6px 0 0">Ready for organization use</p></div>
+ <div class="card"><small class="mute" style="font-weight:700">RECENT ACTIVITY</small>${w.transactions[0]?`<p style="margin:10px 0 0"><b>${esc(w.transactions[0].type)}</b>: ${w.transactions[0].change} credit</p><p class="mute" style="margin:0">${esc(w.transactions[0].details)}</p>`:'<p style="margin:10px 0 0"><b>No activity yet</b></p><p class="mute" style="margin:0">Your next credit use will appear here.</p>'}</div></div>
+ <div class="card"><div class="tabs" style="margin-bottom:8px"><span class="tab on">Transactions</span></div>${w.transactions.length?`<table><tr><th>Date</th><th>Type</th><th>Change</th><th>Balance</th><th>Details</th></tr>${w.transactions.map(t=>`<tr><td>${when(t.at)}</td><td>${esc(t.type)}</td><td>${t.change}</td><td>${t.balance}</td><td>${esc(t.details)}</td></tr>`).join('')}</table>`:'<div class="empty"><b>No transactions yet</b>Balance changes will appear here when credits are added or used.</div>'}</div>
+ <p class="note">Rule used here: each estimate a person approves in Gesir uses 1 credit. Orbyte's own pricing is not public, so this is an assumption.</p>`}
+
+async function orgsettings(){const ev=await j('/hub/events');const cur=ORGS.find(o=>o.id===ORG);
+ m.innerHTML=`<h1>Organization settings</h1><p class="sub">Manage how members sign in, join, and connect services.</p>
+ <div class="tabs" style="margin-bottom:14px"><span class="tab dim">Authentication methods</span><span class="tab dim">Member invitations</span><span class="tab dim">Memberships</span><span class="tab on">Integrations</span></div>
+ <div class="card"><div class="head"><div><b style="font-size:17px">Gesir: quotes and customer chat</b><p class="mute" style="margin:2px 0 0">Prepares price estimates from customer chats and asks an approver before anything is sent.</p></div><span class="pill ${cur?'ok':'bad'}">Connected</span></div>
+ <div class="kv" style="margin-top:12px"><span>Module address</span><span><code>${esc(cur.url)}</code></span><span>Events</span><span>Signed with HMAC-SHA256 (<code>x-orbyte-signature</code>)</span></div>
+ <p class="note">Assumed interface: Orbyte does not publish how modules connect. See docs/ORBYTE.md.</p></div>
+ <div class="card"><b>Events received from the module</b>${ev.length?`<table style="margin-top:8px"><tr><th>Time</th><th>Event</th><th>Signature</th><th>Details</th></tr>${ev.map(x=>`<tr><td class="mute">${when(x.at)}</td><td><b>${esc(x.type)}</b></td><td><span class="pill ${x.ok?'ok':'bad'}">${x.ok?'valid':'invalid'}</span></td><td class="mute">${esc(JSON.stringify(x.data||{}).slice(0,110))}</td></tr>`).join('')}</table>`:'<div class="empty"><b>No events yet</b>Approve or reject an estimate and it appears here.</div>'}</div>`}
+
+function gesir(){m.innerHTML=`<iframe src="${ORGS.find(o=>o.id===ORG).url}/app" title="Gesir module"></iframe>`}
+boot();
 </script></body></html>

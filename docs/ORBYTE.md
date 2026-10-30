@@ -55,6 +55,41 @@ Set `ORBYTE_ORIGIN` to the hub's address (for example `https://hub.example.com`)
 cookie becomes `SameSite=None` so it is sent inside the frame. Over plain http the cookie stays `SameSite=Lax`, which is
 enough for the local mock hub because localhost on two ports is the same site.
 
+## The mock hub (`scripts/mock_orbyte.py`)
+
+It follows the real Orbyte as seen in a signed-in account (October 2026) and shows only what Orbyte has. It uses no Orbyte code,
+logo or images, and is labelled "simulated".
+
+| Screen | Copied from the real Orbyte | Assumed (Orbyte does not publish it) |
+| ------ | --------------------------- | ------------------------------------ |
+| Layout, organization switcher, menu search, signed-in user at the bottom | Yes | |
+| Dashboard, Pending Actions with All, Submit, Review, Approve tabs | Yes | Gesir estimates appear as Approve items |
+| Clients, Project List (Search, Status, Source, Sync all) | Yes | Customers become Clients and quotes become Projects with Source "Gesir" |
+| Users, Settings & Notifications (Role, Approver, Reviewer, Notification recipients, Status) | Yes | Company Admin and Approver may approve; Reviewer and Member may only read |
+| Wallet (balance, Recent activity, Transactions) | Yes | One credit is used per approved estimate |
+| Organization Settings, Integrations | Tab exists (Qwen key, Documenso) | A "Gesir" card and the signed events it sends |
+| "Gesir Quotes" item and "Open in Gesir" | | The module opens in a frame |
+
+Not copied, because they would be invented: the Leave Calendar (it is for leave and public holidays, so Gesir jobs do not belong in it; the job calendar is in the Gesir module itself), leave requests, tasks, e-sign, top-up payments, Email Broadcast, reports. They show
+as greyed menu items or are left out. Users (Azer, Aisha, Mei) and their roles are simulated; the hub, not the browser, decides
+which role goes to the module.
+
+## Hosting the hub with a hosted Gesir (Replit)
+
+The local hub cannot work with a hosted Gesir as it is: the hosted app cannot send webhooks to `localhost`, and a login cookie from
+another site is not sent inside a frame. Run the hub on its own https address instead:
+
+1. Create a second Replit app from the same repository. Run command: `python scripts/mock_orbyte.py`. Deploy it as a Reserved VM or Autoscale.
+2. Secrets on the hub: `HUB_TENANTS` (for example `[{"id":"hrissa","name":"Hrissa","url":"https://gesir-ai.replit.app"}]`),
+   `INCOMING_API_KEY` (the Gesir app's key) and `ORBYTE_SHARED_SECRET` (any long random string).
+3. Secrets on the Gesir app: `ORBYTE_ORIGIN` (the hub's https address), `ORBYTE_SHARED_SECRET` (the same string) and
+   `ORBYTE_WEBHOOK_URL` (`https://<hub address>/hub/webhook/hrissa`, the last part is the organization id). Republish it.
+4. Open the hub, choose Gesir Quotes, and sign in to the dashboard once inside the frame.
+
+Warning: approving in the hub sends a real WhatsApp message through the hosted Gesir. Use it with the test customers only,
+or point `HUB_TENANTS` at a separate demo deployment of Gesir with seeded data.
+The wallet and the list of events are kept in memory, so they reset when the hub restarts.
+
 ## Not done yet
 
 - A different trade (not painting): pricing, schema and prompts are not config-only yet. A second business of the same trade is a config change (`config/business_config.second.example.json`).
