@@ -56,6 +56,9 @@ def ask_for(key, state):
             return t("ask_wall_length_m", lang)
         if key == "room_height_m":
             return t("ask_wall_height_m", lang)
+    if key == "preferred_datetime" and getattr(state, "date_issue", ""):
+        issue, state.date_issue = state.date_issue, ""         # the date they gave has gone by: say so, then ask again
+        return t(issue, lang)
     return t(f"ask_{key}", lang)
 
 

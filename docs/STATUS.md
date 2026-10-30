@@ -38,7 +38,7 @@ in `src/calendar_scheduler.py`) needs a server-held OAuth token and is not conne
 8. **Estimate PDF is a preview only**; it is not sent to the customer as a WhatsApp document.
 9. **Alerts for the owner.** New quotes and "needs a person" messages are only visible by opening the dashboard (it polls).
    A WhatsApp or push notification to the owner would close that gap.
-10. **Privacy.** No consent notice, data export or deletion, or retention rule yet (Malaysia's PDPA applies).
+10. **Privacy.** A PDPA consent notice before anything is read, STOP to erase, and owner erasure exist (see `docs/PDPA.md`). Still missing: a spoken notice for calls, automatic expiry, a customer data export.
 11. **Scope.** Only interior walls and ceilings are priced; trim, doors and exterior work go to a person.
 12. **Operations.** No automated alerting, no database backup routine, no automated frontend tests, no CI.
 13. **Hackathon platform.** Orbyte is not integrated (put aside on purpose).

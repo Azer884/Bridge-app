@@ -6,10 +6,10 @@ from dataclasses import asdict, replace
 from datetime import datetime
 
 from .assessment import LOW_CONFIDENCE, combine, from_dict
-from . import contact, flow, persona as persona_module, scheduling, views
+from . import consent, contact, flow, persona as persona_module, scheduling, views
 from .assistant import PHOTO_CONDITION, advance, handle_message
 from .guard import clean_profile_name, clean_profile_phone
-from .i18n import COLOUR_MS, ISSUE_MS, STRINGS, t
+from .i18n import COLOUR_MS, ISSUE_MS, STRINGS, detect, t
 from .pricing import PricingError, compute_quotation
 from .quote_message import approved_quote_message, duration_text, final_quote_message
 from .schema import ask_for
@@ -207,7 +207,7 @@ class IncomingService:
                         "orders": s.orders + ([current] if current else [])})
         return out
 
-    def approve_quote(self, user_id, send, total=None, send_pdf=None):
+    def approve_quote(self, user_id, send, total=None, send_pdf=None, by=None):
         """SME approval. Sends the customer the estimate and how long the job takes (never the breakdown);
         the quote is marked approved only if the send worked. Raises ValueError when nothing is waiting."""
         with self.store.lock(user_id):
@@ -228,7 +228,7 @@ class IncomingService:
             self.store.save(state)
             self.store.log_message(user_id, "out", message)
             self.store.add_audit(user_id, "owner", "state_change",
-                                 f"Estimate approved: {state.quote['currency']} {amount:,.2f}")
+                                 f"Estimate approved: {state.quote['currency']} {amount:,.2f}" + (f" by {by}" if by else ""))
             self.store.add_audit(user_id, "system", "send", "Estimate and duration sent to the customer on WhatsApp")
             if send_pdf is not None:
                 from .pdf import estimate_pdf
@@ -238,6 +238,23 @@ class IncomingService:
                     self.store.add_audit(user_id, "system", "send", "Estimate PDF sent to the customer on WhatsApp")
                 else:
                     self.store.log_event("send_failed", f"{user_id}: the estimate PDF could not be sent")
+            return True
+
+    def reject_quote(self, user_id, reason, by=None):
+        """The owner says no: nothing is sent to the customer and the job leaves the approval queue. Editing the
+        job values re-prices it and puts it back in the queue. Raises ValueError when nothing is waiting."""
+        reason = (reason or "").strip()
+        if not reason:
+            raise ValueError("a reason is required to reject an estimate")
+        with self.store.lock(user_id):
+            state = self.store.load(user_id)
+            if state.quote_status not in ("pending_approval", "needs_inspection"):
+                raise ValueError("no quote is waiting for approval")
+            state.quote["rejected"] = {"reason": reason[:200], "by": by, "at": time.time()}
+            state.quote_status, state.attention = "rejected", False
+            self.store.save(state)
+            self.store.add_audit(user_id, "owner", "state_change",
+                                 f"Estimate rejected: {reason[:150]}" + (f" (by {by})" if by else ""))
             return True
 
     def confirm_final(self, user_id, send, total):
@@ -266,7 +283,8 @@ class IncomingService:
         scores higher, so the crew's day stays compact. `busy` are events the dashboard already knows about."""
         state = self.store.load(user_id)
         anchor = datetime.fromtimestamp(state.created_at, scheduling.TZ) if state.created_at else None
-        preference = scheduling.parse_preference(state.verified.get("preferred_datetime"), anchor)
+        preference = scheduling.parse_preference(state.verified.get("preferred_datetime"), anchor,
+                                                  today=datetime.now(scheduling.TZ).date())
         return scheduling.suggest_slots(self.store.bookings(), self._job_hours(state), state.verified.get("address", ""),
                                         extra_busy=[(b["start"], b["end"]) for b in busy], preference=preference,
                                         location=state.verified.get("location"))
@@ -318,7 +336,9 @@ class IncomingService:
             when = scheduling.describe_when(booking["start"], state.lang)
             work = duration_text((state.quote or {}).get("schedule"), state.lang) or (
                 f"{hours:g} jam kerja" if state.lang == "ms" else f"about {hours:g} hours of work")
-            message = t("booking_ask", state.lang, owner=self._owner(state), when=when, text=work)
+            plan = scheduling.describe_days(booking, state.lang)
+            message = t("booking_ask", state.lang, owner=self._owner(state), when=when,
+                        text=work + (f" ({plan})" if plan else ""))
             notified = bool(send(message))
             if notified:
                 self.store.log_message(user_id, "out", message)
@@ -459,6 +479,9 @@ class IncomingService:
                 assessment = self.photo_assessor(media_id)
             except Exception:
                 log.exception("photo assessment failed for media %s", media_id)
+        if assessment is not None and not assessment.surface:
+            self.store.log_event("photo_not_a_surface", f"{state.conversation_id}: {assessment.subject or 'unknown'}")
+            return t("photo_not_surface", state.lang)               # a face or a t-shirt is not a wall
         if assessment is None or assessment.confidence < LOW_CONFIDENCE:
             return t("photo_reply", state.lang)
         previous = from_dict(state.photo_assessment) if state.photo_assessment else None
@@ -544,8 +567,65 @@ class IncomingService:
         except Exception:
             log.exception("could not notify the owner")
 
+    def erase_customer(self, user_id, by="the customer"):
+        """PDPA: remove everything held about one customer (chat, photos, bookings, log). Returns False if unknown."""
+        with self.store.lock(user_id):
+            state = self.store.load(user_id)
+            if not (self.store.messages(user_id) or state.history or state.consent or state.pending_first or state.verified):
+                return False                                      # nothing is held about this customer
+            self.store.delete_conversation(user_id)
+            self.store.log_event("data_erased", f"{user_id} erased by {by}")
+            return True
+
+    def _consent_gate(self, state, event):
+        """Returns (replies, erased) when the PDPA notice decides this message, else None. Nothing a customer sends is
+        read, saved or sent to a model until they answer the notice with 1; STOP erases everything."""
+        if not consent.required(self.config) or event.channel == "voice":
+            return None
+        text = event.text if event.type == "text" else ""
+        owner = self._owner(state)
+        if consent.withdraws(text) and state.consent in ("granted", "pending", "declined"):
+            lang = state.lang
+            self.store.delete_conversation(event.user_id)
+            self.store.log_event("data_erased", f"{event.user_id} withdrew consent")
+            return [t("consent_withdrawn", lang)], True
+        if state.consent == "granted":
+            return None
+        if state.consent == "" and not state.history and not state.verified:
+            if event.type == "text" and text.strip():
+                state.pending_first = text.strip()[:1000]       # held unread, replayed once they agree
+            state.lang = detect(text, state.lang) if text else state.lang
+            state.consent, state.consent_asks = "pending", 1
+            state.greeted = False
+            return [t("consent_notice", state.lang, business=self.config.get("business_name", "Gesir.AI"), owner=owner)], False
+        if state.consent == "":                                  # a chat that began before consent was required
+            state.consent = "pending"
+        if consent.agrees(text):
+            state.consent, state.consent_at = "granted", time.time()
+            self.store.add_audit(event.user_id, "customer", "consent",
+                                 f"Agreed to the PDPA notice ({(self.config.get('privacy') or {}).get('notice_version', '')})")
+            first, state.pending_first = state.pending_first, ""
+            if first:
+                self.store.log_message(event.user_id, "in", first)
+                return [self._answer(state, first)], False
+            return [f"{t('consent_thanks', state.lang)} {self._answer(state, 'hi')}".strip()], False
+        if consent.declines(text):
+            state.consent, state.pending_first = "declined", ""
+            self.store.add_audit(event.user_id, "customer", "consent", "Declined the PDPA notice")
+            return [t("consent_declined", state.lang, owner=owner)], False
+        state.consent_asks += 1                                 # anything else: ask again, a few times, then stay quiet
+        if state.consent_asks > consent.MAX_ASKS:
+            return [], False
+        return [t("consent_again", state.lang)], False
+
     def _handle_locked(self, event):
         state = self.store.load(event.user_id)
+        gated = self._consent_gate(state, event)
+        if gated is not None:
+            replies, erased = gated
+            if not erased:
+                self.store.save(state)
+            return replies
         before = (state.needs_human, state.attention, state.quote_status, (state.pending_booking or {}).get("id"))
         if not state.history and not state.channel:
             channel = {"name": clean_profile_name(event.profile_name),

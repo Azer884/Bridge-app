@@ -51,6 +51,9 @@ function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<voi
   const [confirm, setConfirm] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState<unknown>(null);
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+  const [rejectErr, setRejectErr] = useState<unknown>(null);
   const seq = useRef(0);
 
   const readOnly = d.locked || d.status === "collecting" || !d.quote || !params;
@@ -111,6 +114,35 @@ function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<voi
       await reload();
     } catch (e) {
       setSendErr(e);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function reopen() {
+    setSending(true);
+    try {
+      await api.saveParams(d.user_id, values);          // saving re-prices the job and puts it back in the approval list
+      toast("Back in the approval list");
+      onChanged();
+      await reload();
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function reject() {
+    setSending(true);
+    setRejectErr(null);
+    try {
+      await api.rejectQuote(d.user_id, reason.trim());
+      setRejecting(false);
+      setReason("");
+      toast(`Estimate for ${d.job.name ?? "customer"} rejected. Nothing was sent.`);
+      onChanged();
+      await reload();
+    } catch (e) {
+      setRejectErr(e);
     } finally {
       setSending(false);
     }
@@ -241,12 +273,22 @@ function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<voi
             </section>
           )}
 
-          {!readOnly && quote && (
+          {!readOnly && quote && d.status === "rejected" && (
+            <div className="sendbar">
+              <div>
+                <small className="muted">Rejected, nothing was sent</small>
+                <span>Change a value if something was wrong, then put it back for approval.</span>
+              </div>
+              <button className="btn primary" disabled={sending} onClick={reopen}>{sending ? "Working…" : "Put back for approval"}</button>
+            </div>
+          )}
+          {!readOnly && quote && d.status !== "rejected" && (
             <div className="sendbar">
               <div>
                 <small className="muted">The customer gets</small>
                 <b className="num">{money(finalTotal, cur)}</b>
               </div>
+              <button className="btn" disabled={sending} onClick={() => { setRejectErr(null); setRejecting(true); }}>Reject</button>
               <button className="btn primary" disabled={!canSend} onClick={() => { setSendErr(null); setConfirm(true); }}>
                 {calc.status === "loading" ? "Recalculating…" : "Approve and send"}
               </button>
@@ -254,6 +296,21 @@ function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<voi
           )}
           {!readOnly && hasErrors && <p className="err" role="alert">Fix the highlighted values before sending.</p>}
         </>
+      )}
+
+      {rejecting && (
+        <Modal title="Reject this estimate?" onClose={() => !sending && setRejecting(false)}>
+          <p>Nothing is sent to the customer. Your reason is saved in the activity log. If you change the values later, the estimate comes back for approval.</p>
+          <label className="field">
+            <span>Reason (required)</span>
+            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="For example: check the height with the customer" maxLength={200} autoFocus />
+          </label>
+          {rejectErr != null && <div className="alert">{explainError(rejectErr)}</div>}
+          <div className="modal-actions">
+            <button className="btn" onClick={() => setRejecting(false)} disabled={sending}>Cancel</button>
+            <button className="btn primary" onClick={reject} disabled={sending || reason.trim().length < 3}>{sending ? "Rejecting…" : "Reject estimate"}</button>
+          </div>
+        </Modal>
       )}
 
       {confirm && (

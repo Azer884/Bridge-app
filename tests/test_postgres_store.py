@@ -109,6 +109,7 @@ class PostgresStoreTests(unittest.TestCase):
         from src.service import IncomingService
         from tests.test_core import FakeClient, reply
         config = json.loads(Path("config/business_config.example.json").read_text(encoding="utf-8"))
+        config.pop("privacy", None)
         service = IncomingService(self.store, config, FakeClient(reply("Which surfaces would you like painted?")))
         out = service.handle(IncomingEvent("w1", "6012", text="hi, saya nak cat dinding bilik", profile_name="Azer"))
         self.assertTrue(out)

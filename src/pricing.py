@@ -88,6 +88,44 @@ def _schedule(area, coats, multiplier, prep_hours, pricing):
             "crew_size": crew, "hours_on_site": float(round(hours / crew, 1)), "working_days": days}
 
 
+def _benchmark_lines(bench, wall_area, ceiling_area, tier, level, multiplier, height, verified, pricing, assumptions):
+    """Price lines from real market rates (per sq ft, see the config's benchmark block and its sources) instead of a
+    bottom-up estimate. Returns (lines, market) where market is the typical range for the same job."""
+    sqft = _d(bench["sq_ft_per_m2"])
+    walls_cfg, ceiling_cfg = bench["walls"], bench["ceiling"]
+    factor = _d(bench["tier_factor"].get(tier, 1))
+    lines, wall_pl = [], Decimal(0)
+    if wall_area:
+        wall_sqft = wall_area * sqft
+        wall_pl = _d(walls_cfg["paint_and_labour"])
+        rate = _money(wall_pl * factor * multiplier)
+        lines.append(LineItem("Painting - walls, paint and labour (2 coats)", wall_sqft, "sq ft", rate,
+                              _money(wall_sqft * rate), LABOUR))
+        prep_rate = _d(bench["preparation_by_condition"].get(level, bench["preparation_by_condition"]["minor"]))
+        if prep_rate:
+            lines.append(LineItem(f"Surface preparation - filling and sanding ({level} condition)", wall_sqft, "sq ft",
+                                  _money(prep_rate), _money(wall_sqft * _money(prep_rate)), PREP))
+    if ceiling_area:
+        ceiling_sqft = ceiling_area * sqft
+        rate = _money(_d(ceiling_cfg["all_in"]) * factor * multiplier)
+        lines.append(LineItem("Painting - ceiling, all-in", ceiling_sqft, "sq ft", rate,
+                              _money(ceiling_sqft * rate), LABOUR))
+        assumptions.append("the ceiling rate is a market listing whose scope is not stated, so it is treated as all-in")
+    assumptions.append("rates are market medians per sq ft (" + walls_cfg["source"] + "); the final price is confirmed after measuring on site")
+    if level == "moderate":
+        assumptions.append("moderate surface condition: preparation is priced at twice the minor-filling rate (an assumption, not in the market data)")
+    if tier != "standard":
+        assumptions.append(f"'{tier}' paint adjusts the paint and labour rate by {factor}: an assumption, the market data is for standard paint")
+    if height > _d(pricing["height_surcharge"]["above_m"]):
+        assumptions.append(f"height above {pricing['height_surcharge']['above_m']} m: labour x{pricing['height_surcharge']['multiplier']} for access (an assumption)")
+    address = str(verified.get("address") or "").lower()
+    if any(name in address for name in bench.get("other_states", ())) and not any(
+            name in address for name in bench.get("verified_regions", ())):
+        assumptions.append("no verified 2026 rate for this area: the Klang Valley market rate is used and the owner must confirm it")
+    spread = (_d(walls_cfg["total_min"]) / _d(walls_cfg["total_median"]), _d(walls_cfg["total_max"]) / _d(walls_cfg["total_median"]))
+    return lines, {"low_factor": float(spread[0]), "high_factor": float(spread[1])}
+
+
 def compute_quotation(verified, pricing, vision=None, overrides=None):
     """verified: the conversation's verified fields. pricing: config['pricing'].
     vision: optional validated ConditionAssessment from a photo.
@@ -166,37 +204,48 @@ def compute_quotation(verified, pricing, vision=None, overrides=None):
         complexity_multiplier *= _d(pricing["complexity_multipliers"].get(flag, 1))
     multiplier *= min(complexity_multiplier, _d(pricing["max_complexity_multiplier"]))
 
-    lines = []
-    for label, surface_area, rate in (("walls", wall_area, labour_rates["walls"]),
-                                      ("ceiling", ceiling_area, labour_rates["ceiling"])):
-        if surface_area:
-            unit_price = _money(_d(rate) * multiplier)
-            quantity = surface_area * coats
-            lines.append(LineItem(f"Painting labour - {label} ({coats} coats)", quantity,
-                                  "m2 coat", unit_price, _money(quantity * unit_price), LABOUR))
+    bench = pricing.get("benchmark")
+    litres, market = Decimal(0), None
+    if bench:
+        # the market rates already reflect the surface condition (through the preparation line), so only access
+        # (height) and complexity scale them
+        lines, market = _benchmark_lines(bench, wall_area, ceiling_area, tier, level,
+                                         multiplier / _d(condition["labour_multiplier"]), height, verified,
+                                         pricing, assumptions)
+        prep_hours = area / 10 * _d(condition["prep_hours_per_10m2"])      # only for the working-hours estimate
+    else:
+        lines = []
+        for label, surface_area, rate in (("walls", wall_area, labour_rates["walls"]),
+                                          ("ceiling", ceiling_area, labour_rates["ceiling"])):
+            if surface_area:
+                unit_price = _money(_d(rate) * multiplier)
+                quantity = surface_area * coats
+                lines.append(LineItem(f"Painting labour - {label} ({coats} coats)", quantity,
+                                      "m2 coat", unit_price, _money(quantity * unit_price), LABOUR))
 
-    # paint: litres for every coat plus wastage, bought in whole litres
-    wastage = 1 + _d(pricing.get("paint_wastage_pct", 0)) / 100
-    litres = Decimal(math.ceil(area * coats * wastage / _d(paint["coverage_m2_per_litre"]))) if area else Decimal(0)
-    paint_amount = Decimal(0)
-    if litres:
-        paint_amount = _money(litres * _d(paint["price_per_litre"]))
-        lines.append(LineItem(f"Paint - {tier}", litres, "litre", _d(paint["price_per_litre"]),
-                              paint_amount, PAINT))
+        # paint: litres for every coat plus wastage, bought in whole litres
+        wastage = 1 + _d(pricing.get("paint_wastage_pct", 0)) / 100
+        litres = Decimal(math.ceil(area * coats * wastage / _d(paint["coverage_m2_per_litre"]))) if area else Decimal(0)
+        paint_amount = Decimal(0)
+        if litres:
+            paint_amount = _money(litres * _d(paint["price_per_litre"]))
+            lines.append(LineItem(f"Paint - {tier}", litres, "litre", _d(paint["price_per_litre"]),
+                                  paint_amount, PAINT))
 
-    # surface preparation
-    prep_hours = area / 10 * _d(condition["prep_hours_per_10m2"])
-    if prep_hours:
-        prep_rate = _d(pricing["prep_hourly_rate"])
-        lines.append(LineItem(f"Surface preparation ({level} condition)", prep_hours, "hour",
-                              prep_rate, _money(prep_hours * prep_rate), PREP))
+        # surface preparation
+        prep_hours = area / 10 * _d(condition["prep_hours_per_10m2"])
+        if prep_hours:
+            prep_rate = _d(pricing["prep_hourly_rate"])
+            lines.append(LineItem(f"Surface preparation ({level} condition)", prep_hours, "hour",
+                                  prep_rate, _money(prep_hours * prep_rate), PREP))
 
-    # masking tape, drop sheets, sandpaper, filler, brushes and rollers
-    sundries_pct = _d(pricing.get("sundries_pct_of_paint", 0))
-    if paint_amount and sundries_pct:
-        sundries = _money(paint_amount * sundries_pct / 100)
-        lines.append(LineItem(f"Masking, drop sheets, sandpaper, filler, rollers ({sundries_pct}% of paint)",
-                              Decimal(1), "lot", sundries, sundries, MATERIALS))
+        # masking tape, drop sheets, sandpaper, filler, brushes and rollers
+        sundries_pct = _d(pricing.get("sundries_pct_of_paint", 0))
+        if paint_amount and sundries_pct:
+            sundries = _money(paint_amount * sundries_pct / 100)
+            lines.append(LineItem(f"Masking, drop sheets, sandpaper, filler, rollers ({sundries_pct}% of paint)",
+                                  Decimal(1), "lot", sundries, sundries, MATERIALS))
+
 
     subtotal = _money(sum((line.amount for line in lines), Decimal(0)))
     markup = _money(subtotal * _d(pricing["markup_pct"]) / 100)
@@ -221,12 +270,18 @@ def compute_quotation(verified, pricing, vision=None, overrides=None):
     if area > _d(pricing["max_area_without_inspection_m2"]):
         flags.append(f"area {area} m2 exceeds {pricing['max_area_without_inspection_m2']} m2")
 
+    if market:
+        low, high = _money(total * _d(market["low_factor"])), _money(total * _d(market["high_factor"]))
+        assumptions.append(f"typical market range for this job: {pricing['currency']} {low:,.0f} to {high:,.0f} "
+                           f"(10 Klang Valley contractor quotes for a similar scope)")
     return Quotation(
         status="needs_inspection" if flags else "draft_ready", currency=pricing["currency"],
         lines=lines, subtotal=subtotal, markup=markup, total=_money(total),
         minimum_charge_applied=minimum_applied, flags=flags, assumptions=assumptions,
         breakdown=breakdown, schedule=schedule,
-        inputs={"wall_area_m2": float(wall_area), "ceiling_area_m2": float(ceiling_area),
+        inputs={"market_range": ({"low": float(_money(total * _d(market["low_factor"]))),
+                                  "high": float(_money(total * _d(market["high_factor"])))} if market else None),
+                "wall_area_m2": float(wall_area), "ceiling_area_m2": float(ceiling_area),
                 "rooms": len(rooms), "coats": coats, "paint_tier": tier, "condition_level": level,
                 "condition_issues": list(issues), "complexity_flags": list(complexity),
                 "labour_multiplier": float(multiplier), "litres": float(litres)})

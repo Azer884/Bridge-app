@@ -28,6 +28,7 @@ from src.store import SqliteStore
 from stress_scenarios import S
 
 CONFIG = json.loads((ROOT / "config" / "business_config.example.json").read_text(encoding="utf-8"))
+CONFIG.pop("privacy", None)          # the PDPA consent step has its own tests (test_consent.py)
 STATS = {"calls": 0, "seconds": 0.0, "errors": 0}
 LOCK = threading.Lock()
 

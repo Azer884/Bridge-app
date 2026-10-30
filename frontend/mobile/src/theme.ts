@@ -71,6 +71,7 @@ export const STATUS_COLOR: Record<string, string> = {
   pending_approval: "#E9B949",
   approved: "#1C8F63",
   needs_inspection: "#C93A24",
+  rejected: "#C93A24",
   collecting: "#6B8290",
   completed: "#6B8290",
 };

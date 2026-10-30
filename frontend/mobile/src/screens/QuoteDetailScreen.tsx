@@ -13,7 +13,7 @@ import { FinalCard } from "../quote/FinalCard";
 import { PdfCard } from "../quote/PdfCard";
 import { PriceCard, type CalcState } from "../quote/PriceCard";
 import { C, F, useTheme } from "../theme";
-import { Banner, Btn, Empty, Group, Pill, Row, Screen, Segmented, Sheet, T, success } from "../ui";
+import { Banner, Btn, Empty, Field, Group, Pill, Row, Screen, Segmented, Sheet, T, success } from "../ui";
 
 type Tab = "quote" | "chat" | "activity";
 
@@ -48,6 +48,9 @@ function Loaded({ d, reload }: { d: Detail; reload: () => Promise<void> }) {
   const [confirm, setConfirm] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState<unknown>(null);
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+  const [rejectErr, setRejectErr] = useState<unknown>(null);
   const seq = useRef(0);
 
   const readOnly = d.locked || d.status === "collecting" || !d.quote || !params;
@@ -113,12 +116,47 @@ function Loaded({ d, reload }: { d: Detail; reload: () => Promise<void> }) {
     }
   }
 
+  async function reject() {
+    setSending(true);
+    setRejectErr(null);
+    try {
+      await api.rejectQuote(d.user_id, reason.trim());
+      success();
+      setRejecting(false);
+      setReason("");
+      await reload();
+    } catch (e) {
+      setRejectErr(e);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function reopen() {
+    setSending(true);
+    try {
+      await api.saveParams(d.user_id, values); // saving re-prices the job and puts it back in the approval list
+      success();
+      await reload();
+    } finally {
+      setSending(false);
+    }
+  }
+
   const footer =
-    tab === "quote" && !readOnly && quote ? (
+    tab === "quote" && !readOnly && quote && d.status === "rejected" ? (
+      <View style={{ gap: 8 }}>
+        <T v="foot">Rejected, nothing was sent. Change a value if something was wrong, then put it back for approval.</T>
+        <Btn label="Put back for approval" busy={sending} onPress={reopen} />
+      </View>
+    ) : tab === "quote" && !readOnly && quote ? (
       <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
         <View style={{ flex: 1 }}>
           <T v="foot">The customer gets</T>
           <T v="money">{money(finalTotal, cur)}</T>
+        </View>
+        <View style={{ flex: 0.8 }}>
+          <Btn kind="tinted" label="Reject" disabled={sending} onPress={() => { setRejectErr(null); setRejecting(true); }} />
         </View>
         <View style={{ flex: 1.2 }}>
           <Btn label={calc.status === "loading" ? "Recalculating…" : "Approve and send"} disabled={!canSend} onPress={() => { setSendErr(null); setConfirm(true); }} />
@@ -228,6 +266,13 @@ function Loaded({ d, reload }: { d: Detail; reload: () => Promise<void> }) {
           </>
         )}
       </Screen>
+
+      <Sheet visible={rejecting} title="Reject this estimate?" onClose={() => !sending && setRejecting(false)}>
+        <T v="sub">Nothing is sent to the customer. Your reason is saved in the activity log. If you change the values later, the estimate comes back for approval.</T>
+        <Field label="Reason (required)" value={reason} onChangeText={setReason} placeholder="For example: check the height with the customer" maxLength={200} />
+        {rejectErr != null ? <Banner text={explainError(rejectErr)} /> : null}
+        <Btn label="Reject estimate" busy={sending} disabled={reason.trim().length < 3} onPress={reject} />
+      </Sheet>
 
       <Sheet visible={confirm} title="Send this quote?" onClose={() => !sending && setConfirm(false)}>
         <Group>

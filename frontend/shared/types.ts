@@ -1,7 +1,7 @@
-﻿export type QuoteStatus = "pending_approval" | "approved" | "needs_inspection" | "collecting" | "completed";
+﻿export type QuoteStatus = "pending_approval" | "approved" | "needs_inspection" | "collecting" | "completed" | "rejected";
 
 /** Pipeline stage shown on the Pipeline page. Derived by the backend (or by stageOf in shared/calc.ts). */
-export type Stage = "pending_extraction" | "requires_approval" | "quote_sent" | "scheduled" | "completed";
+export type Stage = "pending_extraction" | "requires_approval" | "quote_sent" | "scheduled" | "completed" | "rejected";
 
 export interface Job {
   address?: string;

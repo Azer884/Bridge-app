@@ -196,6 +196,7 @@ class ScheduleEstimateTests(unittest.TestCase):
         from pathlib import Path
         from src.pricing import compute_quotation
         config = json.loads(Path("config/business_config.example.json").read_text(encoding="utf-8"))
+        config.pop("privacy", None)
         verified = {"surfaces": ["walls"], "room_length_m": 4, "room_width_m": 3, "room_height_m": 2.5,
                     "surface_condition": "good"}
         schedule = compute_quotation(verified, config["pricing"]).to_dict()["schedule"]

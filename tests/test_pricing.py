@@ -129,18 +129,57 @@ class AssessmentTests(unittest.TestCase):
 DEMO = json.loads((Path(__file__).resolve().parent.parent / "config" / "business_config.example.json").read_text())["pricing"]
 
 
-class MalaysianDemoRateTests(unittest.TestCase):
+SQFT = Decimal("10.763910416709722")
+
+
+class MalaysianMarketRateTests(unittest.TestCase):
+    """The example rate card is the real 2026 market data in config/painting_prices_malaysia_2026.csv."""
+
+    def quote(self, level="minor", **kw):
+        return compute_quotation(job(**kw), DEMO, overrides={"condition_level": level})
+
     def test_breakdown_sums_to_total_and_is_in_ringgit(self):
-        q = compute_quotation(job(), DEMO)
+        q = self.quote()
         self.assertEqual(q.currency, "MYR")
         self.assertEqual(sum(q.breakdown.values(), Decimal(0)), q.total)
-        self.assertEqual(set(q.breakdown), {"Labour", "Paint", "Materials & sundries", "Overheads & profit"})
 
-    def test_hand_calculated_demo_quote(self):
-        # labour 70*4.2 + 24*5.0 = 414; paint ceil(94*1.05/10)=10 L * 47 = 470; sundries 47;
-        # subtotal 931; overheads 15% = 139.65; total 1070.65
-        q = compute_quotation(job(), DEMO)
-        self.assertEqual((q.subtotal, q.markup, q.total), (Decimal("931.00"), Decimal("139.65"), Decimal("1070.65")))
+    def test_hand_calculated_walls_and_ceiling_at_market_rates(self):
+        # walls 35 m2 and ceiling 12 m2, minor condition: walls RM1.30/sq ft paint+labour and RM0.65/sq ft preparation
+        # (SRC001, together the RM1.95 median); ceiling RM1.20/sq ft all-in (SRC003)
+        q = self.quote()
+        walls, ceiling = Decimal(35) * SQFT, Decimal(12) * SQFT
+        expected = (walls * Decimal("1.30")).quantize(Decimal("0.01")) + (walls * Decimal("0.65")).quantize(Decimal("0.01"))             + (ceiling * Decimal("1.20")).quantize(Decimal("0.01"))
+        self.assertEqual(q.total, expected)
+        self.assertEqual(q.markup, Decimal("0.00"))        # market rates already include the contractor's margin
+
+    def test_the_study_job_lands_on_the_published_median(self):
+        # SRC001: 1,205 sq ft of previously painted wall, minor filling and sanding, two coats: median RM1.95/sq ft
+        q = compute_quotation(job(room_length_m=10.0, room_width_m=9.99, room_height_m=2.8, surfaces=["walls"]),
+                              DEMO, overrides={"condition_level": "minor"})
+        sqft = Decimal(str(q.inputs["wall_area_m2"])) * SQFT
+        self.assertAlmostEqual(float(q.total / sqft), 1.95, places=2)
+        low, high = q.inputs["market_range"]["low"], q.inputs["market_range"]["high"]
+        self.assertAlmostEqual(low / float(sqft), 1.70, places=2)       # the study's cheapest quote
+        self.assertAlmostEqual(high / float(sqft), 2.30, places=2)      # and its dearest
+
+    def test_good_condition_needs_no_filling(self):
+        good, minor = self.quote("good"), self.quote("minor")
+        self.assertLess(good.total, minor.total)
+        walls_only = compute_quotation(job(surfaces=["walls"]), DEMO, overrides={"condition_level": "good"})
+        self.assertAlmostEqual(float(walls_only.total / (Decimal(35) * SQFT)), 1.30, places=2)    # the paint+labour component
+
+    def test_the_same_input_gives_the_same_price(self):
+        self.assertEqual(self.quote().to_dict(), self.quote().to_dict())
+
+    def test_outside_klang_valley_is_flagged_for_the_owner(self):
+        q = self.quote(address="12 Jalan Setia, Johor Bahru, Johor")
+        self.assertIn("no verified 2026 rate", " ".join(q.assumptions))
+        self.assertNotIn("no verified 2026 rate", " ".join(self.quote(address="12 Jalan Ampang, Kuala Lumpur").assumptions))
+
+    def test_assumptions_that_are_not_in_the_data_are_labelled(self):
+        text = " ".join(self.quote("moderate", paint_tier="premium").assumptions)
+        self.assertIn("not in the market data", text)
+        self.assertIn("assumption", text)
 
     def test_minimum_charge_shows_as_its_own_breakdown_line(self):
         q = compute_quotation(job(room_length_m=1.0, room_width_m=1.0, room_height_m=2.0, surfaces=["walls"]), DEMO)

@@ -11,7 +11,7 @@ from .grounding import (HEDGES, ONES, UNIT_FACTORS, GroundingError, cued_sizes, 
                         unit_factors_in)
 from .guard import MAX_STRIKES, clip_message, is_abusive, screen_input
 from . import rooms as rooms_module
-from .answers import CONDITION_STRONG, address_in, explicit_name, fix_typos, is_condition, plausible
+from .answers import CONDITION_STRONG, address_in, condition_clause, explicit_name, fix_typos, is_condition, plausible
 from .i18n import COLOUR_WORDS, STRINGS, TIER_WORDS, detect, metres, requested_language, t, us_spelling
 from .persona import greeting_line, render, text as persona_text
 from .prompt import build_messages, load_system_prompt
@@ -117,7 +117,8 @@ def _handle(state, message, config, client, max_retries=MAX_RETRIES):
             flow.start_new_order(state)         # a returning customer: archive the old job, start a new one
         else:
             return _after_done(state, message, config)
-    if flow.is_correction(message) and state.stage in ("contact", "wrapup", "job"):
+    if (flow.is_correction(message) and state.stage in ("contact", "wrapup", "job")) or (
+            state.stage in ("contact", "wrapup") and _states_dimension(state, message)):      # after the recap a stated size is final
         fixed = _correct_measurement(state, message)
         if fixed:
             return _after_correction(state, message, config, fixed)
@@ -343,8 +344,8 @@ def _ask_again(state, message, config, result, asked, attempt):
         result.reply = ask_for(missing[0], state) if missing else ""
         result.status = Status.COLLECTING.value if missing else Status.READY.value
     else:
-        if asked == "preferred_datetime" and flow._PAST_DATE.search(message):
-            key = "date_past"
+        if asked == "preferred_datetime" and flow.date_problem(message) in ("date_past", "date_past_year"):
+            key = flow.date_problem(message)
         elif asked == "preferred_datetime" and flow._DATE_NEEDS_DAY.search(message):
             key = "date_need_day"
         else:
@@ -365,7 +366,7 @@ def _after_done(state, message, config):
     the estimate goes back to the owner to approve again at the new price."""
     before = {k: state.verified.get(k) for k in _PRICED + _NOTED}
     before["extra_rooms"] = [dict(r) for r in state.verified.get("extra_rooms") or []] or None
-    fixed = _correct_measurement(state, message) if flow.is_correction(message) else None
+    fixed = _correct_measurement(state, message) if flow.is_correction(message) or _states_dimension(state, message) else None
     if not fixed:
         state.stage = "job"                     # the readers below work on a job in progress
         try:
@@ -569,7 +570,7 @@ def _prefill_job(state, message, config):
     required = set(state.required_fields(config))
     if "surface_condition" in required and "surface_condition" not in state.verified \
             and CONDITION_STRONG.search(message) and "?" not in message:
-        state.verified["surface_condition"] = " ".join(message.split())[:160]    # "paint is peeling and some damp"
+        state.verified["surface_condition"] = condition_clause(message)    # "paint is peeling and some damp"
     if "paint_tier" in required and "paint_tier" not in state.verified:
         tier = _TIERS.search(message)                   # "Eco", "premium please": said before it was asked
         if tier:
@@ -580,8 +581,10 @@ def _prefill_job(state, message, config):
             state.verified["colour"] = " and ".join(dict.fromkeys(colours))
     if "preferred_datetime" in required and "preferred_datetime" not in state.verified and len(message.split()) > 1:
         when = flow.when_in(message, strict=True)
-        if when:
+        if when and not flow.date_problem(message):       # a date that has gone by is asked about, not stored
             state.verified["preferred_datetime"] = when
+        elif when:
+            state.date_issue = flow.date_problem(message) or ""
     missing = state.missing_required(config)
     if "surface_condition" in missing and state.photo_assessment:
         state.verified["surface_condition"] = PHOTO_CONDITION      # the photo already shows it
@@ -591,8 +594,10 @@ def _prefill_job(state, message, config):
     key = missing[0]
     if key == "preferred_datetime":
         when = flow.when_in(message)
-        if when:
+        if when and not flow.date_problem(message):
             state.verified[key] = when
+        elif when:
+            state.date_issue = flow.date_problem(message) or ""
     elif key == "surface_condition" and flow._BARE_NO.match(message):
         state.verified[key] = "no visible damage reported"
     elif key == "paint_tier":
@@ -642,13 +647,20 @@ def _prefill_measurement(state, message, config):
     if pending:                                         # the customer is answering "meters or feet?"
         state.pending_sizes = None
         factors = unit_factors_in(message)
+        if not factors and message.strip(" .!").lower() in contact.AFFIRMATIVE and not pending.get("tries"):
+            pending["asked"], pending["tries"] = False, 1       # "yes" does not say meters or feet: ask once more
+            state.pending_sizes = pending
+            return
         if len(factors) == 1:
             factor = next(iter(factors))
             if factor in (1.0, 0.3048):
                 state.unit_factor = factor                      # they measure in feet: later plain numbers are feet
             for key, value in zip(pending["keys"], pending["values"]):
                 if key in open_fields:
-                    keep(key, round(value * factor, 3))
+                    converted = round(value * factor, 3)
+                    if key == "room_height_m" and converted < 1.5 <= value:
+                        converted = float(value)            # "12 x 10 x 3": a 3 ft ceiling is not a room, so it is 3 m
+                    keep(key, converted)
             return
     cued = {k: v for k, v in cued_sizes(message).items() if k in open_fields}
     for key, value in cued.items():                     # "height of 3 meters", "4 m long", a square room's perimeter
@@ -737,9 +749,27 @@ def _size_keys(message, open_fields, count):
     return open_fields[:count]
 
 
+_NOT_NUMBER = re.compile(r"\b(?:not|bukan)\s+\d+(?:[.,]\d+)?\s*(?:m|meters?|metres?|cm|ft|feet|kaki)?\b", re.I)
+
+
+def _states_dimension(state, message):
+    """"the height is 5 m", "it's 5m tall": one number, a unit and one dimension word for a size already stored. The
+    customer is stating the right value, so it replaces the old one even without a "nvm" or "actually"."""
+    if "?" in message:
+        return False
+    upper, _ = estimate_in(message)
+    numbers = [upper] if upper is not None else numbers_in(message)
+    if len(numbers) != 1 or not unit_factors_in(message):
+        return False
+    words = set(re.findall(r"[a-z]+", message.lower()))
+    cued = [k for k in _CUES if _CUES[k] & words]
+    return len(cued) == 1 and cued[0] in state.verified
+
+
 def _correct_measurement(state, message):
     """"nvm its 4m": replace the measurement the customer gave last (or the one they name). Returns the
     acknowledgement, or None when the message is not a clear correction of a size."""
+    message = _NOT_NUMBER.sub(" ", message)             # "its 2.7 not 5": the number after "not" is the wrong one
     upper, estimated = estimate_in(message)
     numbers = [upper] if upper is not None else numbers_in(message)
     if len(numbers) != 1:
@@ -790,7 +820,7 @@ def _swap_answers(state, message, config):
             v["colour"] = new
     if "preferred_datetime" in v:
         when = flow.when_in(message, strict=True)
-        if when and when != v["preferred_datetime"] and (swap or short):
+        if when and when != v["preferred_datetime"] and (swap or short) and not flow.date_problem(message):
             v["preferred_datetime"] = when
     _swap_surfaces(state, message, swap)
     sized = sizes_in(message)

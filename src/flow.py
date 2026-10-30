@@ -208,10 +208,46 @@ _NO_DATE_PREF = re.compile(
     r"flexible|terpulang|apa saja|apa-?apa|mana-?mana|tak kisah)\b", re.I)
 
 
-def date_problem(message):
-    """A date answer that cannot be booked: 'date_past' (yesterday) or 'date_need_day' ("after Raya"), else None."""
+_MONTH_NUMBER = {"jan": 1, "feb": 2, "mar": 3, "mac": 3, "apr": 4, "may": 5, "mei": 5, "jun": 6, "jul": 7, "aug": 8,
+                 "ogo": 8, "sep": 9, "oct": 10, "okt": 10, "nov": 11, "dec": 12, "dis": 12}
+_MONTH_NAMES = ("january|jan|february|feb|march|mar|mac|april|apr|may|mei|june|jun|july|jul|august|aug|ogos|"
+                "september|sept|sep|october|oct|okt|november|nov|december|disember|dec|dis")
+_DAY_MONTH = re.compile(rf"\b(\d{{1,2}})(?:st|nd|rd|th)?\s+({_MONTH_NAMES})\b\.?(?:,?\s+(\d{{4}}))?", re.I)
+_MONTH_DAY = re.compile(rf"\b({_MONTH_NAMES})\b\.?\s+(\d{{1,2}})(?:st|nd|rd|th)?\b(?:,?\s+(\d{{4}}))?", re.I)
+
+
+def explicit_date(message):
+    """(day, month, year or None) of the first "20 Oct", "Oct 20" or "20 October 2027" in the message, else None."""
+    found = _DAY_MONTH.search(message)
+    if found:
+        return int(found.group(1)), _MONTH_NUMBER[found.group(2).lower()[:3]], int(found.group(3)) if found.group(3) else None
+    found = _MONTH_DAY.search(message)
+    if found:
+        return int(found.group(2)), _MONTH_NUMBER[found.group(1).lower()[:3]], int(found.group(3)) if found.group(3) else None
+    return None
+
+
+def passed_this_year(message, today=None):
+    """True for a day and month with no year that has already gone by this year ("20 Oct" said on 30 Oct). The
+    customer must then give the year, so a typo or an old date is never booked silently."""
+    from datetime import date as _date
+    found = explicit_date(message)
+    if not found or found[2] is not None:
+        return False
+    today = today or _date.today()
+    try:
+        return _date(today.year, found[1], found[0]) < today
+    except ValueError:
+        return False
+
+
+def date_problem(message, today=None):
+    """A date answer that cannot be booked: 'date_past' (yesterday), 'date_past_year' ("20 Oct" when that day has gone
+    by) or 'date_need_day' ("after Raya"), else None."""
     if _PAST_DATE.search(message):
         return "date_past"
+    if passed_this_year(message, today):
+        return "date_past_year"
     if _DATE_NEEDS_DAY.search(message) and not _DATE_WORDS.search(message):
         return "date_need_day"
     return None
@@ -436,12 +472,14 @@ def after_done(state, message, config):
     bot answers real questions and anything important (and flags it), acknowledges a couple of other
     messages, then stops replying so the customer is not answered in circles."""
     lang, owner = state.lang, _owner_for(config, state.lang)
-    waiting = state.quote_status in ("", "pending_approval", "needs_inspection")
+    waiting = state.quote_status in ("", "pending_approval", "needs_inspection", "rejected")
     if len(state.followups) < 50:
         state.followups.append({"text": message[:300], "at": time.time()})
     faq = faq_answer(message, config, "done", lang)
     if _GREETING.match(message) and state.quote_status in ("approved", "final"):
         return t("welcome_back", lang)               # a returning customer saying hello
+    if _DATE_WORDS.search(message) and date_problem(message) in ("date_past", "date_past_year"):
+        return t(date_problem(message), lang)           # a date that has gone by: ask again, keep the old preference
     if _DATE_WORDS.search(message):
         state.verified["preferred_datetime"] = message.strip()[:120]
         state.attention = True

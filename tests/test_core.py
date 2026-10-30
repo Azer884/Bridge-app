@@ -11,6 +11,7 @@ from src.runpod_client import RunPodError
 from src.validation import validate_response
 
 CONFIG = json.loads((Path(__file__).resolve().parent.parent / "config" / "business_config.example.json").read_text())
+CONFIG.pop("privacy", None)          # the PDPA consent step has its own tests (test_consent.py)
 # these tests were written for the six-field list; the example config now also asks for the condition
 CONFIG["required_fields"] = [f for f in CONFIG["required_fields"] if f not in ("surface_condition", "paint_tier", "colour")]
 

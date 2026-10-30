@@ -21,7 +21,7 @@ def front_status(state):
 
 
 def stage_of(state, booked):
-    """Pipeline stage: pending_extraction | requires_approval | quote_sent | scheduled | completed."""
+    """Pipeline stage: pending_extraction | requires_approval | quote_sent | scheduled | completed | rejected."""
     status = front_status(state)
     if status == "collecting":
         return "pending_extraction"
@@ -29,6 +29,8 @@ def stage_of(state, booked):
         return "completed"
     if status == "approved":
         return "scheduled" if booked else "quote_sent"
+    if status == "rejected":
+        return "rejected"
     return "requires_approval"
 
 
@@ -73,6 +75,7 @@ def quote_view(quote, state=None):
 
 def quote_item(state, booked=False):
     return {"user_id": state.conversation_id, "status": front_status(state), "customer": customer_name(state),
+            "consent": state.consent or "none",
             "phone": state.verified.get("phone") or state.channel.get("phone"), "job": job_view(state),
             "quote": quote_view(state.quote), "stage": stage_of(state, booked), "lang": state.lang,
             "is_estimate": True, "estimated_fields": state.estimated, "attention": state.attention,

@@ -199,6 +199,7 @@ const pills = (): Record<string, { bg: string; fg: string; label: string }> => (
   pending_extraction: { bg: C.chip, fg: C.ink2, label: "Pending AI extraction" },
   requires_approval: { bg: C.tapeWash, fg: C.ink, label: "Needs your approval" },
   quote_sent: { bg: C.blueWash, fg: C.ink, label: "Quote sent" },
+  rejected: { bg: C.dangerWash, fg: C.dangerInk, label: "Rejected" },
   scheduled: { bg: C.okWash, fg: C.okInk, label: "Scheduled" },
 });
 export function Pill({ status, label }: { status: string; label?: string }) {

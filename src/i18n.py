@@ -6,6 +6,7 @@ sentences. Detection and switching are deterministic: the customer can ask for a
 simply start writing in one.
 """
 import re
+from datetime import date
 
 LANGS = ("en", "ms")
 
@@ -38,6 +39,12 @@ STRINGS = {
         "inspection_reply": "Thanks for letting us know. That kind of work needs an inspection, so a member of our team will contact you to arrange the next step.",
         "conflict": "Earlier you told me the {label} was {old}, but now it sounds like {new}. Which one is correct?",
         "photo_reply": "Thanks, I've passed your photo to our team to look at.",
+        "consent_notice": "Under Malaysia's PDPA 2010, do you consent to {business} (using Gesir.AI) processing your job details, photos, voice notes and phone number to prepare this quote? Only {owner} sees them, we keep them only for this job, and you can withdraw any time by typing STOP, which erases them. (Reply 1 to agree, 2 to decline)",
+        "consent_again": "To prepare your quote I need your consent under Malaysia's PDPA 2010 to process your job details, photos and voice notes. Reply 1 to agree, 2 to decline.",
+        "consent_thanks": "Thank you, your consent is recorded. You can withdraw it any time by typing STOP.",
+        "consent_declined": "No problem, I won't process your details. If you change your mind, reply 1 and we can continue. You can also contact {owner} directly.",
+        "consent_withdrawn": "Done. Your messages, photos, bookings and details have been erased and I won't contact you again. Message us any time to start fresh.",
+        "photo_not_surface": "Thanks, but that photo doesn't show a wall or ceiling, so I can't use it for your quote. Could you send a photo of the wall or ceiling you'd like painted?",
         "faq_private": "I can't share personal details or other customers' information, but {owner} will message you here once your quote is ready.",
         "faq_prep": "{owner} will go through any preparation, like moving furniture or access to the home, when confirming your quote.",
         "faq_other": "Good question. {owner} can help with that when confirming your quote.",
@@ -67,6 +74,7 @@ STRINGS = {
         "st_okay": "Sure! Which room would you like painted?",
         "st_confused": "Sorry, I didn't catch that. Which room would you like painted?",
         "date_past": "That day has already passed. Which day would work for you?",
+        "date_past_year": "That date has already passed this year. Which day would work for you? If you mean next year, please include the year, for example 20 Oct {year}.",
         "date_need_day": "I'll need a specific day to book. Which date would suit you, for example Saturday morning?",
         "date_ask_again": "Which day and time would suit you? For example, Saturday 10am, or just \"anytime\".",
         "condition_ask_again": "Are the surfaces in good condition, or is there peeling, cracks, damp or stains?",
@@ -192,6 +200,12 @@ STRINGS = {
         "inspection_reply": "Terima kasih kerana memberitahu kami. Kerja seperti itu memerlukan pemeriksaan, jadi seorang ahli pasukan kami akan menghubungi anda untuk mengatur langkah seterusnya.",
         "conflict": "Tadi anda kata {label} ialah {old}, tetapi sekarang nampaknya {new}. Yang mana satu betul?",
         "photo_reply": "Terima kasih, saya telah menghantar gambar anda kepada pasukan kami untuk disemak.",
+        "consent_notice": "Di bawah PDPA Malaysia 2010, adakah anda bersetuju {business} (menggunakan Gesir.AI) memproses butiran kerja, gambar, nota suara dan nombor telefon anda untuk menyediakan sebut harga ini? Hanya {owner} dapat melihatnya, kami menyimpannya hanya untuk kerja ini, dan anda boleh menarik balik bila-bila masa dengan menaip STOP, yang akan memadamkannya. (Balas 1 untuk setuju, 2 untuk tidak)",
+        "consent_again": "Untuk menyediakan sebut harga, saya perlukan persetujuan anda di bawah PDPA Malaysia 2010 untuk memproses butiran kerja, gambar dan nota suara anda. Balas 1 untuk setuju, 2 untuk tidak.",
+        "consent_thanks": "Terima kasih, persetujuan anda telah direkodkan. Anda boleh menarik balik bila-bila masa dengan menaip STOP.",
+        "consent_declined": "Tiada masalah, saya tidak akan memproses butiran anda. Jika anda berubah fikiran, balas 1 dan kita boleh teruskan. Anda juga boleh hubungi {owner} terus.",
+        "consent_withdrawn": "Selesai. Mesej, gambar, tempahan dan butiran anda telah dipadam dan saya tidak akan menghubungi anda lagi. Mesej kami bila-bila masa untuk bermula semula.",
+        "photo_not_surface": "Terima kasih, tetapi gambar itu tidak menunjukkan dinding atau siling, jadi saya tidak dapat menggunakannya untuk sebut harga anda. Boleh hantar gambar dinding atau siling yang ingin dicat?",
         "faq_private": "Saya tidak boleh berkongsi maklumat peribadi atau maklumat pelanggan lain, tetapi {owner} akan menghubungi anda di sini selepas sebut harga siap.",
         "faq_prep": "{owner} akan terangkan persediaan, seperti mengalih perabot atau akses ke rumah, semasa mengesahkan sebut harga.",
         "faq_other": "Soalan yang baik. {owner} boleh membantu perkara itu semasa mengesahkan sebut harga anda.",
@@ -221,6 +235,7 @@ STRINGS = {
         "st_okay": "Baik! Bilik mana yang anda mahu cat?",
         "st_confused": "Maaf, saya tidak faham. Bilik mana yang anda mahu cat?",
         "date_past": "Hari itu sudah berlalu. Hari mana yang sesuai untuk anda?",
+        "date_past_year": "Tarikh itu sudah berlalu tahun ini. Hari mana yang sesuai untuk anda? Jika maksud anda tahun depan, sila nyatakan tahun, contohnya 20 Okt {year}.",
         "date_need_day": "Saya perlukan hari yang tepat untuk tempahan. Tarikh mana yang sesuai, contohnya Sabtu pagi?",
         "date_ask_again": "Hari dan masa mana yang sesuai? Contohnya Sabtu 10 pagi, atau \"bila-bila masa\".",
         "condition_ask_again": "Adakah permukaan dalam keadaan baik, atau ada cat mengelupas, retak, lembap atau kesan kotoran?",
@@ -326,6 +341,8 @@ _SENTENCE_START = re.compile(r"(^|[.!?]\s+)([a-z])")
 
 def t(key, lang="en", **kwargs):
     text = STRINGS.get(lang, STRINGS["en"]).get(key) or STRINGS["en"][key]
+    if "{year}" in text:
+        kwargs.setdefault("year", date.today().year + 1)      # "20 Oct 2027": next year, whenever this runs
     text = text.format(**kwargs) if kwargs else text
     if "owner" in kwargs:           # "{owner} will confirm" with no owner's name is "Our team will confirm"
         text = _SENTENCE_START.sub(lambda m: m.group(1) + m.group(2).upper(), text)

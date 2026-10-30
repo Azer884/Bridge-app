@@ -44,7 +44,7 @@ Status: working means it runs in the live demo and is covered by tests. Voice no
 
 - **Customer conversation (working)** — natural replies with a chosen persona, one question at a time, corrections ("nvm its 4m"), several messages in a row read as one, "start over", shared locations, and English or Malay with automatic switching.
 - **Photos (working)** — a vision model reads the surface condition from the customer's photo (cracks, damp, peeling) and flags jobs that need an inspection.
-- **Estimate and final price (working)** — Malaysian rate card in MYR. The owner sees the full breakdown; the customer only sees the total, the estimated time and an "estimate only" note. After the site visit the owner sends the final price.
+- **Estimate and final price (working)** — priced from real 2026 Klang Valley market rates in MYR (see [`docs/PRICING.md`](docs/PRICING.md)), with the typical market range shown to the owner. The owner sees the full breakdown; the customer only sees the total, the estimated time and an "estimate only" note. After the site visit the owner sends the final price.
 - **Owner dashboard (working)** — quotes, a review screen (edit the values the AI read, recalculate, PDF preview), pipeline, customers, calendar, personas, and writing to a customer in the assistant's place.
 - **Smart scheduling (working)** — suggests start times that match what the customer asked for ("Monday evening"), keeps jobs in the same area close together, adds travel time, and never double books. The customer confirms the offered slot on WhatsApp.
 - **Voice notes (fix being deployed)** — transcribed with Whisper (English, Malay and Manglish) and handled like typed messages.
@@ -251,7 +251,8 @@ curl -X POST https://api.runpod.ai/v2/$RUNPOD_ENDPOINT_ID/runsync \
 - [ ] Rate card and working-hours editor in the dashboard, with the SME's real prices
 - [ ] Owner notifications (WhatsApp or push) for new quotes and messages that need a person
 - [ ] Customer reschedule and cancel, and day-before reminders
-- [ ] Per-user logins, privacy consent and data deletion
+- [x] Privacy consent (PDPA notice before any data is read) and data deletion (STOP, owner erase). See [`docs/PDPA.md`](docs/PDPA.md)
+- [ ] Per-user logins
 
 ## Team
 

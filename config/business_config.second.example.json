@@ -1,0 +1,218 @@
+{
+  "_note": "Second demo business for the hub demo: same module, different setup (name, crew, rates, hours). Demo values only.",
+  "business_name": "Berus Biru Painting (demo)",
+  "services": [
+    "interior wall painting",
+    "interior ceiling painting"
+  ],
+  "policies": [
+    "Quotations are prepared by the company after information is collected and reviewed.",
+    "Specialist work (mould, asbestos, lead paint, structural damage) requires an inspection."
+  ],
+  "required_fields": [
+    "address",
+    "surfaces",
+    "room_length_m",
+    "room_width_m",
+    "room_height_m",
+    "surface_condition",
+    "paint_tier",
+    "colour",
+    "preferred_datetime"
+  ],
+  "inspection_keywords": [
+    "mould",
+    "mold",
+    "asbestos",
+    "lead paint",
+    "structural",
+    "kulat",
+    "berkulat",
+    "asbestos",
+    "cat plumbum",
+    "struktur",
+    "reput",
+    "bocor teruk"
+  ],
+  "pricing": {
+    "_note": "Malaysian market ESTIMATES in MYR for the demo, checked against public listings in 2025-26; replace with the SME's real rate card. Labour-only painter rate roughly RM0.35-0.45 per sq ft per coat (1 m2 = 10.76 sq ft). Economy ~ Dulux Pentalite class (5L ~ RM164), standard ~ Nippon interior emulsion (5L ~ RM235), premium ~ washable/anti-mould range (price estimated, not sourced). Prep rate ~ RM176 per 8-hour painter day. Prices exclude any applicable tax. Cross-check (Oct 2026, public Malaysian sources): interior wall/ceiling painting from about RM2.20 psf, premium whites about RM2.50 psf (recommend.my); supply-and-apply RM1.80-6.80 psf per coat (Qanvast); a 1,000 sq ft 3-bed apartment about RM3,500 for basic painting. This card works out to roughly RM2.2-2.5 per sq ft of painted surface. All figures are estimates: the SME replaces them with their real rate card, and the final price is confirmed on site.",
+    "currency": "MYR",
+    "coats": 2,
+    "painting_m2_per_hour_per_painter": 9,
+    "setup_cleanup_hours": 1,
+    "crew_size": 3,
+    "workday_hours": 8,
+    "labour_per_m2_per_coat": {
+      "walls": 3.8,
+      "ceiling": 4.6
+    },
+    "paint_tiers": {
+      "economy": {
+        "price_per_litre": 36.3,
+        "coverage_m2_per_litre": 10
+      },
+      "standard": {
+        "price_per_litre": 51.7,
+        "coverage_m2_per_litre": 10
+      },
+      "premium": {
+        "price_per_litre": 66.0,
+        "coverage_m2_per_litre": 11
+      }
+    },
+    "default_paint_tier": "standard",
+    "condition_levels": {
+      "good": {
+        "labour_multiplier": 1.0,
+        "prep_hours_per_10m2": 0
+      },
+      "minor": {
+        "labour_multiplier": 1.1,
+        "prep_hours_per_10m2": 0.25
+      },
+      "moderate": {
+        "labour_multiplier": 1.25,
+        "prep_hours_per_10m2": 0.75
+      },
+      "severe": {
+        "labour_multiplier": 1.5,
+        "prep_hours_per_10m2": 1.5
+      }
+    },
+    "unknown_condition_level": "minor",
+    "inspection_levels": [
+      "severe"
+    ],
+    "prep_hourly_rate": 22.0,
+    "height_surcharge": {
+      "above_m": 3.0,
+      "multiplier": 1.2
+    },
+    "complexity_multipliers": {
+      "intricate_trim": 1.1,
+      "stairwell": 1.2,
+      "furniture_clutter": 1.05
+    },
+    "max_complexity_multiplier": 1.4,
+    "extra_coat_flags": [
+      "dark_to_light"
+    ],
+    "markup_pct": 5,
+    "minimum_job_charge": 500.0,
+    "max_area_without_inspection_m2": 150,
+    "paint_wastage_pct": 5,
+    "sundries_pct_of_paint": 10,
+    "_benchmark_note": "Rates come from giser_painting_prices_malaysia_2026.xlsx (real Klang Valley data). Walls: SRC001 My Reno Service study, 10 contractor quotes, 1,205 sq ft, minor filling/sanding, two coats Nippon Vinilex 5000: paint+labour RM1.30/sq ft + preparation RM0.65/sq ft = RM1.95 median (range RM1.70 to RM2.30). Ceiling: SRC003 listing RM1.20/sq ft, scope not stated (medium-low confidence). Values marked 'assumption' are not in the sheet.",
+    "benchmark": {
+      "unit": "sq_ft",
+      "sq_ft_per_m2": 10.763910416709722,
+      "walls": {
+        "paint_and_labour": 1.3,
+        "preparation_minor": 0.65,
+        "total_min": 1.7,
+        "total_median": 1.95,
+        "total_max": 2.3,
+        "source": "SRC001, Klang Valley, 2026-09 to 2026-10"
+      },
+      "ceiling": {
+        "all_in": 1.2,
+        "source": "SRC003 marketplace listing (scope not stated)"
+      },
+      "preparation_by_condition": {
+        "good": 0.0,
+        "minor": 0.65,
+        "moderate": 1.3
+      },
+      "preparation_note": "good: no filling needed; minor: the SRC001 scope; moderate: twice the minor rate (assumption, not in the sheet)",
+      "tier_factor": {
+        "economy": 0.95,
+        "standard": 1.05,
+        "premium": 1.15
+      },
+      "tier_note": "assumption: SRC001 used Nippon Vinilex 5000 (standard); economy/premium adjustments are not in the sheet, owner can change them",
+      "verified_regions": [
+        "kuala lumpur",
+        "selangor",
+        "petaling jaya",
+        "shah alam",
+        "subang",
+        "klang",
+        "cheras",
+        "kepong",
+        "ampang",
+        "puchong",
+        "damansara",
+        "bangsar",
+        "ara damansara",
+        "kajang",
+        "bangi",
+        "cyberjaya",
+        "rawang"
+      ],
+      "other_states": [
+        "johor",
+        "kedah",
+        "kelantan",
+        "melaka",
+        "malacca",
+        "negeri sembilan",
+        "pahang",
+        "perak",
+        "perlis",
+        "penang",
+        "pulau pinang",
+        "terengganu",
+        "sabah",
+        "sarawak",
+        "labuan",
+        "putrajaya"
+      ]
+    },
+    "markup_note": "0 because the benchmark rates are what customers pay contractors (all-in quotes); the owner can add a margin here"
+  },
+  "owner": {
+    "name": "",
+    "title": "owner"
+  },
+  "active_persona": "aisha",
+  "personas": {
+    "aisha": {
+      "name": "Aisha",
+      "style": "warm, chatty and upbeat, like a friendly neighbour who happens to know paint; gentle humour, never pushy.",
+      "greeting": "Hi there, I'm {name} from {business}!",
+      "service_question": "What can we help you with today?",
+      "closing": "Wonderful, thank you! I've passed everything to {owner}, and your price estimate will come right here once it's confirmed.",
+      "greeting_ms": "Hai, saya {name} dari {business}!",
+      "service_question_ms": "Apa yang boleh kami bantu hari ini?",
+      "closing_ms": "Bagus, terima kasih! Saya dah serahkan semuanya kepada {owner}, dan anggaran harga anda akan dihantar di sini selepas disahkan.",
+      "voice": "9626c31c-bec5-4cca-baa8-f8ba9e84c8bc"
+    },
+    "ben": {
+      "name": "Ben",
+      "style": "calm, polite and professional; clear and efficient, with a light friendly touch.",
+      "greeting": "Good day, this is {name} from {business}.",
+      "service_question": "How may I help you today?",
+      "closing": "Thank you. I've handed your details to {owner}, who will confirm your price estimate and send it here.",
+      "greeting_ms": "Selamat sejahtera, saya {name} dari {business}.",
+      "service_question_ms": "Bagaimana boleh saya bantu anda hari ini?",
+      "closing_ms": "Terima kasih. Saya telah serahkan maklumat anda kepada {owner}, yang akan mengesahkan anggaran harga dan menghantarnya di sini.",
+      "voice": "a167e0f3-df7e-4d52-a9c3-f949145efdab"
+    },
+    "mei": {
+      "name": "Mei",
+      "style": "cheerful and brief; short sentences, casual Malaysian-English warmth, no slang that could confuse.",
+      "greeting": "Hello! Mei here from {business}.",
+      "service_question": "What are you looking to paint?",
+      "closing": "Thanks so much! {owner} will check everything and your price estimate will be sent here.",
+      "greeting_ms": "Helo! Mei di sini dari {business}.",
+      "service_question_ms": "Apa yang anda nak cat?",
+      "closing_ms": "Terima kasih! {owner} akan semak semuanya dan anggaran harga akan dihantar di sini.",
+      "voice": "f31cc6a7-c1e8-4764-980c-60a361443dd1"
+    }
+  },
+  "privacy": {
+    "require_consent": true,
+    "notice_version": "2026-10",
+    "retention_note": "Chats, photos, bookings and the log are kept for this job only and erased when the customer types STOP or the owner deletes the customer."
+  }
+}

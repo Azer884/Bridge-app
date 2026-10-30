@@ -1,0 +1,112 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Orbyte (local mock)</title><style>
+:root{--bg:#f4f7fb;--card:#fff;--ink:#1f2a3d;--mute:#68758a;--line:#e2e8f1;--brand:#1769e0;--ok:#1a7f4b;--bad:#b3261e}
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,sans-serif;background:var(--bg);color:var(--ink);display:flex;height:100vh}
+nav{width:240px;flex:none;background:var(--card);border-right:1px solid var(--line);padding:16px;overflow:auto}
+nav h1{font-size:20px;margin:0 0 4px;color:var(--brand)}nav small{color:var(--mute)}
+nav .group{margin:16px 0 4px;color:var(--mute);font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+nav a{display:block;padding:8px 10px;border-radius:8px;color:var(--ink);cursor:pointer}
+nav a.on{background:#e8f0fd;color:var(--brand);font-weight:600}nav a.dim{color:var(--mute);cursor:default}
+.wrap{flex:1;display:flex;flex-direction:column;min-width:0}
+header{display:flex;gap:16px;align-items:center;padding:10px 24px;background:var(--card);border-bottom:1px solid var(--line);flex-wrap:wrap}
+header label{color:var(--mute);font-size:12px;display:flex;gap:6px;align-items:center}
+select,input{font:inherit;padding:5px 8px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+.wal{margin-left:auto;font-weight:600}
+main{flex:1;overflow:auto;padding:24px}main h2{margin:0 0 4px;font-size:24px}main p.sub{margin:0 0 20px;color:var(--mute)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.row{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);flex-wrap:wrap}.row:first-of-type{border-top:0}
+.pill{background:#fff3df;color:#9a5a00;border-radius:99px;padding:2px 10px;font-size:12px;white-space:nowrap}.pill.ok{background:#e3f5ea;color:var(--ok)}.pill.bad{background:#fde7e5;color:var(--bad)}
+button{background:var(--brand);color:#fff;border:0;border-radius:8px;padding:7px 14px;cursor:pointer;font:inherit}
+button.ghost{background:transparent;color:var(--brand);border:1px solid var(--brand)}button.danger{background:var(--bad)}button:disabled{opacity:.5;cursor:default}
+iframe{width:100%;height:100%;border:0;border-radius:12px;background:#fff}main.embed{padding:12px}
+.err{color:var(--bad)}.mute{color:var(--mute)}.big{font-size:28px;font-weight:700}.log td{padding:4px 10px 4px 0;vertical-align:top}
+.log{border-collapse:collapse;width:100%;font-size:13px}.log tr{border-top:1px solid var(--line)}
+.reason{display:flex;gap:6px;width:100%;justify-content:flex-end}.reason input{flex:1;max-width:360px}
+code{background:#eef2f8;padding:1px 5px;border-radius:5px;font-size:12px}
+</style></head><body>
+<nav><h1>Orbyte</h1><small>local mock hub</small>
+<div class="group">Navigation</div><a data-p="dash">Dashboard</a>
+<div class="group">Organization</div><a data-p="clients">Clients</a><a class="dim">Projects</a><a class="dim">Users</a><a data-p="wallet">Wallet</a>
+<div class="group">Modules</div><a data-p="gesir">Quotes &amp; Customer Chat</a><a data-p="sent">Sent estimates</a>
+<div class="group">Reports</div><a data-p="activity">Activity log</a><a data-p="events">Module events</a><a data-p="benefit">Business benefit</a></nav>
+<div class="wrap"><header>
+<label>Business <select id="tenant"></select></label>
+<label>Signed in as <input id="user" value="Azer" size="8"></label>
+<label>Role <select id="role"><option>admin</option><option>approver</option><option>reviewer</option></select></label>
+<span class="wal" id="wal"></span></header>
+<main id="m"></main></div>
+<script>
+const $=s=>document.querySelector(s), m=$('#m');
+let T=null,page='dash',timer=null,tenants=[];
+const hd=()=>({'x-hub-role':$('#role').value,'x-hub-user':$('#user').value||'user','content-type':'application/json'});
+const j=async(u,o={})=>{const r=await fetch(u,{...o,headers:{...hd(),...(o.headers||{})}});
+ if(!r.ok){let d=r.status;try{d=(await r.json()).detail||d}catch(e){}throw new Error(d)}return r.json()};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const when=t=>t?new Date(t*1000).toLocaleTimeString():'';
+const money=(c,v)=>v==null?'-':`${c||'MYR'} ${Number(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+async function loadTenants(){tenants=await j('/hub/tenants');
+ $('#tenant').innerHTML=tenants.map(t=>`<option value="${t.id}">${esc(t.name)}</option>`).join('');
+ if(!T)T=tenants[0].id;$('#tenant').value=T;
+ const cur=tenants.find(t=>t.id===T);$('#wal').textContent=`Wallet: ${cur.credits} credits`}
+function show(p){page=p;clearInterval(timer);
+ document.querySelectorAll('nav a[data-p]').forEach(a=>a.classList.toggle('on',a.dataset.p===p));
+ m.className=p==='gesir'?'embed':'';render();
+ if(['dash','sent','activity','events'].includes(p))timer=setInterval(()=>{if(!document.activeElement||document.activeElement.tagName!=='INPUT')render(true)},4000)}
+const pages={dash,clients,gesir,sent,activity,events,benefit,wallet};
+function render(quiet){loadTenants().then(()=>pages[page](quiet)).catch(e=>m.innerHTML=`<p class="err">${esc(e.message)}</p>`)}
+document.querySelectorAll('nav a[data-p]').forEach(a=>a.onclick=()=>show(a.dataset.p));
+$('#tenant').onchange=e=>{T=e.target.value;render()};$('#role').onchange=()=>render();
+
+async function dash(quiet){
+ const q=await j(`/hub/${T}/pending`),cur=tenants.find(t=>t.id===T);
+ if(quiet&&m.querySelector('.reason'))return;
+ const keep=quiet&&$('#msg')?$('#msg').innerHTML:'';
+ m.innerHTML=`<h2>Dashboard</h2><p class="sub">${esc(cur.name)}: here's what needs your attention today.</p>
+ <div class="card"><b>Pending Actions</b> <span class="pill">${q.length}</span>
+ ${q.length?q.map(x=>`<div class="row" data-id="${esc(x.id)}"><div><b>Approve estimate for ${esc(x.customer||x.id)}</b><br>
+ <small class="mute">${money(x.currency,x.total)} ${x.status==='needs_inspection'?'· needs inspection':''}</small></div>
+ <div><span class="pill">Pending approval</span> <button class="ghost" data-a="review">Review</button>
+ <button data-a="approve">Approve</button> <button class="danger" data-a="rejectform">Reject</button></div></div>`).join(''):'<p class="mute">Nothing waiting.</p>'}</div>
+ <p class="mute">Acting as <b>${esc($('#user').value)}</b> (${esc($('#role').value)}). Only admin and approver may approve or reject; a reviewer gets a refusal from the module.</p>
+ <div id="msg">${keep}</div>`}
+m.addEventListener('click',async e=>{const b=e.target.closest('button[data-a]');if(!b)return;const row=b.closest('[data-id]'),id=row&&row.dataset.id,a=b.dataset.a;
+ if(a==='review')return show('gesir');
+ const say=(t,bad)=>{const el=$('#msg');if(el)el.innerHTML=`<p class="${bad?'err':''}">${esc(t)}</p>`};
+ if(a==='rejectform'){row.querySelector('div:last-child').insertAdjacentHTML('afterend',
+   '<div class="reason"><input placeholder="Reason (required, e.g. check the height)"><button class="danger" data-a="reject">Confirm reject</button></div>');b.disabled=true;return}
+ b.disabled=true;
+ try{if(a==='approve'){await j(`/hub/${T}/approve/${id}`,{method:'POST'});say('Approved. The customer was sent the estimate and 1 credit was charged.')}
+  if(a==='reject'){const reason=row.querySelector('.reason input').value;await j(`/hub/${T}/reject/${id}`,{method:'POST',body:JSON.stringify({reason})});say('Rejected. Nothing was sent to the customer and the reason is in the activity log.')}
+  if(a==='esign'){await j(`/hub/${T}/esign/${id}`,{method:'POST'});return render()}
+  await loadTenants();const msg=$('#msg').innerHTML;await dash();$('#msg').innerHTML=msg}
+ catch(err){b.disabled=false;say('Refused: '+err.message,true)}});
+
+async function clients(){const c=await j(`/hub/${T}/clients`);
+ m.innerHTML=`<h2>Client List</h2><p class="sub">Clients created by the Gesir module.</p><div class="card">${c.map(x=>`<div class="row"><div><b>${esc(x.name||x.id)}</b><br><small class="mute">${esc(x.phone||'')}</small></div>
+ <span>${x.orders.length} job(s) · ${x.orders.map(o=>esc((o.quote||{}).total?money((o.quote||{}).currency,(o.quote||{}).total):'no price')).join(', ')}</span></div>`).join('')||'<p>No Record</p>'}</div>`}
+function gesir(){m.innerHTML=`<iframe src="${tenants.find(t=>t.id===T).url}/app" title="Gesir module"></iframe>`}
+async function sent(){const s=await j(`/hub/${T}/sent`);
+ m.innerHTML=`<h2>Sent estimates</h2><p class="sub">Approved estimates. Orbyte eSign here is a mock; no provider is called.</p><div class="card">${s.map(x=>`<div class="row" data-id="${esc(x.id)}"><div><b>${esc(x.customer)}</b><br><small class="mute">${money('MYR',x.total)}</small></div>
+ <div><span class="pill ok">${esc(x.status)}</span> ${x.esign?'<span class="pill ok">Sent for signature</span>':'<button class="ghost" data-a="esign">Send for signature</button>'}</div></div>`).join('')||'<p class="mute">None yet.</p>'}</div>`}
+async function activity(){const a=await j(`/hub/${T}/audit`);
+ m.innerHTML=`<h2>Activity log</h2><p class="sub">Every action on a job: who, what, when. Written as it happens in the module.</p><div class="card"><table class="log">
+ <tr class="mute"><td>Time</td><td>Who</td><td>What</td><td>Job</td></tr>${a.map(e=>`<tr><td>${when(e.ts)}</td><td>${esc(e.actor)}</td><td>${esc(e.summary)}</td><td><small class="mute">${esc((e.customer||e.user_id||'').toString().slice(0,18))}</small></td></tr>`).join('')}</table></div>`}
+async function events(){const e=await j('/hub/events');
+ m.innerHTML=`<h2>Module events</h2><p class="sub">Signed webhooks the module sends to the hub (<code>x-orbyte-signature</code>, HMAC-SHA256).</p><div class="card"><table class="log">
+ <tr class="mute"><td>Time</td><td>Event</td><td>Signature</td><td>Data</td></tr>${e.map(x=>`<tr><td>${when(x.at)}</td><td><b>${esc(x.type)}</b></td><td>${x.ok?'<span class="pill ok">valid</span>':'<span class="pill bad">invalid</span>'}</td><td><small class="mute">${esc(JSON.stringify(x.data||{}).slice(0,120))}</small></td></tr>`).join('')||'<tr><td colspan="4" class="mute">No events yet. Approve or reject something.</td></tr>'}</table></div>`}
+async function benefit(){const b=await j(`/hub/${T}/benefit`);const v=k=>+(localStorage.getItem('hub_'+k)||{manual:15,assisted:3}[k]);
+ const saved=b.approved*(v('manual')-v('assisted'));
+ m.innerHTML=`<h2>Business benefit</h2><p class="sub">Measured from this business's own records, with the assumptions shown.</p>
+ <div class="grid"><div class="card"><div class="big">${b.approved}</div>estimates approved</div><div class="card"><div class="big">${b.rejected}</div>estimates rejected</div>
+ <div class="card"><div class="big">${saved} min</div>owner time saved (${(saved/60).toFixed(1)} h)</div></div>
+ <div class="card"><b>Assumptions</b> (edit to see the effect; these are team estimates, not measurements)
+ <p>Quote by hand today: <input id="am" type="number" value="${v('manual')}" size="3"> min per job (chat back-and-forth, sizing, price, schedule)<br>
+ With Gesir: <input id="aa" type="number" value="${v('assisted')}" size="3"> min per job (review and approve)</p>
+ <p class="mute">Formula: approved estimates × (manual − assisted) = ${b.approved} × (${v('manual')} − ${v('assisted')}) = ${saved} min. Steps removed per job: asking each detail, measuring by message, calculating, writing the quote, proposing times.</p></div>`;
+ $('#am').onchange=e=>{localStorage.setItem('hub_manual',e.target.value);benefit()};$('#aa').onchange=e=>{localStorage.setItem('hub_assisted',e.target.value);benefit()}}
+async function wallet(){const cur=tenants.find(t=>t.id===T);
+ m.innerHTML=`<h2>Wallet</h2><p class="sub">Organization credits for ${esc(cur.name)}.</p><div class="card"><div class="big">${cur.credits} credits</div>
+ <p class="mute">Usage-based pricing: each approved estimate costs 1 credit. Rejected and drafted estimates cost nothing.</p></div>`}
+loadTenants().then(()=>show('dash'));
+</script></body></html>

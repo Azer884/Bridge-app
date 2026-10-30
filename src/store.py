@@ -124,7 +124,8 @@ class SqliteStore:
         """Remove a customer completely: their state, messages, bookings and audit trail (the demo data)."""
         with self._conn() as conn:
             for table, column in (("conversations", "conversation_id"), ("messages", "conversation_id"),
-                                  ("bookings", "user_id"), ("audit", "user_id")):
+                                  ("bookings", "user_id"), ("audit", "user_id"),
+                                  ("processed_messages", "conversation_id")):
                 conn.execute(f"DELETE FROM {table} WHERE {column}=?", (conversation_id,))
 
     def delete_booking(self, booking_id):

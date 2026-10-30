@@ -13,6 +13,7 @@ const TABS: { id: QuoteStatus; label: string }[] = [
   { id: "pending_approval", label: "Needs OK" },
   { id: "approved", label: "Approved" },
   { id: "needs_inspection", label: "Inspect" },
+  { id: "rejected", label: "Rejected" },
 ];
 
 export default function QuotesScreen() {

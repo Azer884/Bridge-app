@@ -279,3 +279,19 @@ add("rm",
     ["bilik tidur utama 4 x 5 x 3 dan bilik anak 3 x 3 x 3, dinding"],
     ["paint my house", "master bedroom 5x4x3", "and the guest room 4x4x3", "walls", "economy"],
 )
+
+
+# dates that have gone by, sizes corrected late, long jobs, odd attachments described in words
+add("late",
+    ["walls 4x4x3 standard white 12 Jalan Ampang Kuala Lumpur 20 oct no damage", "20 oct 2027", "yes"],
+    ["walls 4x4x3 standard white 12 Jalan Ampang Kuala Lumpur tomorrow morning no damage", "yes", "the height is 5m",
+     "sorry its 2.7 not 5"],
+    ["walls 5x4x8 standard white 12 Jalan Ampang Kuala Lumpur saturday morning no damage", "yes", "the height is 5 meters"],
+    ["walls and ceiling 12x10x3 standard cream 5 Jalan SS2 Petaling Jaya next monday evening cracks", "yes"],
+    ["ceiling 4x4 premium white Johor Bahru Jalan Setia saturday no damage", "yes"],
+    ["i want to paint my doors and window frames", "also the walls 4x4x3 standard white"],
+    ["can you paint my fence and gate", "no just the living room walls 5x4x3"],
+    ["send photo of my shirt", "its a wall 4x4x3 walls standard white"],
+    ["walls 4x4x3 premium white 12 Jalan Ampang KL 31 oct no damage", "yes", "change the date to 5 nov", "yes"],
+    ["dinding 5x4x3 standard putih 12 Jalan Ampang KL 5 okt tiada kerosakan", "5 nov 2027", "ya"],
+)

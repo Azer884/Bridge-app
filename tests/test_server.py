@@ -145,6 +145,7 @@ class ServiceTests(unittest.TestCase):
     def quoting_service(self, photo=None):
         config = json.loads((Path(__file__).resolve().parent.parent / "config"
                              / "business_config.example.json").read_text(encoding="utf-8"))
+        config.pop("privacy", None)
         calls = []
         def finishing(state, text, config, client):
             calls.append(text)

@@ -13,6 +13,7 @@ from src.schema import single_wall
 from tests.test_core import FakeClient, reply
 
 FULL = json.loads(Path("config/business_config.example.json").read_text(encoding="utf-8"))
+FULL.pop("privacy", None)          # the PDPA consent step has its own tests (test_consent.py)
 CONFIG = {**FULL, "persona": FULL["personas"]["aisha"]}
 
 

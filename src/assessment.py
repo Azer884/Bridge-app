@@ -20,6 +20,8 @@ class ConditionAssessment:
     complexity_flags: tuple = ()
     confidence: float = 1.0
     source: str = "customer_text"
+    surface: bool = True            # False: the photo does not show a wall or ceiling (a face, a shirt, food, a car...)
+    subject: str = ""               # what the model says the photo shows; only used to cross-check, never shown
 
 
 _TEXT_RULES = [  # checked in order; first hit wins
@@ -53,6 +55,16 @@ def classify_text(text):
     return ConditionAssessment(level, issues, (), 1.0, "customer_text")
 
 
+# Whatever the model says about is_surface, a subject that is plainly not a paintable surface is not one.
+_NOT_A_SURFACE = re.compile(
+    r"\b(person|people|man|woman|boy|girl|child|baby|face|selfie|portrait|head|beard|hair|mustache|moustache|hand|"
+    r"finger|body|shirt|t-?shirt|clothes|clothing|dress|jacket|shoe|bag|food|meal|drink|fruit|animal|pet|dog|cat|bird|"
+    r"car|vehicle|motorcycle|bike|phone|screen|screenshot|laptop|document|paper|receipt|logo|meme|cartoon|toy|plant|"
+    r"flower|tree|sky|landscape|sea|beach|furniture|sofa|chair|table|bed)\b", re.I)
+_PAINTABLE = re.compile(r"\b(walls?|ceilings?|rooms?|house|building|interior|exterior|stairwell|corridor|hallway|"
+                        r"bedroom|kitchen|bathroom|living|facade|fence|plaster|paint(ed)?)\b", re.I)
+
+
 def from_vision_output(raw):
     """Validate a vision model's JSON. Unknown values are dropped; anything else (including
     any dimension it volunteers) is ignored. Returns None if the level is unusable."""
@@ -64,13 +76,18 @@ def from_vision_output(raw):
         confidence = min(1.0, max(0.0, float(raw.get("confidence", 0.0))))
     except (TypeError, ValueError):
         confidence = 0.0
-    return ConditionAssessment(raw["condition_level"], issues, flags, confidence, "vision")
+    subject = str(raw.get("subject") or raw.get("what_is_it") or "")[:60]
+    flag = raw.get("is_surface", True)
+    surface = flag in (True, "true", "True", "yes", 1) and not (_NOT_A_SURFACE.search(subject) and not _PAINTABLE.search(subject))
+    if not surface:
+        return ConditionAssessment("good", (), (), 0.0, "vision", False, subject)
+    return ConditionAssessment(raw["condition_level"], issues, flags, confidence, "vision", True, subject)
 
 
 def from_dict(data):
     """Rebuild an assessment saved in the conversation state (JSON turns tuples into lists)."""
     return ConditionAssessment(data["level"], tuple(data["issues"]), tuple(data["complexity_flags"]),
-                               data["confidence"], data["source"])
+                               data["confidence"], data["source"], data.get("surface", True), data.get("subject", ""))
 
 
 def combine(*assessments):

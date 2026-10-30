@@ -29,7 +29,7 @@ class ConversationState:
     strikes: int = 0               # blocked or abusive messages
     photo_assessment: dict = None  # combined vision result of the customer's photos
     quote: dict = None             # draft quotation with breakdown (Quotation.to_dict()), SME-only
-    quote_status: str = ""         # "" | pending_approval | approved | needs_inspection
+    quote_status: str = ""         # "" | pending_approval | approved | needs_inspection | rejected | final
     estimated: list = field(default_factory=list)  # measurements the customer only estimated ("maybe 4 to 5 m")
     lang: str = "en"               # en | ms: the language the customer writes in or asked for
     last_field: str = ""           # the measurement answered last, so "nvm its 4m" knows what to fix
@@ -45,6 +45,11 @@ class ConversationState:
     service_misses: int = 0        # messages that did not say what the customer wants painted
     pending_sizes: dict = None     # sizes given without a unit that could be feet; waiting for "meters or feet?"
     last_photo_id: str = ""        # the customer's latest photo, kept to suggest a colour from it later
+    date_issue: str = ""           # the date the customer gave could not be booked (date_past_year...): said when the date is asked again
+    consent: str = ""              # PDPA: "" (not asked) | pending | granted | declined
+    consent_at: float = 0.0        # when the customer agreed
+    consent_asks: int = 0          # times the notice was sent, so a silent customer is not nagged
+    pending_first: str = ""        # the first message, held unread until the customer has answered the notice
     awaiting_colour_photo: bool = False   # asked for a photo because the customer wanted a colour suggested
     reasks: dict = field(default_factory=dict)   # times each question was asked again because it was not answered
     unit_factor: float = 1.0       # metres per unit the customer measures in (0.3048 once they said feet)

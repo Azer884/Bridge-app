@@ -59,7 +59,7 @@ from pydantic import BaseModel, Field
 
 from . import flow
 from . import persona as persona_module
-from . import views, webauth
+from . import orbyte, views, webauth
 from .pdf import estimate_pdf
 from .events import calls_from_meta_payload, from_flat, from_meta_payload
 from .i18n import t
@@ -150,6 +150,10 @@ class FinalRequest(BaseModel):
     total: float = Field(gt=0, le=1_000_000)
 
 
+class RejectRequest(BaseModel):
+    reason: str = Field(min_length=3, max_length=200)
+
+
 class ApproveRequest(BaseModel):
     total: float | None = Field(None, gt=0, le=1_000_000)   # the SME may override the computed total
 
@@ -224,6 +228,21 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         if not _same(request.headers.get("x-api-key"), env["INCOMING_API_KEY"]):
             raise HTTPException(401, "bad API key")
 
+    def who(request):
+        """(role, name) of the caller: the dashboard's login is admin; an API-key caller (the hub) names its role."""
+        if has_session(request):
+            return "admin", "dashboard"
+        return orbyte.acting(request.headers.get("x-orbyte-role"), request.headers.get("x-orbyte-user"))
+
+    def require_decider(request):
+        """Approving or rejecting an estimate needs the right role. Enforced here, not only in the interface."""
+        require_key(request)
+        role, name = who(request)
+        if role not in orbyte.CAN_DECIDE:
+            service.store.log_event("forbidden", f"{name or '?'} ({role}) tried to approve or reject")
+            raise HTTPException(403, f"the {role} role cannot approve or reject estimates")
+        return role, name
+
     def call_model(fn):
         try:
             return fn()
@@ -234,7 +253,23 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
     push = PushNotifier(service.store, env.get("EXPO_ACCESS_TOKEN"))
     if getattr(service, "notify", None) is None:
         service.notify = push.notify
+    emitter = orbyte.Emitter(env.get("ORBYTE_WEBHOOK_URL"), env.get("ORBYTE_SHARED_SECRET"), service.store)
+    chat_notify = service.notify
+
+    def notify_and_emit(title, body, data=None, **kw):
+        if title in ("Estimate to approve", "Inspection needed") or title.startswith("Changed job"):
+            emitter.emit("quote.pending_approval", {**(data or {}), "title": title, "summary": body})
+        return chat_notify(title, body, data, **kw)
+
+    service.notify = notify_and_emit
     app = FastAPI(title="Painting assistant")
+    embed_origin = (env.get("ORBYTE_ORIGIN") or "").strip().rstrip("/")
+    if embed_origin:                            # only the hub may show the dashboard in a frame
+        @app.middleware("http")
+        async def frame_policy(request: Request, call_next):
+            response = await call_next(request)
+            response.headers["Content-Security-Policy"] = f"frame-ancestors 'self' {embed_origin}"
+            return response
     if call_handler is None:
         from .whatsapp_calling import handle_call_event      # LiveKit is only imported when a call arrives
         call_handler = handle_call_event
@@ -446,19 +481,31 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
 
     @app.post("/api/quotes/{user_id}/approve")
     def approve_quote(user_id: str, request: Request, body: ApproveRequest = None):
-        require_key(request)
+        role, name = require_decider(request)
         if sender is None:
             raise HTTPException(503, "WhatsApp sender is not configured")
         try:
             sent = service.approve_quote(user_id, lambda text: sender.send_text(user_id, text),
                                          body.total if body else None,
-                                         send_pdf=(lambda data, name: sender.send_document(user_id, data, name))
-                                         if hasattr(sender, "send_document") else None)
+                                         send_pdf=(lambda data, fname: sender.send_document(user_id, data, fname))
+                                         if hasattr(sender, "send_document") else None,
+                                         by=f"{name or role} ({role})")
         except ValueError as err:
             raise HTTPException(409, str(err))
         if not sent:
             raise HTTPException(502, "could not send the quotation to the customer")
+        emitter.emit("quote.approved", {"user_id": user_id, "by": name or role, "role": role})
         return {"approved": True, "slots": service.slots(user_id)[:3]}      # the best times to offer next
+
+    @app.post("/api/quotes/{user_id}/reject")
+    def reject_quote(user_id: str, body: RejectRequest, request: Request):
+        role, name = require_decider(request)
+        try:
+            service.reject_quote(user_id, body.reason, by=f"{name or role} ({role})")
+        except ValueError as err:
+            raise HTTPException(409, str(err))
+        emitter.emit("quote.rejected", {"user_id": user_id, "reason": body.reason, "by": name or role, "role": role})
+        return {"rejected": True}
 
     @app.get("/api/quotes/{user_id}")
     def quote_detail(user_id: str, request: Request):
@@ -642,12 +689,21 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
             raise HTTPException(409, str(err))
         if not sent:
             raise HTTPException(502, "could not send the final price to the customer")
+        emitter.emit("quote.final", {"user_id": user_id, "total": body.total})
         return {"final": True}
 
     @app.get("/api/customers")
     def customers(request: Request):
         require_key(request)
         return {"customers": service.customers()}
+
+    @app.delete("/api/customers/{user_id}/data", status_code=204)
+    def erase_customer(user_id: str, request: Request):
+        """PDPA: erase everything held about one customer (chat, photos, bookings, log). Admin or approver only."""
+        role, name = require_decider(request)
+        if not service.erase_customer(user_id, by=f"{name or role} ({role})"):
+            raise HTTPException(404, "no such customer")
+        return Response(status_code=204)
 
     @app.get("/api/personas")
     def list_personas(request: Request):
@@ -713,8 +769,9 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         limiter.clear(who)
         response = RedirectResponse(target, status_code=303)
         secure = request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
+        # inside a hub on another site the browser only sends the cookie when it is SameSite=None (and https)
         response.set_cookie(webauth.COOKIE, webauth.make_cookie(session_secret), max_age=webauth.MAX_AGE,
-                            httponly=True, samesite="lax", secure=secure)
+                            httponly=True, samesite="none" if embed_origin and secure else "lax", secure=secure)
         return response
 
     @app.post("/logout")

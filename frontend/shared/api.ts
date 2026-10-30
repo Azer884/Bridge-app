@@ -130,6 +130,12 @@ export const api = {
     return http("POST", `/api/quotes/${encodeURIComponent(userId)}/approve`, total != null ? { total } : undefined);
   },
 
+  /** Says no to an estimate: nothing is sent to the customer, the reason is kept in the activity log. Editing the values brings it back. */
+  rejectQuote(userId: string, reason: string): Promise<unknown> {
+    if (config.mock) return guard(() => mockApi.rejectQuote(userId, reason));
+    return http("POST", `/api/quotes/${encodeURIComponent(userId)}/reject`, { reason });
+  },
+
   /** The phone tells the backend where to send push notifications (a customer needs the owner, a quote waits). */
   registerPush(token: string, platform: string): Promise<unknown> {
     if (config.mock) return guard(async () => ({ registered: true }));

@@ -425,6 +425,17 @@ export const mockApi = {
     return JSON.parse(JSON.stringify(list));
   },
 
+  async rejectQuote(userId: string, reason: string): Promise<{ rejected: true }> {
+    await wait(400);
+    const q = quotes.find((x) => x.user_id === userId);
+    if (!q || (q.status !== "pending_approval" && q.status !== "needs_inspection")) throw new MockError(409, "Nothing pending for this customer");
+    if (reason.trim().length < 3) throw new MockError(422, "A reason is required");
+    q.status = "rejected";
+    q.updated_at = new Date().toISOString();
+    appendAudit(userId, "owner", "state_change", `Estimate rejected: ${reason.trim()}`);
+    return { rejected: true };
+  },
+
   async approveQuote(userId: string, total?: number): Promise<{ ok: true; total: number }> {
     await wait(700);
     const q = quotes.find((x) => x.user_id === userId);

@@ -29,6 +29,7 @@ export const STAGES: { id: Stage; label: string; hint: string }[] = [
   { id: "quote_sent", label: "Quote sent", hint: "Waiting for the customer." },
   { id: "scheduled", label: "Scheduled and booked", hint: "A slot is booked." },
   { id: "completed", label: "Completed", hint: "Job done." },
+  { id: "rejected", label: "Rejected", hint: "Nothing was sent. Change a value to send it back for approval." },
 ];
 
 /** Fallback when the backend does not send a stage. */
@@ -36,6 +37,7 @@ export function fallbackStage(status: QuoteStatus): Stage {
   if (status === "collecting") return "pending_extraction";
   if (status === "approved") return "quote_sent";
   if (status === "completed") return "completed";
+  if (status === "rejected") return "rejected";
   return "requires_approval";
 }
 

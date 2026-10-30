@@ -71,7 +71,7 @@ MONTHS = {"jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6, "jul": 7, 
           "nov": 11, "dec": 12, "mac": 3, "mei": 5, "ogos": 8, "dis": 12}
 
 
-def parse_preference(text, anchor=None):
+def parse_preference(text, anchor=None, today=None):
     """What the customer asked for, read from their own words ("Monday evening", "tomorrow 8am", "26 Oct"):
     {"date", "weekday", "part", "hour", "after", "text"}; empty values mean they did not say. Relative words
     ("tomorrow") count from `anchor`, the day they said it."""
@@ -90,17 +90,18 @@ def parse_preference(text, anchor=None):
             pref["weekday"] = WEEKDAYS[word]
         if word in PARTS and not pref["part"]:
             pref["part"] = word if word in ("morning", "afternoon", "evening") else {"pagi": "morning"}.get(word, "evening")
-    explicit = re.search(r"\b(\d{1,2})(?:st|nd|rd|th)?\s+([a-z]{3})", low) or re.search(r"\b([a-z]{3})[a-z]*\s+(\d{1,2})\b", low)
-    if explicit:
-        day, month = explicit.groups()
-        if day.isalpha():
-            day, month = month, day
-        if month[:3] in MONTHS and day.isdigit():
-            try:
-                chosen = date(anchor.year, MONTHS[month[:3]], int(day))
-                pref["date"] = chosen if chosen >= anchor.date() else date(anchor.year + 1, chosen.month, chosen.day)
-            except ValueError:
-                pass
+    from .flow import explicit_date
+    today = today or anchor.date()      # the service passes today's date: a day that has gone by is never offered
+    found = explicit_date(text or "")
+    if found:
+        day, month, year = found
+        try:
+            chosen = date(year or anchor.year, month, day)
+            if year is None and chosen < today:
+                chosen = date(chosen.year + 1, month, day)
+            pref["date"] = chosen
+        except ValueError:
+            pass
     slash = re.search(r"\b(\d{1,2})[/.-](\d{1,2})\b", low)
     if slash and not pref["date"]:
         try:
@@ -267,10 +268,12 @@ def suggest_slots(bookings, hours, address="", now=None, rules=RULES, extra_busy
         starts = [opening, datetime.combine(day, LUNCH[1], TZ)]
         close_of_day = day_close(day, rules)
         if preference:                                  # start times that fit what the customer asked for
-            latest = close_of_day - timedelta(hours=min(hours, 9))
+            latest = close_of_day - timedelta(hours=min(hours, MAX_HOURS_PER_DAY))
             starts += [datetime.combine(day, time(13, 0), TZ), latest.replace(minute=latest.minute - latest.minute % 30)]
             if preference.get("hour") is not None:
                 starts.append(datetime.combine(day, time(preference["hour"], 0), TZ))
+            elif preference.get("part") in PARTS:             # "evening": a start at the beginning of that part of the day
+                starts.append(datetime.combine(day, time(PARTS[preference["part"]][0], 0), TZ))
         if offset == 0:
             starts.append(_round_up(now, rules.step_minutes))
         for seg_start, seg_end, other in busy:        # right after a nearby job that day
@@ -284,7 +287,9 @@ def suggest_slots(bookings, hours, address="", now=None, rules=RULES, extra_busy
             segments = day_segments(start, hours, rules)
             if start in candidates or not _free(segments, busy, extra, area, rules):
                 continue
-            wanted, matched = _wanted(preference, segments[0][0], hours)
+            first_day = segments[0][0].date()
+            first_day_hours = sum((e - s).total_seconds() / 3600 for s, e in segments if s.date() == first_day)
+            wanted, matched = _wanted(preference, segments[0][0], first_day_hours)
             score, reason = 80 - 2 * offset + wanted, "Free time"
             if matched:
                 said = preference["text"][:40]
@@ -329,6 +334,20 @@ def new_booking(user_id, customer, phone, address, start, hours, status="tentati
             "address": address or "", "area": area_of(address, location), "start": segments[0][0].isoformat(),
             "end": segments[-1][1].isoformat(), "hours": float(hours), "status": status,
             "location": location, "created_at": datetime.now(TZ).isoformat()}
+
+
+def describe_days(booking, lang="en"):
+    """A job that runs over several working days, day by day: "Day 1: Mon 9 Nov, 2:00 pm to 6:00 pm; Day 2: ...".
+    Empty for a job that fits in one day."""
+    days = working_days(booking_segments(booking))
+    if len(days) <= 1:
+        return ""
+    word = "Hari" if lang == "ms" else "Day"
+
+    def clock(moment):
+        return f"{moment.hour % 12 or 12}:{moment.minute:02d} {'am' if moment.hour < 12 else 'pm'}"
+    return "; ".join(f"{word} {number}: {describe_when(start.isoformat(), lang).split(',')[0]}, {clock(start)} - {clock(end)}"
+                     for number, (start, end) in enumerate(days, start=1))
 
 
 def describe_when(start, lang="en"):
