@@ -1,5 +1,5 @@
 modules = ["python-3.12", "nodejs-20", "web"]
-run = "PORT=8000 python scripts/mock_orbyte.py"
+run = "python -m uvicorn src.server:create_app --factory --host 0.0.0.0 --port 8000"
 
 [nix]
 channel = "stable-25_05"
@@ -12,7 +12,7 @@ expertMode = true
 [userenv.shared]
 
 [deployment]
-run = ["sh", "-c", "PORT=8000 python scripts/mock_orbyte.py"]
+run = ["sh", "-c", "python -m uvicorn src.server:create_app --factory --host 0.0.0.0 --port 8000"]
 deploymentTarget = "vm"
 ignorePorts = false
 
@@ -38,7 +38,7 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "PORT=8000 python scripts/mock_orbyte.py"
+args = "python -m uvicorn src.server:create_app --factory --host 0.0.0.0 --port 8000"
 waitForPort = 8000
 
 [workflows.workflow.metadata]
