@@ -132,13 +132,31 @@ Set these in Replit **Secrets**, or in a local `.env` (never commit it). `.env.e
 | `RUNPOD_API_KEY`, `RUNPOD_ENDPOINT_ID` | chat model endpoint |
 | `RUNPOD_VISION_API_KEY`, `RUNPOD_VISION_ENDPOINT_ID` | photo model endpoint |
 | `STT_RUNPOD_ENDPOINT_ID`, `STT_RUNPOD_API_KEY` | voice-note transcription on RunPod's Faster Whisper endpoint; empty means the server transcribes on its own CPU |
-| `INCOMING_API_KEY` | key for the dashboard API and scripts (`x-api-key`) |
+| `INCOMING_API_KEY` | shared key for incoming messages, dashboard scripts, and voice worker |
+| `VAPI_API_KEY` | separate Bearer key for the Vapi Custom LLM endpoint |
 | `DASHBOARD_PASSWORD`, `SESSION_SECRET` | dashboard sign-in and its cookie signing |
 | `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET` | receiving WhatsApp webhooks |
 | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` | sending messages, downloading photos and voice notes |
 | `DATABASE_URL` | PostgreSQL (Replit sets it); without it a local SQLite file is used |
 | `LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, `WHATSAPP_LIVEKIT_AGENT_NAME` | WhatsApp calls (see `voice_worker/README.md`) |
 | `CORS_ORIGINS`, `STT_MODEL_SIZE`, `MESSAGE_WINDOW_SECONDS` | optional |
+
+### Connect a Vapi phone assistant
+
+Bridge exposes an OpenAI-compatible `POST /chat/completions` endpoint. It sends
+each caller turn through the same painting assistant used by WhatsApp, including
+screening, job-state updates, price rules, and response validation. When Vapi
+provides the caller's phone number, Bridge reuses that customer's existing
+conversation. Otherwise, Bridge keeps state under the Vapi call ID.
+
+In Vapi, select **Custom LLM** and set the endpoint base URL to
+`https://gesir-ai.replit.app`. Vapi appends `/chat/completions`. Create a Bearer
+credential whose token matches Replit's `VAPI_API_KEY`, then attach it to the
+assistant. Generate this as a separate secret; do not reuse `INCOMING_API_KEY`.
+Keep call metadata enabled so Bridge can identify each call.
+Vapi continues to provide telephony, transcription, and speech playback; Bridge
+provides the assistant response. Use the separate LiveKit worker setup below
+for calls made to the WhatsApp Business number.
 
 ### Option 1 — Run on Replit (recommended)
 

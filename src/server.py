@@ -4,6 +4,7 @@
     GET  /webhook          Meta verification handshake (direct WhatsApp Cloud API)
     POST /webhook          Meta messages, HMAC-verified, answered in the background
     POST /incoming         flat JSON from n8n or any other front door -> {"replies": [...]}
+    POST /chat/completions Vapi Custom LLM adapter -> the same assistant service
   GET  /api/events                        recent webhook, send and error events (x-api-key)
   GET  /api/storage                       which database is in use and its row counts (x-api-key)
   Dashboard (x-api-key; the contract is frontend/shared/api.ts)
@@ -41,6 +42,7 @@ Run: uvicorn src.server:create_app --factory --port 8000
 import base64
 import binascii
 import dataclasses
+import hashlib
 import hmac
 import json
 import logging
@@ -54,7 +56,7 @@ from typing import Literal
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from . import flow
@@ -380,6 +382,82 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         end_call = event.channel == "voice" and ((state.stage == "done" and before != "done")
                                                  or flow.ends_call(event.text or ""))
         return {"replies": replies, "lang": state.lang, "end_call": end_call}
+
+    @app.post("/chat/completions")
+    def vapi_chat_completions(body: dict, request: Request):
+        """Vapi's OpenAI-compatible Custom LLM entry point; each caller turn uses the same assistant service."""
+        key = env.get("VAPI_API_KEY") or ""
+        auth = request.headers.get("authorization", "")
+        scheme, _, bearer = auth.partition(" ")
+        supplied = bearer if scheme.lower() == "bearer" else request.headers.get("x-api-key", "")
+        if not key:
+            raise HTTPException(503, "VAPI_API_KEY is not configured")
+        if not _same(supplied, key):
+            raise HTTPException(401, "bad API key")
+
+        messages = body.get("messages")
+        if not isinstance(messages, list):
+            raise HTTPException(400, "messages must be an array")
+
+        def content_text(content):
+            if isinstance(content, str):
+                return content
+            if isinstance(content, list):
+                return " ".join(item["text"] for item in content
+                                if isinstance(item, dict) and item.get("type") in ("text", "input_text")
+                                and isinstance(item.get("text"), str))
+            return ""
+
+        user_messages = [content_text(item.get("content")) for item in messages
+                         if isinstance(item, dict) and item.get("role") == "user"]
+        user_text = next((text.strip() for text in reversed(user_messages) if text.strip()), "")
+        if not user_text:
+            raise HTTPException(400, "messages must include non-empty user content")
+
+        call = body.get("call") if isinstance(body.get("call"), dict) else {}
+        metadata = body.get("metadata") if isinstance(body.get("metadata"), dict) else {}
+        customer = call.get("customer") if isinstance(call.get("customer"), dict) else {}
+        phone = str(customer.get("number") or body.get("customer_number") or "").strip()
+        phone_digits = "".join(ch for ch in phone if ch.isdigit())
+        call_id = str(body.get("callId") or body.get("call_id") or call.get("id")
+                      or metadata.get("callId") or metadata.get("call_id") or "").strip()
+        if not phone_digits and not call_id:
+            raise HTTPException(400, "Vapi request must include call ID or customer number")
+
+        # Reuse existing WhatsApp customer state when Vapi supplies caller number.
+        user_id = phone_digits or f"vapi-{call_id}"
+        history = json.dumps(messages, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        digest = hashlib.sha256(history.encode("utf-8")).hexdigest()[:20]
+        message_id = f"vapi:{call_id or user_id}:{digest}"
+        try:
+            event = from_flat({"message_id": message_id, "user_id": user_id, "type": "text",
+                               "text": user_text, "channel": "voice", "phone": f"+{phone_digits}" if phone_digits else ""})
+        except ValueError as err:
+            raise HTTPException(400, str(err))
+
+        replies = service.handle(event)
+        reply = " ".join(text.strip() for text in replies if isinstance(text, str) and text.strip())
+        model = str(body.get("model") or "bridge-ai")
+        completion_id = f"chatcmpl-bridge-{time.time_ns()}"
+        created = int(time.time())
+        if body.get("stream") is True:
+            def stream():
+                words = reply.split(" ") if reply else []
+                for index, word in enumerate(words):
+                    chunk = {"id": completion_id, "object": "chat.completion.chunk", "created": created,
+                             "model": model, "choices": [{"index": 0,
+                             "delta": {"content": word + (" " if index < len(words) - 1 else "")},
+                             "finish_reason": None}]}
+                    yield "data: " + json.dumps(chunk, ensure_ascii=False) + "\n\n"
+                final = {"id": completion_id, "object": "chat.completion.chunk", "created": created,
+                         "model": model, "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}]}
+                yield "data: " + json.dumps(final, ensure_ascii=False) + "\n\n"
+                yield "data: [DONE]\n\n"
+            return StreamingResponse(stream(), media_type="text/event-stream",
+                                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+        return JSONResponse({"id": completion_id, "object": "chat.completion", "created": created, "model": model,
+                             "choices": [{"index": 0, "message": {"role": "assistant", "content": reply},
+                                          "finish_reason": "stop"}]})
 
     @app.get("/api/voice/pending")
     def voice_pending(request: Request, user_id: str, end: bool = False):
