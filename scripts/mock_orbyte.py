@@ -36,12 +36,26 @@ KEY = os.environ.get("INCOMING_API_KEY", "")
 SECRET = os.environ.get("ORBYTE_SHARED_SECRET", "local-hub-secret")
 CREDITS_PER_ESTIMATE = 1
 OPENING_CREDITS = 100
+TENANT_ERROR = ""
+
+
 def _tenants():
     """One organization per Gesir business. HUB_TENANTS is a JSON list such as
-    [{"id": "hrissa", "name": "Hrissa", "url": "https://gesir-ai.replit.app"}]; without it the two local demo businesses are used."""
-    raw = os.environ.get("HUB_TENANTS")
+    [{"id": "hrissa", "name": "Hrissa", "url": "https://gesir-ai.replit.app"}]; without it the two local demo businesses are used.
+    A value that is not valid JSON does not crash the server (a crash loop hides the reason): the hub starts and says what is wrong."""
+    global TENANT_ERROR
+    raw = (os.environ.get("HUB_TENANTS") or "").strip()
     if raw:
-        return {t["id"]: {"name": t["name"], "url": t["url"].rstrip("/")} for t in json.loads(raw)}
+        for text in (raw, "[" + raw + "]"):                # a single object, or objects separated by commas, also work
+            try:
+                items = json.loads(text)
+                items = items if isinstance(items, list) else [items]
+                return {t["id"]: {"name": t["name"], "url": t["url"].rstrip("/")} for t in items}
+            except (ValueError, KeyError, TypeError, AttributeError):
+                continue
+        TENANT_ERROR = ('HUB_TENANTS is not valid. It must be one JSON list like '
+                        '[{"id":"hrissa","name":"Hrissa","url":"https://gesir-ai.replit.app"}]')
+        return {}
     return {"8000": {"name": "Example Painting", "url": "http://localhost:8000"},
             "8001": {"name": "Berus Biru Painting", "url": "http://localhost:8001"}}
 
@@ -104,6 +118,8 @@ def project(q):
 
 @app.get("/hub/tenants")
 def tenants():
+    if TENANT_ERROR:
+        raise HTTPException(500, TENANT_ERROR)
     return [{"id": k, **v, "credits": wallet[k]["credits"]} for k, v in TENANTS.items()]
 
 
