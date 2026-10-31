@@ -356,6 +356,33 @@ PNG = base64.b64encode(b"fake png image bytes").decode()
 KEY = {"x-api-key": "key"}
 
 
+class CrossSiteTests(unittest.TestCase):
+    """A signed-in owner's cookie must not let another website approve a quote."""
+    def setUp(self):
+        from src import webauth
+        self.sender = SentRecorder()
+        self.service = ServiceTests().quoting_service()
+        self.service.handle(IncomingEvent("m1", "60123456789", text="yes"))
+        env = {**ENV, "SESSION_SECRET": "s3cret", "DASHBOARD_PASSWORD": "pw", "ORBYTE_ORIGIN": "https://hub.example.com"}
+        self.api = TestClient(create_app(self.service, self.sender, env), base_url="https://gesir.example.com")
+        self.api.cookies.set(webauth.COOKIE, webauth.make_cookie(b"s3cret"))
+
+    def test_a_post_from_another_site_is_refused(self):
+        res = self.api.post("/api/quotes/60123456789/approve", headers={"origin": "https://evil.example"})
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(self.sender.sent, [])
+
+    def test_the_dashboard_and_the_hub_may_post(self):
+        for origin in ("https://gesir.example.com", "https://hub.example.com"):
+            self.assertNotEqual(self.api.post("/api/quotes/60123456789/approve", headers={"origin": origin}).status_code, 403)
+
+    def test_the_login_limit_cannot_be_dodged_with_a_forged_forwarded_header(self):
+        for n in range(6):
+            res = self.api.post("/login", content=b"password=wrong", headers={
+                "x-forwarded-for": f"10.0.0.{n}, 203.0.113.9", "content-type": "application/x-www-form-urlencoded"})
+        self.assertEqual(res.status_code, 429)
+
+
 class ModelApiTests(unittest.TestCase):
     def client(self, text=None, vision=None):
         self.text, self.vision = text or FakeModel("hello there"), vision or FakeModel()

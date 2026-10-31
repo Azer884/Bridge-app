@@ -262,6 +262,28 @@ def _closed_day(day, working_days):
     return day.weekday() not in working_days or (day.month, day.day) in _FIXED_HOLIDAYS
 
 
+# "Jalan Raya", "Taman Merdeka" and "Masjid India" are street and place names, not holidays or foreign places
+_STREET_NAME = re.compile(r"\b(jalan|jln|lorong|lrg|persiaran|taman|tmn|lebuh|lebuhraya|bandar|kampung|kg|dataran|bulatan|"
+                          r"masjid|medan|pasar|kompleks)\s+\w+", re.I)
+
+
+def without_street_names(text):
+    return _STREET_NAME.sub(" ", text)
+
+
+_CLAUSE_BREAK = re.compile(r"[,.;!?]|\b(?:but|instead|how about|rather|so|then)\b", re.I)
+
+
+def _unnegated(pattern, text):
+    """The first match of pattern that is not itself negated ("not free monday, how about saturday" -> saturday).
+    A negation only covers the words right after it, not the whole message."""
+    for found in pattern.finditer(text):
+        clause = _CLAUSE_BREAK.split(text[:found.start()])[-1]       # a comma or "but" ends what the "not" covered
+        if not _NEGATED_DATE.search(clause):
+            return found
+    return None
+
+
 def outside_working_time(message, today=None):
     """True when the customer asks for a day or hour the crew does not work: a weekend, a public holiday, or a clock
     time before 9 am or from 6 pm ("3 am", "three AM"). Dates ("31 Oct", "tomorrow") are checked by their weekday.
@@ -269,21 +291,21 @@ def outside_working_time(message, today=None):
     from datetime import date as _date, timedelta
     from .calendar_scheduler import RULES
     today = today or _date.today()
-    if not _NEGATED_DATE.search(message):
-        days = RULES.working_days
-        if (_SUNDAY.search(message) and 6 not in days) or (_SATURDAY.search(message) and 5 not in days) \
-                or (_WEEKEND.search(message) and 5 not in days) or _HOLIDAY_NAMES.search(message):
-            return True
-        found = explicit_date(message)
+    days = RULES.working_days
+    text = without_street_names(message)
+    if (6 not in days and _unnegated(_SUNDAY, text)) or (5 not in days and (_unnegated(_SATURDAY, text) or _unnegated(_WEEKEND, text)))             or _unnegated(_HOLIDAY_NAMES, text):
+        return True
+    for pattern in (_DAY_MONTH, _MONTH_DAY):
+        match = _unnegated(pattern, text)
+        found = explicit_date(match.group(0)) if match else None
         if found:
             try:
                 if _closed_day(_date(found[2] or today.year, found[1], found[0]), days):
                     return True
             except ValueError:
                 pass
-        if (_TOMORROW.search(message) and _closed_day(today + timedelta(days=1), days)) \
-                or (_TODAY.search(message) and _closed_day(today, days)):
-            return True
+    if (_unnegated(_TOMORROW, text) and _closed_day(today + timedelta(days=1), days))             or (_unnegated(_TODAY, text) and _closed_day(today, days)):
+        return True
     for found in _CLOCK.finditer(message):
         if found.group(3):
             hour = int(found.group(1)) % 12 + (12 if found.group(3).lower() == "pm" else 0)

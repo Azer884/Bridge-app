@@ -162,6 +162,14 @@ def _same(a, b):
     return bool(a) and bool(b) and hmac.compare_digest(a.encode(), b.encode())
 
 
+def embed_origin_value(env):
+    return (env.get("ORBYTE_ORIGIN") or "").strip().rstrip("/")
+
+
+def origins_value(env):
+    return [o.strip().rstrip("/") for o in (env.get("CORS_ORIGINS") or "").split(",") if o.strip()]
+
+
 def create_app(service=None, sender=None, env=None, text_client=None, vision_client=None, transcriber=None,
                call_handler=None):
     if env is None:
@@ -222,8 +230,21 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
     def has_session(request):
         return webauth.valid_cookie(session_secret, request.cookies.get(webauth.COOKIE))
 
+    allowed_origins = {o for o in [embed_origin_value(env), *origins_value(env)] if o}
+
+    def same_site_request(request):
+        """A browser sends Origin on every cross-site POST. With the cookie sent cross-site (the hub embed), a page on
+        another site could otherwise approve a quote for a signed-in owner. No Origin means not a browser: allowed."""
+        origin = (request.headers.get("origin") or "").rstrip("/")
+        if not origin:
+            return True
+        own = f"{request.headers.get('x-forwarded-proto', request.url.scheme)}://{request.headers.get('host', '')}"
+        return origin == own or origin in allowed_origins
+
     def require_key(request):
         if has_session(request):                # the web dashboard: signed in with the password
+            if request.method not in ("GET", "HEAD", "OPTIONS") and not same_site_request(request):
+                raise HTTPException(403, "cross-site request refused")
             return
         if not env.get("INCOMING_API_KEY"):
             raise HTTPException(503, "INCOMING_API_KEY is not configured")
@@ -747,8 +768,9 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
 
     # --- the hosted dashboard: login, the built frontend, and its client-side routes -----------------
     def client_id(request):
+        # the proxy in front appends the address it saw as the LAST entry; earlier entries are whatever the client sent
         forwarded = request.headers.get("x-forwarded-for", "")
-        return forwarded.split(",")[0].strip() or (request.client.host if request.client else "?")
+        return forwarded.split(",")[-1].strip() or (request.client.host if request.client else "?")
 
     @app.get("/login")
     def login_form(next: str = "/app"):

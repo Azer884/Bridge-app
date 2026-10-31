@@ -51,4 +51,5 @@ _FOREIGN = re.compile(
 def foreign_place(text):
     """True when typed text puts the job in another country ("Jakarta", "Singapore"). A pin is checked by
     in_malaysia; this covers an address typed in words."""
-    return bool(_FOREIGN.search(text or ""))
+    from .flow import without_street_names      # "Jalan Brunei" and "Masjid India" are streets in Kuala Lumpur
+    return bool(_FOREIGN.search(without_street_names(text or "")))

@@ -1,7 +1,8 @@
 """A day or hour the crew does not work is explained, and a new time is never read as a new size."""
 import unittest
+from datetime import date
 
-from src import flow, scheduling
+from src import geo, flow, scheduling
 from src.events import IncomingEvent
 from tests.test_core import reply
 from tests.test_malay_orders_voice import make_service, new_state
@@ -32,6 +33,33 @@ class WorkingTimeTests(unittest.TestCase):
     def test_the_hours_are_said_from_the_calendar_rules(self):
         self.assertEqual(scheduling.working_hours_text("en"), "Monday to Friday 9 am to 6 pm")
         self.assertIn("Isnin hingga Jumaat", scheduling.working_hours_text("ms"))
+
+
+class WeekendHolidayAndPlaceTests(unittest.TestCase):
+    TUESDAY, FRIDAY = date(2026, 11, 3), date(2026, 11, 6)
+
+    def test_a_negation_only_covers_the_words_after_it(self):
+        self.assertEqual(flow.date_problem("I'm not free monday, how about saturday", self.TUESDAY), "date_closed")
+        self.assertEqual(flow.date_problem("not sure, maybe christmas", self.TUESDAY), "date_closed")
+        for text in ("any day except sunday", "not on weekends please"):
+            self.assertIsNone(flow.date_problem(text, self.TUESDAY), text)
+
+    def test_street_and_place_names_are_not_holidays_or_foreign_places(self):
+        for text in ("12 Jalan Raya Timur", "Taman Merdeka, Ampang", "Jalan Medan Tuanku, KL", "near Masjid India, KL",
+                     "Jalan Brunei Utara"):
+            self.assertIsNone(flow.date_problem(text, self.TUESDAY), text)
+            self.assertFalse(geo.foreign_place(text), text)
+
+    def test_other_countries_are_caught(self):
+        for text in ("I'm in Jakarta", "Johor Bahru side? no, Singapore", "bangkok thailand"):
+            self.assertTrue(geo.foreign_place(text), text)
+
+    def test_tomorrow_and_a_date_are_judged_by_their_weekday(self):
+        self.assertEqual(flow.date_problem("tomorrow 10am", self.FRIDAY), "date_closed")       # a Saturday
+        self.assertIsNone(flow.date_problem("tomorrow 10am", self.TUESDAY))
+        self.assertEqual(flow.date_problem("7 Nov 10am", self.TUESDAY), "date_closed")          # a Saturday
+        self.assertIsNone(flow.date_problem("9 Nov 10am", self.TUESDAY))                        # a Monday
+        self.assertEqual(flow.date_problem("25 Dec 10am", self.TUESDAY), "date_closed")         # Christmas, a Friday
 
 
 class ChatTests(unittest.TestCase):
