@@ -35,6 +35,13 @@ Because the agent is told the caller's WhatsApp number, the call continues that 
    Speech models are LiveKit Inference strings, billed through LiveKit Cloud: `VOICE_STT_MODEL` (default `deepgram/nova-3`,
    language `multi` covers English and Malay), `VOICE_TTS_MODEL` (default `cartesia/sonic-3.5`).
 
+## Run it on Replit (no computer needed)
+`scripts/start.py` starts the agent beside the web app when the app is **published** and the LiveKit secrets are set
+(`LIVEKIT_URL`, `LIVEKIT_API_KEY`, `LIVEKIT_API_SECRET`, plus the app's own `INCOMING_API_KEY`). It waits for the web app,
+installs `voice_worker/requirements.txt` the first time, talks to the app on localhost, and starts again if it stops. Look for
+`[voice]` lines in the deployment logs. `RUN_VOICE_WORKER=1` forces it on (for example in the workspace), `RUN_VOICE_WORKER=0`
+switches it off. Run only one agent at a time: stop any copy on a computer, or calls may land on the old one.
+
 ## Run it on your own computer (Windows)
 1. `python -m venv .venv-voice` then `.venv-voice\Scripts\python -m pip install -r voice_worker/requirements.txt` (once).
 2. Fill the empty lines in `.env.local` (it is git-ignored): the LiveKit key and secret, `INCOMING_API_KEY`, `VOICE_TTS_VOICE`.
