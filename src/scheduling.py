@@ -110,8 +110,9 @@ def parse_preference(text, anchor=None, today=None):
         except ValueError:
             pass
     clock = re.search(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b", low)
-    if clock:
-        hour = int(clock.group(1)) % 12 + (12 if clock.group(3) == "pm" else 0)
+    plain = re.search(r"\b([01]?\d|2[0-3]):([0-5]\d)\b(?!\s*[ap]m)", low) if not clock else None      # "14:30", "9:15"
+    if clock or plain:
+        hour = (int(clock.group(1)) % 12 + (12 if clock.group(3) == "pm" else 0)) if clock else int(plain.group(1))
         pref["hour"] = hour
         pref["part"] = pref["part"] or ("morning" if hour < 12 else "afternoon" if hour < 15 else "evening")
     if "next week" in low or "minggu depan" in low:

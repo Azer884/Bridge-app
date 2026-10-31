@@ -1,6 +1,6 @@
 import { Link, useParams } from "react-router-dom";
 import { api } from "@shared/api";
-import { phone } from "@shared/format";
+import { jobTitle, phone } from "@shared/format";
 import { useAsync } from "../hooks";
 import { QuoteDetail } from "../quote/QuoteDetail";
 
@@ -17,7 +17,7 @@ export default function Quotes() {
       <nav className="ob-crumbs" aria-label="Breadcrumb">
         <Link to="/app/pipeline">Projects</Link>
         <span aria-hidden>/</span>
-        <b>Repaint for {name}</b>
+        <b>{jobTitle(row?.job)} for {name}</b>
       </nav>
       <QuoteDetail key={userId} userId={userId} onChanged={() => void rows.reload()} />
     </>

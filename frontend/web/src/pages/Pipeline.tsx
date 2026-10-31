@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, explainError } from "@shared/api";
-import { money, phone, timeAgo } from "@shared/format";
+import { jobSummary, jobTitle, money, phone, timeAgo } from "@shared/format";
 import { STAGES } from "@shared/params";
 import type { PipelineRow, Stage } from "@shared/types";
 import { useAsync } from "../hooks";
@@ -74,7 +74,7 @@ export default function Pipeline() {
             <tbody>
               {shown.map((r) => (
                 <tr key={r.user_id} onClick={() => open(r)}>
-                  <td><b>Repaint for {r.job.name ?? phone(r.user_id)}</b><br /><small className="muted">{r.job.surfaces ?? "Not given"}</small></td>
+                  <td><b>{jobTitle(r.job)} for {r.job.name ?? phone(r.user_id)}</b><br /><small className="muted">{jobSummary(r.job)}</small></td>
                   <td>{r.job.name ?? phone(r.user_id)}<br /><small className="muted num">{phone(r.job.phone ?? r.user_id)}</small></td>
                   <td><span className={`ob-pill ${tone(r.stage)}`}>{label(r.stage)}</span></td>
                   <td>Gesir</td>

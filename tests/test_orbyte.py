@@ -56,11 +56,11 @@ class HubLinkTests(unittest.TestCase):
         self.assertTrue(res.json()["notified"])
         self.assertEqual(self.service.store.load(UID).quote_status, "rejected")
         self.assertTrue(any("rejected: price too low" in s for s in self.audit()))
-        # the customer is told the team will be in touch: no price, and the owner's reason stays internal
+        # the customer is told, with the owner's reason and no price
         self.assertEqual(len(self.sender.sent), 1)
         told = str(self.sender.sent[0])
         self.assertIn("can't give you an estimate", told)
-        self.assertNotIn("price too low", told)
+        self.assertIn("price too low", told)
         self.assertNotIn("RM", told)
         self.assertTrue(any("The customer was told" in s for s in self.audit()))
         # a rejected estimate cannot be approved by mistake

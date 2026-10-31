@@ -42,6 +42,15 @@ def job_lines(verified, lang="en"):
         if len(rooms) == 1 and not name:
             label = "Bilik" if lang == "ms" else "Room"
         lines.append(t("est_room", lang, name=label, size=_size(length, width, height, one_wall)))
+    if verified.get("service_type"):                    # an aircon job
+        lines.append(t("est_service", lang, value=verified["service_type"]))
+        if verified.get("unit_count"):
+            lines.append(t("est_units", lang, value=verified["unit_count"]))
+        if verified.get("horsepower"):
+            lines.append(t("est_hp", lang, value=verified["horsepower"]))
+        issue = verified.get("aircon_issue")
+        if issue and "photo" not in str(issue).lower():
+            lines.append(t("est_issue", lang, value=issue))
     surfaces = verified.get("surfaces")
     if surfaces:
         shown = [(_SURFACE_MS.get(str(s).lower(), s) if lang == "ms" else s) for s in surfaces]

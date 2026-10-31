@@ -247,6 +247,7 @@ a.ob-drow:hover { background: #f8fbff; }
 .ob-drow.item { grid-template-columns: minmax(0, 2.2fr) 1fr auto 1fr auto; }
 .ob-status { display: inline-flex; align-items: center; gap: 6px; border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 700; background: #e6f6f8; color: #12697a; }
 .ob-status.reply { background: #fff3e6; color: #9a5a00; }
+.ob-status.rejected { background: #fbe5e2; color: #b3261e; }
 .ob-link { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
 .ob-dcard .ob-banner { margin: 0 16px 14px; }
 @media (max-width: 900px) { .ob-drow.item { grid-template-columns: 1fr; } }

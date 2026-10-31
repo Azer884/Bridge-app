@@ -562,8 +562,15 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
     def reject_quote(user_id: str, body: RejectRequest, request: Request):
         role, name = require_decider(request)
         try:
-            notified = service.reject_quote(user_id, body.reason, by=f"{name or role} ({role})",
-                                            send=(lambda text: sender.send_text(user_id, text)) if sender else None)
+            def reach(text):
+                """Said in the call when the customer is on the phone, and written in the chat as well."""
+                spoken = on_call(user_id)
+                if spoken:
+                    tell_caller(user_id, [text])
+                written = bool(sender and sender.send_text(user_id, text))
+                return spoken or written
+
+            notified = service.reject_quote(user_id, body.reason, by=f"{name or role} ({role})", send=reach)
         except ValueError as err:
             raise HTTPException(409, str(err))
         emitter.emit("quote.rejected", {"user_id": user_id, "reason": body.reason, "by": name or role, "role": role})

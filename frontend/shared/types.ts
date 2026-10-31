@@ -13,6 +13,11 @@ export interface Job {
   preferred_datetime?: string;
   name?: string;
   phone?: string;
+  /** "painting" or "aircon"; the aircon jobs also carry the service, the number of units and the horsepower. */
+  trade?: string | null;
+  service_type?: string;
+  unit_count?: string;
+  horsepower?: string;
   /** A location the customer shared on WhatsApp; maps_url opens it in Google Maps. */
   location?: { lat: number; lon: number; name?: string; address?: string; maps_url: string } | null;
 }

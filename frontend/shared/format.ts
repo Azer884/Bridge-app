@@ -50,3 +50,19 @@ export function slotLabel(startIso: string, endIso: string): string {
     d.toLocaleTimeString("en-MY", { hour: "numeric", minute: "2-digit", hour12: true });
   return `${t(s)} – ${t(e)}`;
 }
+
+
+/** "Repaint" or "Aircon service": what the project is, from the job's trade. */
+export function jobTitle(job?: { trade?: string | null } | null): string {
+  return job?.trade === "aircon" ? "Aircon service" : "Repaint";
+}
+
+/** One line on what the job is: the surfaces for painting; the service, units and horsepower for aircon. */
+export function jobSummary(job?: { trade?: string | null; surfaces?: string; service_type?: string; unit_count?: string; horsepower?: string } | null): string {
+  if (!job) return "Not given";
+  if (job.trade === "aircon") {
+    const parts = [job.service_type, job.unit_count ? `${job.unit_count} ${Number(job.unit_count) === 1 ? "unit" : "units"}` : "", job.horsepower].filter(Boolean);
+    return parts.length ? parts.join(", ") : "Not given";
+  }
+  return job.surfaces ?? "Not given";
+}

@@ -35,7 +35,9 @@ STRINGS = {
         "label_service_type": "service", "label_unit_count": "number of units", "label_horsepower": "horsepower",
         "label_aircon_issue": "problem with the aircon",
         "recap_service": "Service", "recap_units": "Units", "recap_horsepower": "Horsepower", "recap_issue": "Problem",
-        "quote_rejected": "Thanks for your patience. We can't give you an estimate for this job just yet, so {owner} will contact you to talk it through. Nothing has been charged or booked.",
+        "quote_rejected": "Thanks for your patience. We can't give you an estimate for this job just yet. The reason: {reason}. {owner} will contact you to talk it through. Nothing has been charged or booked.",
+        "est_service": "Service: {value}", "est_units": "Units: {value}", "est_hp": "Horsepower: {value}",
+        "est_issue": "Problem: {value}",
         "which_service": "Happy to help. Which service do you need: painting or aircon servicing?",
         "which_service_again": "Sorry, I want to be sure I get this right. Is it painting, or aircon servicing?",
         "photo_aircon": "Thanks, I've passed your photo to our technician to look at.",
@@ -220,7 +222,9 @@ STRINGS = {
         "label_service_type": "servis", "label_unit_count": "bilangan unit", "label_horsepower": "kuasa kuda",
         "label_aircon_issue": "masalah aircond",
         "recap_service": "Servis", "recap_units": "Unit", "recap_horsepower": "Kuasa kuda", "recap_issue": "Masalah",
-        "quote_rejected": "Terima kasih kerana bersabar. Buat masa ini kami belum dapat memberi anggaran untuk kerja ini, jadi {owner} akan menghubungi anda untuk berbincang. Tiada caj atau tempahan dibuat.",
+        "quote_rejected": "Terima kasih kerana bersabar. Buat masa ini kami belum dapat memberi anggaran untuk kerja ini. Sebabnya: {reason}. {owner} akan menghubungi anda untuk berbincang. Tiada caj atau tempahan dibuat.",
+        "est_service": "Servis: {value}", "est_units": "Unit: {value}", "est_hp": "Kuasa kuda: {value}",
+        "est_issue": "Masalah: {value}",
         "which_service": "Dengan senang hati. Servis mana yang anda perlukan: mengecat atau servis aircond?",
         "which_service_again": "Maaf, saya mahu pastikan betul. Mengecat, atau servis aircond?",
         "photo_aircon": "Terima kasih, saya telah menghantar gambar anda kepada juruteknik kami untuk disemak.",
@@ -493,7 +497,14 @@ TIER_WORDS = {"ekonomi": "economy", "economy": "economy", "eco": "economy", "che
               "premium": "premium"}
 COLOUR_WORDS = {"white", "black", "grey", "gray", "blue", "green", "red", "yellow", "cream", "beige", "brown",
                 "pink", "purple", "orange", "silver", "gold", "navy", "teal", "ivory", "putih", "hitam", "kelabu",
-                "biru", "hijau", "merah", "kuning", "krim", "coklat", "ungu", "oren"}
+                "biru", "hijau", "merah", "kuning", "krim", "coklat", "ungu", "oren",
+                # the names people say for a paint colour
+                "maroon", "burgundy", "turquoise", "aqua", "cyan", "lavender", "lilac", "violet", "magenta", "mint", "olive",
+                "lime", "sage", "khaki", "tan", "charcoal", "peach", "coral", "salmon", "mustard", "rose", "lemon", "sand",
+                "taupe", "mauve", "plum", "indigo", "azure", "emerald", "cobalt", "terracotta", "tangerine", "apricot",
+                "champagne", "chocolate", "coffee", "offwhite", "snow", "pearl", "slate", "steel", "bronze", "copper",
+                "jingga", "perang", "emas", "perak", "turquois", "peach", "krem", "kelabu", "merah jambu", "hijau muda",
+                "biru muda", "biru tua", "putih gading"}
 COLOUR_MS = {"white": "putih", "ivory": "ivori", "cream": "krim", "beige": "beige", "grey": "kelabu", "blue": "biru",
              "navy": "biru tua", "teal": "teal", "green": "hijau", "yellow": "kuning", "pink": "merah jambu",
              "brown": "coklat"}

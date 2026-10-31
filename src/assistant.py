@@ -661,12 +661,14 @@ _UNIT_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "
                "empat": 4, "lima": 5, "enam": 6}
 _UNITS = re.compile(r"\b(\d{1,2}|one|two|three|four|five|six|satu|dua|tiga|empat|lima|enam)\s*(?:x\s*)?"
                     r"(?:units?|aircon\w*|air[- ]?cond\w*|ac|biji|buah|pcs|pieces)\b", re.I)
-_HORSEPOWER = re.compile(r"\b(\d(?:[.,]\d)?)\s*(?:hp|h\.p\.|horse ?power|kuasa kuda)\b", re.I)
+_HORSEPOWER = re.compile(r"\b(\d(?:[.,]\d)?|one|two|three|satu|dua|tiga)\s*(?:hp|h\.p\.|horse ?power|kuasa kuda)\b", re.I)
 _SERVICE_KINDS = [("chemical_overhaul", re.compile(r"\b(overhaul|dismantle|bongkar)\b", re.I), "chemical overhaul"),
                   ("chemical_wash", re.compile(r"\b(chemical|kimia)\b", re.I), "chemical wash"),
                   ("gas_topup", re.compile(r"\b(gas|freon|refrigerant|top[- ]?up|tambah gas)\b", re.I), "gas top-up"),
                   ("general_service", re.compile(r"\b(general|normal|regular|routine|biasa|servis biasa|just (?:a )?service)\b", re.I),
                    "general service")]
+_WASH = re.compile(r"\bwash\w*\b", re.I)
+_GENERAL_LOOSE = re.compile(r"\b(servic\w*|clean\w*|maintenance|cuci|servis)\b", re.I)    # a plain "service" answers the service question only
 _NOT_SURE = re.compile(r"\b(not sure|don'?t know|do not know|no idea|tak pasti|tidak pasti|tak tahu|idk)\b", re.I)
 _ISSUE = re.compile(r"\b(not cold|tak sejuk|tidak sejuk|water (?:is )?(?:drip\w*|leak\w*)|drip\w*|leak\w*|smell\w*|bau|noise\w*|"
                     r"bising|blinking|beep\w*|ice|freez\w*|menitis|bocor|kelip|not cooling|warm)\b", re.I)
@@ -688,7 +690,8 @@ def _prefill_aircon(state, message, config, replace=False):
     if "horsepower" in required and (replace or "horsepower" not in v):
         found = _HORSEPOWER.search(message)
         if found:
-            v["horsepower"] = found.group(1).replace(",", ".") + " HP"
+            raw = found.group(1).lower()
+            v["horsepower"] = str(_UNIT_WORDS.get(raw, raw)).replace(",", ".") + " HP"
         elif asked == "horsepower" and _NOT_SURE.search(message):
             v["horsepower"] = "not sure"                # the technician reads it from the unit
         elif asked == "horsepower" and re.fullmatch(r"\s*\d(?:[.,]\d)?\s*[.!]?\s*", message):
@@ -698,6 +701,11 @@ def _prefill_aircon(state, message, config, replace=False):
             if pattern.search(message):
                 v["service_type"] = label
                 break
+        else:
+            if _WASH.search(message):
+                v["service_type"] = "chemical wash"
+            elif asked == "service_type" and state.history and _GENERAL_LOOSE.search(message):    # after the question was asked
+                v["service_type"] = "general service"
     if "aircon_issue" in required and "aircon_issue" not in v:
         if _ISSUE.search(message) and "?" not in message:
             v["aircon_issue"] = " ".join(message.split())[:160]

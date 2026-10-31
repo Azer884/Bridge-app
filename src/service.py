@@ -261,7 +261,7 @@ class IncomingService:
             return True
 
     def reject_quote(self, user_id, reason, by=None, send=None):
-        """The owner says no: the job leaves the approval queue and the customer is told, without the reason or any price,
+        """The owner says no: the job leaves the approval queue and the customer is told, with the reason and no price,
         that the team will be in touch. Editing the job values re-prices it and puts it back in the queue.
         Returns True when the customer was told. Raises ValueError when nothing is waiting."""
         reason = (reason or "").strip()
@@ -278,10 +278,10 @@ class IncomingService:
                                  f"Estimate rejected: {reason[:150]}" + (f" (by {by})" if by else ""))
             if send is None:
                 return False
-            message = t("quote_rejected", state.lang, owner=self._owner(state))
+            message = t("quote_rejected", state.lang, owner=self._owner(state), reason=reason[:200].rstrip(" ."))
             if send(message):
                 self.store.log_message(user_id, "out", message)
-                self.store.add_audit(user_id, "system", "send", "The customer was told the team will be in touch (no price sent)")
+                self.store.add_audit(user_id, "system", "send", "The customer was told the estimate was rejected, with the reason (no price sent)")
                 return True
             self.store.add_audit(user_id, "system", "send", "The customer could not be told: the message was not sent")
             return False

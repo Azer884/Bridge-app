@@ -92,6 +92,18 @@ def is_name(value):
         and all(re.fullmatch(r"[^\W\d_][\w'.\-]*", w) for w in words)
 
 
+_NOT_A_COLOUR = {"yes", "no", "ok", "okay", "sure", "what", "why", "how", "when", "hello", "hi", "sorry", "thanks", "thank", "please",
+                 "maybe", "none", "nothing", "idk", "hmm", "um", "uh", "that", "this", "it", "the", "a", "an", "tomorrow", "today",
+                 "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", "walls", "wall", "ceiling",
+                 "economy", "standard", "premium", "paint", "colour", "color", "cancel", "stop"}
+
+
+def _plain_words(value):
+    """One to three plain words with no digits and nothing that is plainly not a colour."""
+    words = re.findall(r"[a-z']+", str(value).lower())
+    return 1 <= len(words) <= 3 and not re.search(r"\d|\?", str(value)) and not (_NOT_A_COLOUR & set(words))
+
+
 def plausible(key, value, message):
     """False when `value` (taken from `message`) cannot be the answer to `key`."""
     if key == "surface_condition":
@@ -101,7 +113,9 @@ def plausible(key, value, message):
     if key == "address":
         return is_address(str(value)) or is_address(message)
     if key == "colour":
-        return is_colour(message)
+        if "?" in message:
+            return False                                       # "what colours do you have?" is a question, not a colour
+        return is_colour(message) or _plain_words(value)       # any short plain answer to "what colour?" is a colour: "sky blue", "off white"
     if key == "customer_name":
         return is_name(value)
     return True

@@ -304,9 +304,9 @@ function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<voi
 
       {rejecting && (
         <Modal title="Reject this estimate?" onClose={() => !sending && setRejecting(false)}>
-          <p>The customer is told we cannot give an estimate yet and that the team will be in touch. No price is sent and your reason stays internal, in the activity log. If you change the values later, the estimate comes back for approval.</p>
+          <p>The customer is sent your reason, and told the team will be in touch. If they are on a call, they hear it. No price is sent. The reason is also kept in the activity log. If you change the values later, the estimate comes back for approval.</p>
           <label className="field">
-            <span>Reason (required)</span>
+            <span>Reason (the customer sees this)</span>
             <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="For example: check the height with the customer" maxLength={200} autoFocus />
           </label>
           {rejectErr != null && <div className="alert">{explainError(rejectErr)}</div>}

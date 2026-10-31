@@ -169,7 +169,7 @@ _DATE_WORDS = re.compile(
     r"\b(lunch ?time|noon|midday|day after( tomorrow)?|next (mon|tues|wednes|thurs|fri|satur|sun)day|"
     r"in \d+ (days?|weeks?)|\d+ (days?|weeks?) (later|from now)|tengah ?hari|minggu ini)\b|"
     r"\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s?(am|pm)\b|"     # "three AM" from a call
-    r"\b\d{1,2}\s?(am|pm)\b|\b\d{1,2}:\d{2}\b|\b\d{1,2}[/-]\d{1,2}\b", re.I)
+    r"\b\d{1,2}\s?(am|pm)\b|\b\d{1,2}:\d{2}(?:\s?(?:am|pm)\b)?|\b\d{1,2}[/-]\d{1,2}\b", re.I)
 _DATE_FILLER = {"make", "it", "sorry", "actually", "wait", "nvm", "no", "ok", "okay", "change", "to", "on", "at", "la", "lah", "pls", "please", "then"}
 _NEGATED_DATE = re.compile(r"\b(except|not|bukan|kecuali|other than|besides|excluding|apart from)\b", re.I)
 _GOOD_GREETING = re.compile(r"\b(good|selamat)\s+(morning|afternoon|evening|night|pagi|petang|malam|tengah ?hari)\b", re.I)

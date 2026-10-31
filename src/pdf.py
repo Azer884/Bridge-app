@@ -50,8 +50,10 @@ def estimate_pdf(business, customer, job, quote):
                 "room_length_m": job.get("room_length_m"), "room_width_m": job.get("room_width_m"),
                 "room_height_m": job.get("room_height_m"), "room_name": job.get("room_name") or "",
                 "extra_rooms": job.get("extra_rooms") or [], "paint_tier": job.get("paint_tier") or "standard",
-                "colour": job.get("colour")}
-    lines = [(business, 20, True), ("Painting estimate", 14, True),
+                "colour": job.get("colour"), "service_type": job.get("service_type"), "unit_count": job.get("unit_count"),
+                "horsepower": job.get("horsepower"), "aircon_issue": job.get("aircon_issue")}
+    title = "Aircon servicing estimate" if job.get("trade") == "aircon" else "Painting estimate"
+    lines = [(business, 20, True), (title, 14, True),
              (datetime.now(TZ).strftime("%d %b %Y"), 10, False), ("", 8, False),
              (f"Customer: {customer}", 11, False), (f"Address: {job.get('address') or '-'}", 11, False), ("", 6, False)]
     lines += [("- " + line, 11, False) for line in job_lines(verified)]

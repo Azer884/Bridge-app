@@ -6,8 +6,8 @@ import { useAsync } from "../hooks";
 import { canDecide, useActor } from "../actor";
 import { IArrowOut, ICalendar, IChevron, IClock, ISearch, IUsers } from "../ui/ObIcons";
 
-type Tab = "all" | "submit" | "review" | "approve";
-type Row = { id: string; title: string; sub: string; amount: string; kind: "approve" | "reply"; at?: string };
+type Tab = "all" | "submit" | "review" | "approve" | "rejected";
+type Row = { id: string; title: string; sub: string; amount: string; kind: "approve" | "reply" | "rejected"; at?: string };
 
 const greeting = (h: number) => (h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening");
 
@@ -24,6 +24,7 @@ export default function Dashboard() {
     10_000,
   );
   const customers = useAsync(() => api.listCustomers(), [me?.id], 10_000);
+  const rejectedQuotes = useAsync(() => api.listQuotes("rejected"), [me?.id], 10_000);
   const [tab, setTab] = useState<Tab>("all");
   const [query, setQuery] = useState("");
   const [closed, setClosed] = useState<Record<string, boolean>>({});
@@ -41,23 +42,34 @@ export default function Dashboard() {
   const replies: Row[] = (customers.data ?? [])
     .filter((c) => (c.needs_human || c.attention) && !todo.some((t) => t.id === c.user_id))
     .map((c) => ({ id: c.user_id, title: `Reply to ${c.name ?? "a customer"}`, sub: "The customer asked for a person", amount: "", kind: "reply" }));
+  const rejectedRows: Row[] = (rejectedQuotes.data ?? []).map((q) => ({
+    id: q.user_id,
+    title: `Rejected: estimate for ${q.customer}`,
+    sub: (q.quote as { rejected?: { reason?: string } } | null)?.rejected?.reason ?? q.job.address ?? q.user_id,
+    amount: q.quote ? money(q.quote.total, q.quote.currency) : "",
+    kind: "rejected",
+    at: q.updated_at,
+  }));
   const q = query.trim().toLowerCase();
   const match = (r: Row) => !q || `${r.title} ${r.sub}`.toLowerCase().includes(q);
   const approve = (decide ? todo : []).filter(match);
   const review = (decide ? [] : todo).concat(replies).filter(match);
+  const rejected = rejectedRows.filter(match);
   const groups = [
     { key: "approve", title: "Estimates to approve", note: "Waiting for an approver", rows: approve, show: tab === "all" || tab === "approve" },
     { key: "review", title: decide ? "Customers waiting" : "To review", note: decide ? "Need a reply from a person" : "You can read these, an approver decides", rows: review, show: tab === "all" || tab === "review" },
+    { key: "rejected", title: "Rejected estimates", note: "The customer was told. Change the values to put one back for approval", rows: rejected, show: tab === "all" || tab === "rejected" },
   ].filter((g) => g.show && g.rows.length);
   const allClosed = groups.length > 0 && groups.every((g) => closed[g.key]);
   const jobs = (today.data ?? []).filter((b) => b.status !== "cancelled").sort((a, b) => a.start.localeCompare(b.start));
   const clock = (iso: string) => new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const first = (me?.name ?? "").split(" ")[0];
   const tabs: [Tab, string][] = [
-    ["all", `All (${approve.length + review.length})`],
+    ["all", `All (${approve.length + review.length + rejected.length})`],
     ["submit", "Submit (0)"],
     ["review", `Review (${review.length})`],
     ["approve", `Approve (${approve.length})`],
+    ["rejected", `Rejected (${rejected.length})`],
   ];
 
   return (
@@ -129,7 +141,7 @@ export default function Dashboard() {
               <div key={r.id + r.kind} className="ob-drow item">
                 <span><b>{r.title}</b><small>{r.sub}</small></span>
                 <span className="mute">{r.kind === "approve" ? "Approver" : "Owner"}</span>
-                <span className={`ob-status ${r.kind}`}><IClock />{r.kind === "approve" ? "Pending Approval" : "Needs Reply"}</span>
+                <span className={`ob-status ${r.kind}`}><IClock />{r.kind === "approve" ? "Pending Approval" : r.kind === "rejected" ? "Rejected" : "Needs Reply"}</span>
                 <span className="mute num">{r.amount || (r.at ? timeAgo(r.at) : "")}</span>
                 <Link className="ob-link" to={`/app/quotes/${r.id}`}>{r.kind === "approve" && decide ? "Go to approval" : "Open"} <IArrowOut /></Link>
               </div>
