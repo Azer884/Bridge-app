@@ -85,6 +85,8 @@ def _handle(state, message, config, client, max_retries=MAX_RETRIES):
     if flow.wants_restart(message):
         flow.restart_job(state) if state.stage != "done" else flow.start_new_order(state)
         first = ask_for(state.next_missing(config), state) if state.next_missing(config) else ""
+        if config.get("extra_trades"):                  # the business offers several trades: which one is asked again
+            first = t("which_service", state.lang)
         return _finish(state, message, f"{t('restart', state.lang)} {first}".strip(),
                        Status.COLLECTING.value, record=False)
     if screen_input(message):
@@ -661,6 +663,9 @@ _UNIT_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "
                "empat": 4, "lima": 5, "enam": 6}
 _UNITS = re.compile(r"\b(\d{1,2}|one|two|three|four|five|six|satu|dua|tiga|empat|lima|enam)\s*(?:x\s*)?"
                     r"(?:units?|aircon\w*|air[- ]?cond\w*|ac|biji|buah|pcs|pieces)\b", re.I)
+_BARE_COUNT = re.compile(r"\s*(?:(?:just|only|about|around|cuma|hanya)\s+)?(\d{1,2}|one|two|three|four|five|six|satu|dua|tiga|empat|lima|enam)"
+                         r"(?:\s+(?:only|sahaja|je))?\s*[.!]?\s*", re.I)
+_BARE_DECIMAL = re.compile(r"\s*\d[.,]\d\s*[.!]?\s*")      # "2.0", "1.5": a horsepower, never a number of units
 _HORSEPOWER = re.compile(r"\b(\d(?:[.,]\d)?|one|two|three|satu|dua|tiga)\s*(?:hp|h\.p\.|horse ?power|kuasa kuda)\b", re.I)
 _SERVICE_KINDS = [("chemical_overhaul", re.compile(r"\b(overhaul|dismantle|bongkar)\b", re.I), "chemical overhaul"),
                   ("chemical_wash", re.compile(r"\b(chemical|kimia)\b", re.I), "chemical wash"),
@@ -684,8 +689,8 @@ def _prefill_aircon(state, message, config, replace=False):
         if found:
             word = found.group(1).lower()
             v["unit_count"] = str(int(word) if word.isdigit() else _UNIT_WORDS[word])
-        elif asked == "unit_count" and re.fullmatch(r"\s*(\d{1,2}|one|two|three|four|five|six|satu|dua|tiga|empat|lima|enam)\s*[.!]?\s*", message, re.I):
-            word = message.strip(" .!").lower()
+        elif asked == "unit_count" and (bare := _BARE_COUNT.fullmatch(message)):
+            word = bare.group(1).lower()
             v["unit_count"] = str(int(word) if word.isdigit() else _UNIT_WORDS[word])
     if "horsepower" in required and (replace or "horsepower" not in v):
         found = _HORSEPOWER.search(message)
@@ -695,6 +700,8 @@ def _prefill_aircon(state, message, config, replace=False):
         elif asked == "horsepower" and _NOT_SURE.search(message):
             v["horsepower"] = "not sure"                # the technician reads it from the unit
         elif asked == "horsepower" and re.fullmatch(r"\s*\d(?:[.,]\d)?\s*[.!]?\s*", message):
+            v["horsepower"] = message.strip(" .!").replace(",", ".") + " HP"
+        elif asked in ("horsepower", "unit_count") and _BARE_DECIMAL.fullmatch(message):
             v["horsepower"] = message.strip(" .!").replace(",", ".") + " HP"
     if "service_type" in required and (replace or "service_type" not in v):
         for _key, pattern, label in _SERVICE_KINDS:

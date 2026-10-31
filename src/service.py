@@ -498,6 +498,11 @@ class IncomingService:
         label, confidence = intent.read_trade(self.intent_client or self.client, text, list(self.trades))
         return label if label in self.trades and confidence >= intent.MIN_TRADE_CONFIDENCE else None
 
+    @staticmethod
+    def _started(state):
+        """Has this chat begun a job? A name and a phone number kept through "start over" do not count."""
+        return bool(state.history or any(k not in ("customer_name", "phone") for k in state.verified))
+
     def _pick_trade(self, state, text):
         """Which trade the customer means, when the business offers several: from their words, then from the model,
         and when it is still unclear a question. Returns the question to send, or None to carry on with the trade set."""
@@ -509,7 +514,7 @@ class IncomingService:
                 flow.start_new_order(state)             # asking for the other service after a finished job is a new job
                 state.trade = found
             return None
-        if not state.trade and (state.verified or state.history):
+        if not state.trade and self._started(state):
             # a chat that began before the business offered several trades is the main trade, unless the customer now plainly
             # asks for another one: then the old answers are dropped and the new job starts
             if found in self.trades and found != main:
@@ -697,7 +702,7 @@ class IncomingService:
         """The question the customer is answering right now, for the model to read their message against ("" when none)."""
         if state.stage == "done":
             return ""
-        if len(self.trades) > 1 and not state.trade and not (state.verified or state.history):
+        if len(self.trades) > 1 and not state.trade and not self._started(state):
             return t("which_service", state.lang)
         return _current_question(state, self._turn_config(state), service=True)
 

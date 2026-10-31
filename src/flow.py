@@ -399,6 +399,7 @@ def restart_job(state):
     state.estimated, state.pending_conflict, state.history, state.last_field = [], None, [], ""
     state.waiting_count, state.attention, state.needs_human = 0, False, False
     state.service_checked = state.greeted = True
+    state.trade, state.last_photo_id = "", ""            # a clean start: the service is asked again, the old photo is forgotten
 
 
 _QUESTION_START = re.compile(
