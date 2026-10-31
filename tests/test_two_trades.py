@@ -203,3 +203,53 @@ class NewJobOtherTradeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BareACTests(unittest.TestCase):
+    def test_ac_said_on_its_own_is_an_aircon(self):
+        for text in ("I'd like to fix my AC.", "my AC is broken", "the A.C. is leaking", "I need an ac technician"):
+            self.assertEqual(trades.detect(text), "aircon", text)
+
+    def test_words_that_only_contain_ac_are_not(self):
+        for text in ("I need a place to park", "pack the room", "back wall please"):
+            self.assertNotEqual(trades.detect(text), "aircon", text)
+
+    def test_fixing_my_ac_starts_an_aircon_job_not_a_painting_one(self):
+        svc = mixed()
+        out = say(svc, "I'd like to fix my AC.", 1)
+        self.assertEqual(svc.store.load(UID).trade, "aircon")
+        self.assertNotIn("paint", out.lower())
+        self.assertNotIn("surface", out.lower())
+
+
+class ReturningCustomerTests(unittest.TestCase):
+    def test_an_older_painting_chat_does_not_swallow_a_request_to_fix_the_ac(self):
+        svc = mixed()
+        state = svc.store.load(UID)
+        state.verified.update({"surfaces": ["walls"], "room_length_m": 4.0})          # a painting chat from before: no trade saved
+        state.history = [{"role": "user", "content": "paint my wall"}, {"role": "assistant", "content": "How wide?"}]
+        svc.store.save(state)
+        out = say(svc, "I'd like to fix my AC.", 1)
+        saved = svc.store.load(UID)
+        self.assertEqual(saved.trade, "aircon")
+        self.assertNotIn("surfaces", saved.verified)
+        self.assertNotIn("paint", out.lower())
+
+    def test_an_older_painting_chat_carries_on_when_the_customer_does_not_ask_for_aircon(self):
+        svc = mixed()
+        state = svc.store.load(UID)
+        state.verified.update({"surfaces": ["walls"], "room_length_m": 4.0})
+        state.history = [{"role": "user", "content": "paint my wall"}, {"role": "assistant", "content": "How wide?"}]
+        svc.store.save(state)
+        say(svc, "3 meters", 1)
+        self.assertEqual(svc.store.load(UID).trade, "painting")
+
+    def test_a_finished_painting_job_then_ac_starts_a_new_aircon_job(self):
+        svc = mixed()
+        state = svc.store.load(UID)
+        state.stage, state.quote_status = "done", "pending_approval"
+        state.verified.update({"surfaces": ["walls"]})
+        svc.store.save(state)
+        say(svc, "I'd like to fix my AC.", 1)
+        saved = svc.store.load(UID)
+        self.assertEqual((saved.trade, len(saved.orders)), ("aircon", 1))

@@ -497,13 +497,21 @@ class IncomingService:
         """Which trade the customer means, when the business offers several: from their words, then from the model,
         and when it is still unclear a question. Returns the question to send, or None to carry on with the trade set."""
         found = trades_module.detect(text)
+        main = trade_of(self.config)
         if state.stage == "done":
-            if state.trade and found in self.trades and found != state.trade:
+            current = state.trade or main               # an older finished job counts as the main trade
+            if found in self.trades and found != current:
                 flow.start_new_order(state)             # asking for the other service after a finished job is a new job
                 state.trade = found
             return None
         if not state.trade and (state.verified or state.history):
-            state.trade = trade_of(self.config)         # a chat that began before the business offered several trades
+            # a chat that began before the business offered several trades is the main trade, unless the customer now plainly
+            # asks for another one: then the old answers are dropped and the new job starts
+            if found in self.trades and found != main:
+                flow.restart_job(state)
+                state.trade = found
+            else:
+                state.trade = main
         if state.trade:
             return None
         if found not in self.trades:                    # nothing said, or both trades in one message

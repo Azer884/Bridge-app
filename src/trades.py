@@ -15,7 +15,7 @@ TRADE_DIR = ROOT / "config" / "trades"
 # Words of one trade that are also words of another ("wall-mounted" aircon, "ceiling cassette") are taken out first.
 _SHARED = re.compile(r"\b(wall[- ]mounted|wall[- ]type|ceiling[- ]cassette|ceiling[- ]mounted|ceiling[- ]concealed)\b", re.I)
 _AIRCON = re.compile(
-    r"\b(air[- ]?con\w*|air[- ]?cond\w*|a/c|ac units?|ac servic\w*|chemical (?:wash|overhaul)|gas top[- ]?up|"
+    r"\b(air[- ]?con\w*|air[- ]?cond\w*|a/c|a\.c\b|ac|chemical (?:wash|overhaul)|gas top[- ]?up|"
     r"penghawa dingin|aircond\w*|not cold|tak sejuk|tidak sejuk|air menitis|cuci kimia|tambah gas)\b", re.I)
 _PAINT = re.compile(
     r"\b(paint\w*|repaint\w*|walls?|ceilings?|mengecat\w*|\bcat\b|dinding|siling|colou?rs?|warna|plaster)\b", re.I)
