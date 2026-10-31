@@ -1,0 +1,68 @@
+/* Orbyte look for every Gesir page inside the app (quotes, calendar, WhatsApp, personas, status). Same functions, Orbyte skin:
+   plain headings, white cards with a thin border, small square-ish blue buttons, flat pills and light tables. */
+.shell.ob h1, .shell.ob h2, .shell.ob h3, .shell.ob h4 { font-family: var(--font); letter-spacing: 0; }
+.shell.ob .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 14px; }
+.shell.ob .page-head h1 { font-size: 28px; font-weight: 500; letter-spacing: -.01em; }
+.shell.ob .page-head p { color: var(--ink-3); font-size: 14px; margin-top: 2px; max-width: 70ch; }
+.shell.ob .main { padding: 24px 28px; }
+
+/* buttons: Orbyte uses small, lightly rounded buttons */
+.shell.ob .btn {
+  min-height: 34px; padding: 0 14px; border: 1px solid var(--line); border-radius: 6px; background: #fff; color: var(--ink);
+  font-weight: 600; font-size: 14px; box-shadow: none; transform: none;
+}
+.shell.ob .btn:hover { background: #f1f5fb; transform: none; }
+.shell.ob .btn.primary, .shell.ob .btn.dark { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 700; box-shadow: 0 2px 6px rgba(7, 103, 232, .3); }
+.shell.ob .btn.primary:hover, .shell.ob .btn.dark:hover { background: var(--blue-deep); border-color: var(--blue-deep); }
+.shell.ob .btn.danger { background: #b3261e; border-color: #b3261e; color: #fff; box-shadow: none; }
+.shell.ob .btn.small { min-height: 28px; padding: 0 10px; font-size: 13px; }
+.shell.ob .btn[disabled] { opacity: .5; }
+
+/* cards and panels */
+.shell.ob .panel { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; box-shadow: none; margin-bottom: 16px; }
+.shell.ob .panel h2, .shell.ob .panel-title h2 { font-size: 18px; font-weight: 700; }
+.shell.ob .alert { border-radius: 10px; }
+.shell.ob .empty { text-align: center; padding: 42px 0; color: var(--ink-3); }
+.shell.ob .empty b { display: block; color: var(--ink); font-size: 18px; margin-bottom: 4px; }
+
+/* tabs and filter chips */
+.shell.ob .tabs { display: flex; gap: 6px; flex-wrap: wrap; background: none; border: 0; padding: 0; }
+.shell.ob .tab, .shell.ob .fchip {
+  padding: 6px 12px; border-radius: 8px; border: 1px solid transparent; background: none; color: var(--ink); font-weight: 600; font-size: 14px; box-shadow: none;
+}
+.shell.ob .tab[aria-selected="true"], .shell.ob .fchip[aria-pressed="true"] { background: var(--blue-wash); border-color: rgba(7, 103, 232, .25); color: var(--blue); }
+.shell.ob .filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.shell.ob .fchip small, .shell.ob .tab small { opacity: .7; }
+
+/* flat pills for status */
+.shell.ob .stage-chip, .shell.ob .status-chip, .shell.ob .detail-head .status-chip {
+  border-radius: 99px; padding: 2px 10px; font-size: 12px; font-weight: 600; background: rgba(28, 49, 83, .07); color: var(--ink-3);
+}
+.shell.ob .stage-chip.s-requires_approval, .shell.ob .status-chip.pending_approval, .shell.ob .status-chip.needs_inspection, .shell.ob .status-chip.tentative { background: #fff3d6; color: #9a5a00; }
+.shell.ob .stage-chip.s-quote_sent, .shell.ob .stage-chip.s-scheduled, .shell.ob .stage-chip.s-completed, .shell.ob .status-chip.approved, .shell.ob .status-chip.confirmed { background: #e3f5ea; color: #1a7f4b; }
+.shell.ob .stage-chip.s-rejected, .shell.ob .status-chip.rejected, .shell.ob .status-chip.cancelled { background: #fbe5e2; color: #b3261e; }
+
+/* lists, rows and tables */
+.shell.ob .row-chip { background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: none; }
+.shell.ob .row-chip:hover { background: #f8fbff; }
+.shell.ob .pipe-table th, .shell.ob .ob-table th { font-size: 13px; font-weight: 800; text-transform: none; letter-spacing: 0; color: var(--ink); background: #fff; }
+.shell.ob .pipe-table td { border-bottom: 1px solid var(--line); }
+.shell.ob .ob-table.clickable tbody tr { cursor: pointer; }
+.shell.ob .ob-table.clickable tbody tr:hover { background: #f8fbff; }
+.shell.ob .board .col, .shell.ob .kcard, .shell.ob .persona-card, .shell.ob .event, .shell.ob .slot { background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: none; }
+.shell.ob .board .col { background: #f8fbff; }
+
+/* fields */
+.shell.ob input, .shell.ob select, .shell.ob textarea, .shell.ob .input, .shell.ob .textarea {
+  border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); font: inherit; padding: 8px 10px;
+}
+.shell.ob .field > span { font-weight: 700; font-size: 13px; }
+.ob-filters { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+.ob-filters label { display: flex; flex-direction: column; font-size: 12px; font-weight: 700; gap: 4px; }
+.ob-filters label.grow { flex: 1; min-width: 200px; }
+.ob-filters .ob-tabs { margin: 0; }
+
+/* modals and overlays keep working, in the Orbyte palette */
+.shell.ob .modal, .shell.ob .sheet { background: #fff; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); }
+.shell.ob .link { color: var(--blue); }
+.shell.ob a { color: inherit; }
