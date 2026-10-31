@@ -1,0 +1,111 @@
+{
+  "_note": "DEMO DATA - Air Conditioning Servicing profile demonstrating Orbyte Hub multi-trade reuse. Malaysian market estimates in MYR for residential HVAC in Klang Valley (2025-2026 benchmark).",
+  "business_name": "CoolBreeze Aircon Services Sdn Bhd (Orbyte Demo)",
+  "trade_type": "aircon",
+  "services": [
+    "regular aircon servicing and filter cleaning",
+    "chemical wash and deep coil cleaning",
+    "complete chemical overhaul (dismantle indoor unit)",
+    "refrigerant gas top-up (R32, R410A, R22)",
+    "troubleshooting water leakage and sensor blinking"
+  ],
+  "policies": [
+    "Quotation is prepared based on unit count, horsepower, and requested service type.",
+    "Compressor breakdown, PCB inverter board replacement, and copper pipe concealed leak require on-site diagnostic inspection.",
+    "Chemical overhaul includes a 60-day workmanship warranty against water dripping."
+  ],
+  "required_fields": [
+    "address",
+    "unit_count",
+    "service_type",
+    "horsepower",
+    "surface_condition",
+    "preferred_datetime"
+  ],
+  "inspection_keywords": [
+    "trip elektrik",
+    "trip power",
+    "compressor dead",
+    "lampu kelip",
+    "blinking light",
+    "copper pipe leak",
+    "gas bocor teruk",
+    "pcb board",
+    "inverter rosak"
+  ],
+  "pricing": {
+    "_note": "Malaysian market estimates (Klang Valley benchmark 2025-2026). Standard wall-mounted 1.0-1.5HP: General Service RM60/unit, Chemical Wash RM130/unit, Chemical Overhaul RM180/unit. Gas top-up RM70-90. Multi-unit discount applies for >=2 units.",
+    "currency": "MYR",
+    "trade_type": "aircon",
+    "crew_size": 2,
+    "workday_hours": 8,
+    "minimum_job_charge": 80.0,
+    "markup_pct": 10,
+    "service_types": {
+      "general_service": {
+        "label": "General Service (Cleaning & Pressure Check)",
+        "base_rate": 60.0,
+        "hours_per_unit": 0.6,
+        "category": "Labour"
+      },
+      "chemical_wash": {
+        "label": "Chemical Wash (On-wall Coil Deep Clean)",
+        "base_rate": 130.0,
+        "hours_per_unit": 1.0,
+        "category": "Labour"
+      },
+      "chemical_overhaul": {
+        "label": "Chemical Overhaul (Full Dismantle & Chemical Bath)",
+        "base_rate": 180.0,
+        "hours_per_unit": 1.8,
+        "category": "Labour"
+      }
+    },
+    "default_service_type": "chemical_wash",
+    "horsepower_multipliers": {
+      "1.0hp": 1.0,
+      "1.5hp": 1.0,
+      "2.0hp": 1.25,
+      "2.5hp": 1.4,
+      "3.0hp": 1.6
+    },
+    "default_horsepower": "1.0hp",
+    "gas_topup": {
+      "r32": 80.0,
+      "r410a": 85.0,
+      "r22": 65.0,
+      "hours": 0.3
+    },
+    "discounts": {
+      "multi_unit_tier_1_min": 2,
+      "multi_unit_tier_1_pct": 10,
+      "multi_unit_tier_2_min": 4,
+      "multi_unit_tier_2_pct": 15
+    },
+    "condition_levels": {
+      "good": { "multiplier": 1.0 },
+      "minor": { "multiplier": 1.0 },
+      "moderate": { "multiplier": 1.15 },
+      "severe": { "multiplier": 1.35 }
+    },
+    "inspection_levels": ["severe"]
+  },
+  "owner": {
+    "name": "Alex Wong",
+    "title": "Lead HVAC Specialist"
+  },
+  "active_persona": "chong",
+  "personas": {
+    "chong": {
+      "name": "Chong",
+      "style": "efficient, straightforward and polite; clear Malaysian tone, responsive and helpful.",
+      "greeting": "Hello! Chong here from CoolBreeze Aircon.",
+      "service_question": "How many aircon units need servicing, and what service are you looking for?",
+      "closing": "Great! I have forwarded your request to {owner}. Your quotation draft will arrive here shortly.",
+      "greeting_ms": "Salam! Saya Chong dari CoolBreeze Aircon.",
+      "service_question_ms": "Berapa biji aircond yang perlu diservis dan apakah servis yang diperlukan?",
+      "closing_ms": "Baik! Saya dah hantar butiran kepada {owner}. Draf sebut harga akan dihantar ke sini sekejap lagi.",
+      "voice": "a167e0f3-df7e-4d52-a9c3-f949145efdab"
+    }
+  }
+}
