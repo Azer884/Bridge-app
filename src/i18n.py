@@ -76,9 +76,11 @@ STRINGS = {
         "st_confused": "Sorry, I didn't catch that. Which room would you like painted?",
         "date_past": "That day has already passed. Which day would work for you?",
         "date_past_year": "That date has already passed this year. Which day would work for you? If you mean next year, please include the year, for example 20 Oct {year}.",
+        "date_closed": "Our crew works {hours}. Which day and time within those hours would suit you?",
         "date_need_day": "I'll need a specific day to book. Which date would suit you, for example Saturday morning?",
         "date_ask_again": "Which day and time would suit you? For example, Saturday 10am, or just \"anytime\".",
         "condition_ask_again": "Are the surfaces in good condition, or is there peeling, cracks, damp or stains?",
+        "tier_ideas": "Most customers choose standard: good coverage at a fair price. Economy keeps the cost lowest, and premium gives a more washable, longer-lasting finish. Which would you like: economy, standard or premium?",
         "colour_ideas": "Popular choices are white, cream or light grey. Send me a photo of the room and I can suggest colours that suit it. Which colour would you like?",
         "colour_ask_again": "Which colour would you like? For example white, cream, grey, or say \"no preference\".",
         "address_ask_again": "What is the full address of the property, for example 12 Jalan Bunga, Taman Melati?",
@@ -155,6 +157,7 @@ STRINGS = {
         "declined_again": "I've passed your request to {owner}. If you'd like an interior wall or ceiling painted, tell me which room and I'll start the quote.",
         "foreign": "Sorry, I can only chat in English or Bahasa Malaysia. Could you write to me in one of those?",
         "abuse": "Please keep the chat respectful so I can help you.",
+        "location_outside": "That location is not in Malaysia, and we only quote jobs in Malaysia. Please share the property's location again, or type its address.",
         "location_saved": "Thanks, I've saved the location you shared.",
         "pinned": "Pinned location ({lat:.5f}, {lon:.5f})",
         "welcome_back": "Hi again! If you would like another painting job quoted, just tell me what you want painted.",
@@ -238,9 +241,11 @@ STRINGS = {
         "st_confused": "Maaf, saya tidak faham. Bilik mana yang anda mahu cat?",
         "date_past": "Hari itu sudah berlalu. Hari mana yang sesuai untuk anda?",
         "date_past_year": "Tarikh itu sudah berlalu tahun ini. Hari mana yang sesuai untuk anda? Jika maksud anda tahun depan, sila nyatakan tahun, contohnya 20 Okt {year}.",
+        "date_closed": "Pasukan kami bekerja {hours}. Hari dan masa mana dalam waktu itu yang sesuai untuk anda?",
         "date_need_day": "Saya perlukan hari yang tepat untuk tempahan. Tarikh mana yang sesuai, contohnya Sabtu pagi?",
         "date_ask_again": "Hari dan masa mana yang sesuai? Contohnya Sabtu 10 pagi, atau \"bila-bila masa\".",
         "condition_ask_again": "Adakah permukaan dalam keadaan baik, atau ada cat mengelupas, retak, lembap atau kesan kotoran?",
+        "tier_ideas": "Kebanyakan pelanggan memilih standard: perlindungan baik pada harga berpatutan. Ekonomi paling jimat, dan premium memberi kemasan yang lebih tahan basuh dan tahan lama. Mana yang anda mahu: ekonomi, standard atau premium?",
         "colour_ideas": "Pilihan popular ialah putih, krim atau kelabu cerah. Hantar gambar bilik dan saya boleh cadangkan warna yang sesuai. Warna apa yang anda mahu?",
         "colour_ask_again": "Warna apa yang anda mahu? Contohnya putih, krim, kelabu, atau cakap \"tiada pilihan\".",
         "address_ask_again": "Apakah alamat penuh hartanah itu, contohnya 12 Jalan Bunga, Taman Melati?",
@@ -317,6 +322,7 @@ STRINGS = {
         "declined_again": "Saya telah serahkan permintaan anda kepada {owner}. Jika anda mahu dinding atau siling dalaman dicat, beritahu bilik mana dan saya akan mulakan sebut harga.",
         "foreign": "Maaf, saya hanya boleh berbual dalam bahasa Inggeris atau Bahasa Malaysia. Boleh anda tulis dalam salah satu bahasa itu?",
         "abuse": "Sila jaga kesopanan dalam sembang ini supaya saya dapat membantu anda.",
+        "location_outside": "Lokasi itu bukan di Malaysia, dan kami hanya memberi sebut harga untuk kerja di Malaysia. Sila kongsi semula lokasi hartanah, atau taip alamatnya.",
         "location_saved": "Terima kasih, saya telah simpan lokasi yang anda kongsi.",
         "pinned": "Lokasi dikongsi ({lat:.5f}, {lon:.5f})",
         "welcome_back": "Hai lagi! Jika anda mahu sebut harga untuk kerja mengecat yang lain, beritahu saya apa yang anda mahu cat.",
@@ -343,6 +349,9 @@ _SENTENCE_START = re.compile(r"(^|[.!?]\s+)([a-z])")
 
 def t(key, lang="en", **kwargs):
     text = STRINGS.get(lang, STRINGS["en"]).get(key) or STRINGS["en"][key]
+    if "{hours}" in text:
+        from .scheduling import working_hours_text
+        kwargs.setdefault("hours", working_hours_text(lang))
     if "{year}" in text:
         kwargs.setdefault("year", date.today().year + 1)      # "20 Oct 2027": next year, whenever this runs
     text = text.format(**kwargs) if kwargs else text

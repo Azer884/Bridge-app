@@ -75,6 +75,8 @@ def condition_clause(message):
 
 
 def is_address(text):
+    if flow._DATE_WORDS.search(text) and not STREET.search(text):
+        return False                    # "tomorrow morning, maybe at 3 am" has a comma and a digit, but it is a time
     words = re.findall(r"[A-Za-z0-9]+", text)
     return bool(STREET.search(text) and (re.search(r"\d", text) or len(words) >= 3)) or (
         len(words) >= 4 and "," in text and re.search(r"\d", text) is not None)

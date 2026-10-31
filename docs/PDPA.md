@@ -23,6 +23,14 @@ The same notice exists in Bahasa Malaysia (`src/i18n.py`, keys `consent_*`). The
 
 "Stop, I meant 4 m" is a correction, not a withdrawal: only a message that is nothing but the request erases data.
 
+**Withdrawal in the customer's own words.** A customer does not have to type STOP. "You can't record my address", "nvm dont have
+my agreement", or a long message saying they would rather you did not keep their details (in English, Malay or another language)
+pauses everything. Fixed phrases catch the common ones (`src/consent.py`), and for longer or unusual messages the model reads what
+the customer means (`src/intent.py`) and returns one label. Code decides what happens: processing stops, the owner is flagged, and the
+customer is told to reply STOP to erase everything or 1 to carry on. The model never writes a reply and never erases anything.
+Only messages that contain a related word, or are long, are sent to the model. Set `AI_INTENTS=0` to turn the model reading off.
+The same reading recognises a cancel and a restart said in other words, but only when the model is at least 85% sure.
+
 Calls are not covered yet: the voice agent answers without the notice. Either tell callers at the start of the call or turn
 calls off until a spoken notice is added.
 

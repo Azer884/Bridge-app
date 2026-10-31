@@ -336,6 +336,20 @@ def new_booking(user_id, customer, phone, address, start, hours, status="tentati
             "location": location, "created_at": datetime.now(TZ).isoformat()}
 
 
+def working_hours_text(lang="en"):
+    """The crew's days and hours in words, from the working rules: "Monday to Friday 9 am to 6 pm and Saturday 9 am to 1 pm"."""
+    def clock(moment, ms):
+        hour = moment.hour % 12 or 12
+        return f"{hour} {('pagi' if moment.hour < 12 else 'tengah hari' if moment.hour == 12 else 'petang') if ms else ('am' if moment.hour < 12 else 'pm')}"
+    ms = lang == "ms"
+    open_, close = RULES.day_start, RULES.day_end
+    weekdays = ("Isnin hingga Jumaat" if ms else "Monday to Friday")
+    text = f"{weekdays} {clock(open_, ms)} {'hingga' if ms else 'to'} {clock(close, ms)}"
+    if 5 in RULES.working_days:
+        text += f" {'dan Sabtu' if ms else 'and Saturday'} {clock(open_, ms)} {'hingga' if ms else 'to'} {clock(SATURDAY_CLOSE, ms)}"
+    return text
+
+
 def describe_days(booking, lang="en"):
     """A job that runs over several working days, day by day: "Day 1: Mon 9 Nov, 2:00 pm to 6:00 pm; Day 2: ...".
     Empty for a job that fits in one day."""

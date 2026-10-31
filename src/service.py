@@ -6,7 +6,7 @@ from dataclasses import asdict, replace
 from datetime import datetime
 
 from .assessment import LOW_CONFIDENCE, combine, from_dict
-from . import consent, contact, flow, persona as persona_module, scheduling, views
+from . import consent, contact, flow, geo, intent, persona as persona_module, scheduling, views
 from .assistant import PHOTO_CONDITION, advance, handle_message
 from .guard import clean_profile_name, clean_profile_phone
 from .i18n import COLOUR_MS, ISSUE_MS, STRINGS, detect, t
@@ -42,6 +42,8 @@ class IncomingService:
         self.photo_assessor, self.transcriber = photo_assessor, transcriber
         self.colour_assessor = colour_assessor      # colour_assessor(media_id) -> {"current", "suggestions"} or None
         self.notify = notify                        # notify(title, body, data) -> push to the owner's phone
+        self.use_ai_intents = False                 # the server turns this on when a real model is connected (see intent.py)
+        self.intent_client = None                   # the model that reads meanings; the chat model when not set
 
     def _turn_config(self):
         """The business config plus the persona the dashboard has selected right now."""
@@ -577,6 +579,14 @@ class IncomingService:
             self.store.log_event("data_erased", f"{user_id} erased by {by}")
             return True
 
+    def _meaning(self, text):
+        """What the customer means, read by the model for messages that may hold a withdrawal, a cancel or a restart.
+        "other" when the model is off, down, not sure, or the message is an ordinary answer."""
+        if not self.use_ai_intents or not text or not intent.worth_reading(text):
+            return "other"
+        label, confidence = intent.classify(self.intent_client or self.client, text)
+        return intent.decided(label, confidence)
+
     def _consent_gate(self, state, event):
         """Returns (replies, erased) when the PDPA notice decides this message, else None. Nothing a customer sends is
         read, saved or sent to a model until they answer the notice with 1; STOP erases everything."""
@@ -589,7 +599,7 @@ class IncomingService:
             self.store.delete_conversation(event.user_id)
             self.store.log_event("data_erased", f"{event.user_id} withdrew consent")
             return [t("consent_withdrawn", lang)], True
-        if state.consent == "granted" and consent.objects(text):
+        if state.consent == "granted" and (consent.objects(text) or self._meaning(text) == "withdraw_consent"):
             # "you can't record my address": a withdrawal in ordinary words. Stop processing until they choose.
             state.consent, state.consent_asks, state.attention = "pending", 1, True
             self.store.add_audit(event.user_id, "customer", "consent", "Objected to their details being recorded; processing paused")
@@ -643,7 +653,13 @@ class IncomingService:
 
         if event.type == "text" and event.text.strip():
             self.store.log_message(event.user_id, "in", event.text)
-            reply = self._answer(state, event.text)
+            said = event.text
+            meaning = self._meaning(said)
+            if meaning == "cancel_job" and not flow.wants_cancel(said):
+                said = "cancel"                         # the model read a cancel in other words: the usual cancel handling takes over
+            elif meaning == "restart" and not flow._RESTART.search(said):
+                said = "start over"
+            reply = self._answer(state, said)
         elif event.type == "audio":
             self.store.log_message(event.user_id, "in", "[voice note]", event.media_id)
             text, problem = self._voice_text(event)
@@ -679,6 +695,13 @@ class IncomingService:
         elif event.type == "location":
             place = event.location or {}
             lat, lon = place.get("lat"), place.get("lon")
+            if not geo.in_malaysia(lat, lon):               # a pin in the sea or in another country is never a job site
+                self.store.log_message(event.user_id, "in", "[location outside Malaysia]")
+                self.store.log_event("location_outside_malaysia", f"{event.user_id}: {lat}, {lon}")
+                reply = t("location_outside", state.lang)
+                self.store.save(state)
+                self.store.log_message(event.user_id, "out", reply)
+                return [reply]
             state.verified["location"] = {**place}
             self.store.log_message(event.user_id, "in", "[location] " + (event.text or f"{lat:.5f}, {lon:.5f}"))
             if state.stage == "job" and state.next_missing(self.config) == "address":

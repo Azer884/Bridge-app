@@ -41,6 +41,11 @@ _OBJECTIONS = [
                r"share|track)(?:ing)?\b(?:\W+\w+){0,4}?\W+" + _NOUN + r"\b", re.I),
     re.compile(r"\bi\s+(?:do\s*n'?t|do\s+not|dont|won'?t|will\s+not)\s+(?:consent|agree|give\s+(?:you\s+)?(?:my\s+)?permission)\b", re.I),
     re.compile(r"\b(?:i\s+)?(?:withdraw|revoke|take\s+back)\s+(?:my\s+)?(?:consent|permission|agreement)\b", re.I),
+    # "nvm dont have my agreement", "you don't have my consent", "no consent", "I never agreed", "I didn't agree"
+    re.compile(r"\b(?:you\s+)?(?:do\s*n'?t|do\s+not|dont|don'?t)\s+(?:have|got)\s+(?:my\s+)?(?:agreement|consent|permission)\b", re.I),
+    re.compile(r"\bno\s+(?:consent|permission|agreement)\b", re.I),
+    re.compile(r"\bi\s+(?:never|did\s*n'?t|did\s+not|didnt|have\s*n'?t|haven'?t)\s+(?:agree|agreed|consent|consented|give\s+permission)\b", re.I),
+    re.compile(r"\b(?:tak|tidak)\s+(?:beri|bagi)\s+(?:kebenaran|persetujuan)\b", re.I),
     re.compile(r"\b(?:jangan|tak\s+boleh|tidak\s+boleh|dilarang)\s+(?:\w+\s+){0,2}?(?:simpan|rekod|guna|ambil|kumpul|proses|kongsi)\b"
                r"(?:\W+\w+){0,4}?\W+" + _NOUN + r"\b", re.I),
     re.compile(r"\b(?:tarik\s+balik|tidak\s+setuju|tak\s+setuju)\b.*\b(?:persetujuan|data|maklumat)\b", re.I),

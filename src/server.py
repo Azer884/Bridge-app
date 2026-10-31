@@ -211,6 +211,8 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
                                   colour_assessor=suggest_colour if sender else None,
                                   transcriber=transcribe_voice if sender and transcriber else None)
     clients["text"] = clients["text"] or service.client
+    # a real model reads what long or unusual messages mean (see src/intent.py); tests and fake clients are left alone
+    service.use_ai_intents = isinstance(service.client, RunPodClient) and str(env.get("AI_INTENTS", "1")) != "0"
 
     session_secret = (env.get("SESSION_SECRET") or env.get("INCOMING_API_KEY") or "").encode()
     dashboard_password = env.get("DASHBOARD_PASSWORD") or ""

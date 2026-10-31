@@ -241,13 +241,35 @@ def passed_this_year(message, today=None):
         return False
 
 
+_SUNDAY = re.compile(r"\b(sunday|sun|ahad)\b", re.I)
+_CLOCK = re.compile(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b|\b([01]?\d|2[0-3]):([0-5]\d)\b", re.I)
+
+
+def outside_working_time(message):
+    """True when the customer asks for a day or hour the crew does not work: Sunday, or a clock time before 9 am or from
+    6 pm ("3 am Sunday"). The hours come from the calendar's working rules."""
+    from .calendar_scheduler import RULES
+    if _SUNDAY.search(message) and not _NEGATED_DATE.search(message) and 6 not in RULES.working_days:
+        return True
+    for found in _CLOCK.finditer(message):
+        if found.group(3):
+            hour = int(found.group(1)) % 12 + (12 if found.group(3).lower() == "pm" else 0)
+        else:
+            hour = int(found.group(4))
+        if hour < RULES.day_start.hour or hour >= RULES.day_end.hour:
+            return True
+    return False
+
+
 def date_problem(message, today=None):
     """A date answer that cannot be booked: 'date_past' (yesterday), 'date_past_year' ("20 Oct" when that day has gone
-    by) or 'date_need_day' ("after Raya"), else None."""
+    by), 'date_closed' (Sunday, or 3 am) or 'date_need_day' ("after Raya"), else None."""
     if _PAST_DATE.search(message):
         return "date_past"
     if passed_this_year(message, today):
         return "date_past_year"
+    if outside_working_time(message):
+        return "date_closed"
     if _DATE_NEEDS_DAY.search(message) and not _DATE_WORDS.search(message):
         return "date_need_day"
     return None
@@ -478,7 +500,7 @@ def after_done(state, message, config):
     faq = faq_answer(message, config, "done", lang)
     if _GREETING.match(message) and state.quote_status in ("approved", "final"):
         return t("welcome_back", lang)               # a returning customer saying hello
-    if _DATE_WORDS.search(message) and date_problem(message) in ("date_past", "date_past_year"):
+    if _DATE_WORDS.search(message) and date_problem(message) in ("date_past", "date_past_year", "date_closed"):
         return t(date_problem(message), lang)           # a date that has gone by: ask again, keep the old preference
     if _DATE_WORDS.search(message):
         state.verified["preferred_datetime"] = message.strip()[:120]

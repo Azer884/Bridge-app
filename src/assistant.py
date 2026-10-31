@@ -211,7 +211,10 @@ def _handle(state, message, config, client, max_retries=MAX_RETRIES):
         pick = f"st_ok_{state.reasks['okay'] % 3 + 1}"          # "ok", "hmm", "sure": no answer yet, ask again gently
         return _finish(state, message, f"{t(pick, state.lang)} {ask_for(nxt, state)}", Status.COLLECTING.value,
                        record=False)
-    if persona and nxt == "preferred_datetime" and flow.date_problem(message):
+    if persona and flow.date_problem(message) and (
+            nxt == "preferred_datetime"
+            or (len(message.split()) <= 16 and flow.when_in(message, strict=True)
+                and not address_in(message))):     # also when they change a date already given
         return _finish(state, message, t(flow.date_problem(message), state.lang), Status.COLLECTING.value, record=False)
     if persona:
         faq = flow.faq_answer(message, config, "job", state.lang)
@@ -221,6 +224,11 @@ def _handle(state, message, config, client, max_retries=MAX_RETRIES):
             else:
                 return _finish(state, message, f"{faq} {ask_for(nxt, state)}", Status.COLLECTING.value,
                                record=False)
+
+    if persona and state.next_missing(config) == "paint_tier" and flow.asks_for_ideas(message) \
+            and not _TIERS.search(message) and not re.search(r"\byou\s+(pick|choose|decide|select)\b", message, re.I):
+        # "which one do you recommend?" is a question, not "no preference": answer it, then ask again
+        return _finish(state, message, t("tier_ideas", state.lang), Status.COLLECTING.value, record=False)
 
     if "colour" in state.missing_required(config) and not (sizes_in(message, loose=True) or cued_sizes(message)) \
             and not re.search(r"\byou\s+(pick|choose|decide|select)\b", message, re.I) \
@@ -344,7 +352,7 @@ def _ask_again(state, message, config, result, asked, attempt):
         result.reply = ask_for(missing[0], state) if missing else ""
         result.status = Status.COLLECTING.value if missing else Status.READY.value
     else:
-        if asked == "preferred_datetime" and flow.date_problem(message) in ("date_past", "date_past_year"):
+        if asked == "preferred_datetime" and flow.date_problem(message) in ("date_past", "date_past_year", "date_closed"):
             key = flow.date_problem(message)
         elif asked == "preferred_datetime" and flow._DATE_NEEDS_DAY.search(message):
             key = "date_need_day"
@@ -770,6 +778,9 @@ def _correct_measurement(state, message):
     """"nvm its 4m": replace the measurement the customer gave last (or the one they name). Returns the
     acknowledgement, or None when the message is not a clear correction of a size."""
     message = _NOT_NUMBER.sub(" ", message)             # "its 2.7 not 5": the number after "not" is the wrong one
+    if flow._DATE_WORDS.search(message) and not unit_factors_in(message) \
+            and not any(_CUES[k] & set(re.findall(r"[a-z]+", message.lower())) for k in _CUES):
+        return None                                      # "actually 3 am Sunday": a new time, not a new size
     upper, estimated = estimate_in(message)
     numbers = [upper] if upper is not None else numbers_in(message)
     if len(numbers) != 1:
