@@ -12,7 +12,7 @@ The first version is built for Malaysian painting businesses.
 | ---------------------- | ------------------------------------------- |
 | **Team Name**          |  HRISSA                                     |
 | **Team Domain**        |  Domain 2                                   |
-| **Main SDG**           |SDG 8 - Descent work and economic growth     |
+| **Main SDG**           |SDG 8 - Decent work and economic growth      |
 |   **Sub SDG**          |SDG 8.1: Economic Growth, SDG8.2 Diversification and Innovation, SDG 8.3: Enterprise Support|
 | **Team Leader**        | Azer Hamdaoui                               |
 | **University**         |Xiamen University Malaysia                   |
@@ -24,7 +24,7 @@ The first version is built for Malaysian painting businesses.
 | ----------------- | ---------------------------------------------- |
 | GitHub Repository | https://github.com/Azer884/Bridge-app          |
 | Replit Project    | https://replit.com/@AzerHamdaoui/Bridge-app    |
-| Live Demo         | https://gesir-ai.replit.app (the dashboard is at `/app`; demo password: `TiJedWeldikYa5ra3fest3al5ra9omtnl9a5ryaBh8aElFarch`) |
+| Live Demo         | https://gesir-ai.replit.app (the dashboard is at `/app`; the password is set in the `DASHBOARD_PASSWORD` secret, ask the team) |
 | RunPod Endpoints  | text model `ose8agxpb9p1mr`, vision model `m3a8r7m8ebibba`, speech-to-text (Faster Whisper) `nvnrh39cdxgymr` (`https://api.runpod.ai/v2/<id>/runsync`) |
 | Slide Deck        | https://canva.link/gesir-ai                    |
 | Demo Video        | https://youtu.be/tXOuRwmwh6g              |
@@ -39,16 +39,80 @@ Many SMEs lose valuable time to constant back-and-forth with customers: clarifyi
 ### Solution
 Gesir.AI sits on the business's WhatsApp number. It chats with the customer in English or Bahasa Malaysia, understands text, photos and voice notes, and asks one question at a time until it has the job details. It never invents information, and it never decides prices or bookings itself: a deterministic rate engine prepares the estimate, and the owner reviews, edits and approves it in a dashboard. The customer then receives the estimate, a note that it is only an estimate, and how long the job will take. Jobs are scheduled so that customers in the same area are visited close together.
 
+### Who it is for
+The owner and the small team of a Malaysian painting contractor who take every enquiry on WhatsApp. The recurring chore Gesir removes is **turning a WhatsApp enquiry into an approved quotation and a booked visit**: asking for the sizes, the surfaces and the condition, working out a price, writing it up and agreeing a date.
+
 ### Key Features
 Status: working means it runs in the live demo and is covered by tests. Voice notes and calls are still being finished.
 
-- **Customer conversation (working)** — natural replies with a chosen persona, one question at a time, corrections ("nvm its 4m"), several messages in a row read as one, "start over", shared locations, and English or Malay with automatic switching.
+- **Customer conversation (working)** — natural replies with a chosen persona, one question at a time, corrections ("nvm its 4m"), several messages in a row read as one, "start over", shared locations, and English or Malay with automatic switching. It refuses jobs outside Malaysia, weekends, public holidays and times outside working hours.
 - **Photos (working)** — a vision model reads the surface condition from the customer's photo (cracks, damp, peeling) and flags jobs that need an inspection.
 - **Estimate and final price (working)** — priced from real 2026 Klang Valley market rates in MYR (see [`docs/PRICING.md`](docs/PRICING.md)), with the typical market range shown to the owner. The owner sees the full breakdown; the customer only sees the total, the estimated time and an "estimate only" note. After the site visit the owner sends the final price.
-- **Owner dashboard (working)** — quotes, a review screen (edit the values the AI read, recalculate, PDF preview), pipeline, customers, calendar, personas, and writing to a customer in the assistant's place.
-- **Smart scheduling (working)** — suggests start times that match what the customer asked for ("Monday evening"), keeps jobs in the same area close together, adds travel time, and never double books. The customer confirms the offered slot on WhatsApp.
+- **Owner dashboard in the Orbyte layout (working)** — Dashboard with Pending Actions (Approve, Review), Clients, Projects (each project opens the quote: what the AI read, the price, approve or reject, the chat, the PDF, the activity log), Users with roles, Wallet, Organization settings (WhatsApp, personas, model status) and the Job Calendar.
+- **Smart scheduling (working)** — suggests start times that match what the customer asked for ("Monday evening"), keeps jobs in the same area close together, adds travel time, and never double books. Bookings respect the working day (9 am to 6 pm, lunch 1 to 2 pm) and skip weekends and public holidays. The customer confirms the offered slot on WhatsApp.
+- **Roles and approval (working)** — Company Admin and Approver may approve or reject; a Reviewer may only read. The server checks the role on every approve and reject.
 - **Voice notes (fix being deployed)** — transcribed with Whisper (English, Malay and Manglish) and handled like typed messages.
 - **WhatsApp calls (in development)** — calls are accepted through LiveKit and answered by a voice agent that uses the same assistant. Not yet tested end to end.
+
+---
+
+## The Final Demo Journey
+
+One SME, one task, one run: a customer asks for a repaint on WhatsApp and ends with an approved estimate and a booked visit.
+
+| Step | What happens | Where to see it |
+| ---- | ------------ | --------------- |
+| 1. Trigger | A customer messages the business's WhatsApp number. The message arrives automatically on a signed webhook; nobody has to open an app. | Customer's WhatsApp, then **Dashboard** |
+| 2. Connected data | Gesir pulls together the chat, the photos, the shared location, the business's rate card, the crew's calendar and its working rules. | **Projects** ▸ open a project |
+| 3. Decision logic | Code decides what to ask next and prices the job with a deterministic engine. AI is used only to read free text and photos. Missing details are asked again; anything unclear (an inspection case, a customer asking for a person) is handed to the owner with the reason. | Project page: "Check before sending" |
+| 4. Human approval | A person with the Approver or Company Admin role approves or rejects. Nothing is sent before that. A rejection needs a reason, sends nothing to the customer and is recorded. | Project page: **Approve and send** or **Reject**; switch user at the bottom left to try a Reviewer |
+| 5. Visible outcome | The customer receives the estimate on WhatsApp, the project moves to "Quote sent", a credit is used in the Wallet, and the activity log shows who approved and when. | Project ▸ **Activity**; **Wallet** |
+| 6. A second business | A second SME is a configuration change: its own business config and rate card, and for another trade its own rules file (`prompts/trades/aircon.txt`, `config/trades/aircon.json`). | See [Reuse through Orbyte](#reuse-through-orbyte) |
+
+## Must-Haves at the Final
+
+| Must-have | How Gesir shows it live |
+| --------- | ----------------------- |
+| 1. One clear SME problem | One user (a painting contractor's owner) and one chore: WhatsApp enquiry to approved quote and booked visit. |
+| 2. Core automated journey | The six steps above run end to end on synthetic data, from the WhatsApp message to the recorded result. |
+| 3. Accuracy and ease of learning | The same details always give the same price (deterministic engine, 495 automated tests). The dashboard uses Orbyte's layout and plain words, so an Orbyte user needs no training. |
+| 4. People stay in control | Roles decide who can act; approval is enforced in the backend (a Reviewer gets 403); the activity log is written as each action happens. |
+| 5. Orbyte fit and reuse | The dashboard follows Orbyte's structure (Organization, Workspace, Pending Actions, Wallet); a second business or trade is configuration, not new code. |
+| 6. Business benefit and SDG | Benefit with assumptions below, tied to SDG 8.2 and 8.3. |
+
+## Technical Expectations
+
+- **Approval gate in the backend.** `POST /api/quotes/{id}/approve` and `/reject` check the caller's role on the server (`src/orbyte.py`, `src/server.py`). The WhatsApp message is only sent inside the approve call. A rejection writes an audit entry with the reason and the person.
+- **Activity log.** Every step (estimate drafted, values edited, approved, rejected, slot offered, booking confirmed) is written to the audit table as it happens (`GET /api/audit`) and shown on each project.
+- **Decision logic.** Rules handle what rules can: the next question, unit and size checks, working days, holidays, service area, prices and scheduling. AI is used where judgement on free text is needed: **Qwen2.5-7B-Instruct** for the conversation and **Qwen2.5-VL-7B-Instruct** for photos, both on RunPod. Whisper transcribes voice notes. Every value a model extracts is checked against the customer's own words before it is stored.
+- **Accuracy and exceptions.** Prices come from `src/pricing.py` and the rate table, never from a model. Inspection cases (damp, mould, structural damage), customers who ask for a person, jobs the engine cannot price, and repeated unclear answers go to the owner with a clear reason.
+- **Data and interfaces.** Synthetic customers and data only. The assumed Orbyte interface (roles, signed events, embedding) is documented in [`docs/ORBYTE.md`](docs/ORBYTE.md).
+- **Reuse.** Business settings live in `config/` (rate card, required fields, personas, working rules, holidays). The AI rules are split into `prompts/global.txt` (every trade) and `prompts/trades/<trade>.txt` (one file per trade).
+- **Engineering.** Deployed at the Live Demo link, 495 unit tests (`python -m unittest discover tests`), and steady commits on `main`.
+
+## Impact & Evidence
+
+**Baseline and target (Phase 1 proposal).** A painting contractor spends **10 to 15 hours a week** on WhatsApp enquiries: asking for sizes and photos, pricing, writing quotes and agreeing dates. The Phase 1 target is to cut that by **85%**.
+
+**What Gesir removes per enquiry.** The owner no longer asks for each detail, measures the area from the customer's numbers, calculates the price, writes the quote, or proposes times. What is left is one review and one approve tap, plus replying when Gesir hands a chat over.
+
+**How it is measured.** Every message, estimate, approval and booking is time-stamped in the event log (`/api/events`) and the audit log (`/api/audit`). Time saved per week = enquiries per week × (owner minutes per enquiry before − owner minutes per enquiry with Gesir). The final report uses these logs and the test runs (`scripts/stress_chat.py`, about 200 scenarios) as proof; the assumptions are stated there.
+
+**Business model and cost.**
+- Usage-based, suited to Orbyte's wallet: **one credit per estimate a person approves**. Nothing is charged for chats that never become an estimate.
+- Running cost: the models run on RunPod serverless GPUs, billed per second and scaled to zero when idle. A typical quote uses about 10 to 30 seconds of GPU time, roughly **US$0.01 to 0.02 per quote** at RunPod's listed rates (an estimate). Hosting on Replit is a fixed monthly plan.
+
+**Scale through Orbyte.** Any service SME that quotes over WhatsApp can use it: painters first, then aircon servicing (rules already written), plumbers, electricians, cleaners and renovators. A second business of the same trade changes only its configuration; a new trade adds its rules file and rate card.
+
+**Privacy (PDPA).** Nothing is read before the customer agrees to a PDPA notice; "STOP" erases their data; the owner can erase a customer; only the owner's roles can see data; data is kept for the job only. See [`docs/PDPA.md`](docs/PDPA.md).
+
+**SDG 8.2 and 8.3.** Gesir raises the productivity of micro and small businesses through technology (8.2) by removing hours of manual quoting each week, and supports their growth (8.3) by letting a small team answer more enquiries, faster, without hiring.
+
+## Reuse through Orbyte
+
+- **Same trade, new business:** copy `config/business_config.example.json`, set the name, owner, rate card and working rules. No code change.
+- **New trade:** add `prompts/trades/<trade>.txt` (what to collect, inspection cases, trade words) and a rate card such as `config/trades/aircon.json`, then set `"trade_type"` in the business config. The aircon pricing engine already exists (`src/pricing_aircon.py`); the chat flow for aircon is still being made trade-neutral.
+- **Inside Orbyte:** a hub can call Gesir with the API key and a role, receive signed events, and embed the dashboard (`ORBYTE_ORIGIN`). See [`docs/ORBYTE.md`](docs/ORBYTE.md).
 
 See [`docs/STATUS.md`](docs/STATUS.md) for what is built and what is still missing.
 
@@ -56,7 +120,7 @@ See [`docs/STATUS.md`](docs/STATUS.md) for what is built and what is still missi
 
 | Layer         | Technology                                              |
 | ------------- | ------------------------------------------------------- |
-| Frontend      | React, TypeScript and Vite (web), Expo React Native (mobile). Source in `frontend/` (`web/`, `mobile/`, `shared/`); the web build is served from `dashboard/` |
+| Frontend      | React, TypeScript and Vite (web, Orbyte-style layout), Expo React Native (mobile). Source in `frontend/` (`web/`, `mobile/`, `shared/`); the web build is served from `dashboard/` |
 | Backend       | Python 3.12, FastAPI, uvicorn                           |
 | Database      | PostgreSQL on Replit (SQLite for local runs)            |
 | AI / Compute  | RunPod serverless GPU: Qwen2.5-7B-Instruct (chat), Qwen2.5-VL-7B-Instruct (photos). Whisper (`faster-whisper`) for voice notes |
@@ -70,12 +134,18 @@ See [`docs/STATUS.md`](docs/STATUS.md) for what is built and what is still missi
 ```
 .
 ├── config/
-│   └── business_config.example.json   # business, personas, required fields, Malaysian rate card
-├── dashboard/                         # built web dashboard served by the backend (from feature/frontend)
+│   ├── business_config.example.json   # business, personas, required fields, Malaysian rate card
+│   ├── painting_prices_malaysia_2026.csv  # the market data behind the rates
+│   ├── holidays.json                  # public holidays the crew does not work
+│   └── trades/aircon.json             # a second trade's rate card
+├── dashboard/                         # built web dashboard served by the backend
 ├── docs/
-│   └── STATUS.md                      # what works, what is missing, how to link Google Calendar
+│   ├── STATUS.md                      # what works, what is missing, how to link Google Calendar
+│   ├── PRICING.md, PDPA.md            # where the rates come from; privacy and consent
+│   └── ORBYTE.md                      # the assumed Orbyte interface
 ├── prompts/
-│   └── painting_assistant.txt         # the assistant's permanent rules
+│   ├── global.txt                     # the assistant's permanent rules, for every trade
+│   └── trades/<trade>.txt             # what each trade collects (painting, aircon)
 ├── scripts/                           # chat.py, quote.py, build_dashboard.sh and other helpers
 ├── src/
 │   ├── server.py                      # FastAPI app: WhatsApp webhook, dashboard API, login, static site
@@ -161,7 +231,15 @@ cp .env.example .env            # then fill in your values
 uvicorn src.server:create_app --factory --port 8000
 ```
 
-Without `DATABASE_URL` the app keeps its data in `data/bridge.db`. To rebuild the dashboard from the frontend branch, use `scripts/build_dashboard.sh`.
+Without `DATABASE_URL` the app keeps its data in `data/bridge.db`. `python scripts/run_local_demo.py` runs the app with a fake WhatsApp sender (password `local-demo`).
+
+To rebuild the web dashboard:
+
+```bash
+cd frontend/web
+npm install
+VITE_USE_MOCK=false VITE_BOOKINGS_LIVE=true npx vite build --outDir ../../dashboard --emptyOutDir
+```
 
 ### Run Tests
 
@@ -246,7 +324,9 @@ curl -X POST https://api.runpod.ai/v2/$RUNPOD_ENDPOINT_ID/runsync \
 ## Future Improvements
 
 - [ ] Confirm voice notes and WhatsApp calls end to end in the live demo
-- [ ] Link Google Calendar on the server and exclude Malaysian public holidays
+- [ ] Link Google Calendar on the server
+- [x] Exclude weekends and Malaysian public holidays (`config/holidays.json`)
+- [ ] Make the chat flow trade-neutral, so aircon chats run end to end
 - [ ] WhatsApp message templates, so estimates and slot offers work after the 24-hour window
 - [ ] Rate card and working-hours editor in the dashboard, with the SME's real prices
 - [ ] Owner notifications (WhatsApp or push) for new quotes and messages that need a person
@@ -268,11 +348,12 @@ curl -X POST https://api.runpod.ai/v2/$RUNPOD_ENDPOINT_ID/runsync \
 
 ## Submission Checklist
 
-- [ ] Team name, domain (Domain 1 / Domain 2) and SDG track filled in
-- [ ] Slide deck link added
-- [ ] Demo video link added
-- [ ] Replit used, with proof of use in `submission/`
-- [ ] RunPod used, with proof of use in `submission/`
+- [x] Team name, domain (Domain 1 / Domain 2) and SDG track filled in
+- [x] Slide deck link added
+- [ ] Demo video link updated for the Final
+- [x] Replit used, with proof of use in `submission/`
+- [x] RunPod used, with proof of use in `submission/`
+- [ ] Technical & Tools Declaration added to `submission/`
 - [ ] Submission template completed in `submission/`
 - [ ] "How to Run" steps verified
 - [ ] No API keys or secrets committed to the repository
