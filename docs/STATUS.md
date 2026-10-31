@@ -11,7 +11,7 @@
 - Calendar: area-aware slot suggestions that respect what the customer asked for ("Monday evening"), travel gaps, no double
   booking, an offer to the customer that they confirm on WhatsApp. The dashboard books real slots through `/api/bookings`;
   a job that runs through lunch is shown in two parts.
-- Dashboard (web) in an Orbyte-style layout, hosted on the same Replit app behind a password: Dashboard (Pending Actions),
+- Dashboard (web) in an Orbyte-style layout, hosted on the same Replit app behind a sign-up and sign-in (name, business, email, password, trade): Dashboard (Pending Actions),
   Clients, Projects (each opens the quote: review, edit, recalculate, approve or reject, PDF, chat, activity), Users,
   Wallet, Organization settings (WhatsApp, personas, model status) and the Job Calendar. See `docs/ORBYTE.md`.
 - Roles: Company Admin and Approver may approve or reject, a Reviewer may only read; the server checks the role.
@@ -29,7 +29,7 @@ the server class in `src/calendar_scheduler.py` are kept for later but are not u
 2. **Calls.** `voice_worker/` answers WhatsApp calls through LiveKit (see `voice_worker/README.md`). It must run on a
    machine of ours, and calls have not been tested end to end on the Meta test number.
 3. **Voice notes are untested on the live server.** `GET /api/voice/health` says whether the model loaded and why not.
-4. **Owner login.** One shared dashboard password; the people and roles in Users are simulated ("Act as"), not real accounts.
+4. **Owner login.** Anyone can sign up and sign in with email and password (stored as scrypt hashes). The trade chosen at sign-up is only recorded: painting and aircon both work for every account. The people and roles in Users are still simulated ("Act as"), not tied to accounts. No email verification or password reset.
    Rotate `INCOMING_API_KEY` (it was pasted in chats, and the Android app contains it).
 5. **Google Calendar** is not used for now (see above). Weekends and public holidays are excluded (`config/holidays.json`).
 6. **Rate card and settings editor.** Rates, crew size, working hours and services live in `config/business_config.example.json`;

@@ -182,11 +182,12 @@ class EmbedTests(unittest.TestCase):
         self.assertNotIn("content-security-policy", self.app().get("/health").headers)
 
     def test_the_login_cookie_works_inside_the_hub_only_over_https(self):
-        form = {"password": "pw"}
-        env = {"DASHBOARD_PASSWORD": "pw", "SESSION_SECRET": "s", "ORBYTE_ORIGIN": "https://hub.example.com"}
-        secure = self.app(**env).post("/login", data=form, headers={"x-forwarded-proto": "https"}, follow_redirects=False)
+        form = {"name": "Aisyah Tan", "business": "Tan Painting", "trade": "aircon", "email": "a@example.com",
+                "password": "long enough pw"}
+        env = {"SESSION_SECRET": "s", "ORBYTE_ORIGIN": "https://hub.example.com"}
+        secure = self.app(**env).post("/signup", data=form, headers={"x-forwarded-proto": "https"}, follow_redirects=False)
         self.assertIn("samesite=none", secure.headers["set-cookie"].lower())
-        plain = self.app(**env).post("/login", data=form, follow_redirects=False)
+        plain = self.app(**env).post("/signup", data=form, follow_redirects=False)
         self.assertIn("samesite=lax", plain.headers["set-cookie"].lower())          # none needs https, so http stays lax
 
 

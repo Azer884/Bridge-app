@@ -2,14 +2,13 @@ import { ActivityIndicator, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import * as Notifications from "expo-notifications";
 import { createNavigationContainerRef, DefaultTheme, NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator, type NativeStackNavigationOptions } from "@react-navigation/native-stack";
 import { SafeAreaProvider } from "react-native-safe-area-context";
-import { useFonts, Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold } from "@expo-google-fonts/figtree";
-import { BricolageGrotesque_700Bold } from "@expo-google-fonts/bricolage-grotesque";
+import { useFonts, PublicSans_400Regular, PublicSans_500Medium, PublicSans_600SemiBold, PublicSans_700Bold, PublicSans_800ExtraBold } from "@expo-google-fonts/public-sans";
 import { api, configureApi } from "../shared/api";
+import ApproveScreen from "./src/screens/ApproveScreen";
 import CalendarScreen from "./src/screens/CalendarScreen";
 import CustomersScreen from "./src/screens/CustomersScreen";
 import LinkScreen from "./src/screens/LinkScreen";
@@ -20,9 +19,9 @@ import QuotesScreen from "./src/screens/QuotesScreen";
 import SettingsScreen from "./src/screens/SettingsScreen";
 import StatusScreen from "./src/screens/StatusScreen";
 import { useAsync } from "./src/hooks";
-import { customerOf, registerForPush } from "./src/push";
+import { ActorProvider } from "./src/actor";
+import { customerOf, refreshPush, setBadge, useTappedNotification } from "./src/push";
 import { C, F, ThemeProvider, useTheme } from "./src/theme";
-import { ThemeButton } from "./src/ui";
 
 configureApi({
   baseUrl: process.env.EXPO_PUBLIC_API_URL ?? "",
@@ -33,10 +32,9 @@ configureApi({
 
 const Tabs = createBottomTabNavigator();
 const navigation = createNavigationContainerRef<any>();
-const Quotes = createNativeStackNavigator();
-const Pipeline = createNativeStackNavigator();
-const Calendar = createNativeStackNavigator();
-const Settings = createNativeStackNavigator();
+const Approve = createNativeStackNavigator();
+const Jobs = createNativeStackNavigator();
+const More = createNativeStackNavigator();
 
 /** Large titles on iOS, standard headers elsewhere. Colors are read fresh so a theme change repaints. */
 const header = (): NativeStackNavigationOptions => ({
@@ -46,10 +44,9 @@ const header = (): NativeStackNavigationOptions => ({
   headerStyle: { backgroundColor: C.wall },
   headerLargeStyle: { backgroundColor: C.wall },
   headerTintColor: C.blue,
-  headerTitleStyle: { color: C.ink, fontFamily: F.sys },
-  headerLargeTitleStyle: { color: C.ink, fontFamily: F.display, fontSize: 38 },
+  headerTitleStyle: { color: C.ink, fontFamily: F.semi },
+  headerLargeTitleStyle: { color: C.ink, fontFamily: F.display, fontSize: 34 },
   contentStyle: { backgroundColor: C.wall },
-  headerRight: () => <ThemeButton />,
 });
 
 const detail = ({ route }: { route: { params?: object } }): NativeStackNavigationOptions => ({
@@ -57,43 +54,44 @@ const detail = ({ route }: { route: { params?: object } }): NativeStackNavigatio
   headerLargeTitle: false,
 });
 
-function QuotesStack() {
+/** Screens every tab can open: a quote to review, and the calendar to book it. */
+const shared = (Stack: typeof Approve) => (
+  <>
+    <Stack.Screen name="QuoteDetail" component={QuoteDetailScreen} options={detail} />
+    <Stack.Screen name="Calendar" component={CalendarScreen} options={{ title: "Calendar", headerLargeTitle: false }} />
+  </>
+);
+
+function ApproveStack() {
   useTheme();
   return (
-    <Quotes.Navigator screenOptions={header()}>
-      <Quotes.Screen name="QuotesHome" component={QuotesScreen} options={{ title: "Quotes" }} />
-      <Quotes.Screen name="QuoteDetail" component={QuoteDetailScreen} options={detail} />
-    </Quotes.Navigator>
+    <Approve.Navigator screenOptions={header()}>
+      <Approve.Screen name="ApproveHome" component={ApproveScreen} options={{ title: "Approve" }} />
+      {shared(Approve)}
+    </Approve.Navigator>
   );
 }
-function PipelineStack() {
+function JobsStack() {
   useTheme();
   return (
-    <Pipeline.Navigator screenOptions={header()}>
-      <Pipeline.Screen name="PipelineHome" component={PipelineScreen} options={{ title: "Pipeline" }} />
-      <Pipeline.Screen name="QuoteDetail" component={QuoteDetailScreen} options={detail} />
-    </Pipeline.Navigator>
+    <Jobs.Navigator screenOptions={header()}>
+      <Jobs.Screen name="JobsHome" component={QuotesScreen} options={{ title: "Jobs" }} />
+      {shared(Jobs)}
+    </Jobs.Navigator>
   );
 }
-function CalendarStack() {
+function MoreStack() {
   useTheme();
   return (
-    <Calendar.Navigator screenOptions={header()}>
-      <Calendar.Screen name="CalendarHome" component={CalendarScreen} options={{ title: "Calendar" }} />
-    </Calendar.Navigator>
-  );
-}
-function SettingsStack() {
-  useTheme();
-  return (
-    <Settings.Navigator screenOptions={header()}>
-      <Settings.Screen name="SettingsHome" component={SettingsScreen} options={{ title: "Settings" }} />
-      <Settings.Screen name="Link" component={LinkScreen} options={{ title: "WhatsApp number" }} />
-      <Settings.Screen name="Personas" component={PersonasScreen} options={{ title: "Personas" }} />
-      <Settings.Screen name="Status" component={StatusScreen} options={{ title: "Status" }} />
-      <Settings.Screen name="Customers" component={CustomersScreen} options={{ title: "Customers" }} />
-      <Settings.Screen name="QuoteDetail" component={QuoteDetailScreen} options={detail} />
-    </Settings.Navigator>
+    <More.Navigator screenOptions={header()}>
+      <More.Screen name="MoreHome" component={SettingsScreen} options={{ title: "More" }} />
+      <More.Screen name="Pipeline" component={PipelineScreen} options={{ title: "Pipeline", headerLargeTitle: false }} />
+      <More.Screen name="Customers" component={CustomersScreen} options={{ title: "Customers", headerLargeTitle: false }} />
+      <More.Screen name="Link" component={LinkScreen} options={{ title: "WhatsApp number", headerLargeTitle: false }} />
+      <More.Screen name="Personas" component={PersonasScreen} options={{ title: "Personas", headerLargeTitle: false }} />
+      <More.Screen name="Status" component={StatusScreen} options={{ title: "Status", headerLargeTitle: false }} />
+      {shared(More)}
+    </More.Navigator>
   );
 }
 
@@ -103,23 +101,31 @@ const icon = (on: keyof typeof Ionicons.glyphMap, off: keyof typeof Ionicons.gly
 export default function App() {
   return (
     <ThemeProvider>
-      <Root />
+      <ActorProvider>
+        <Root />
+      </ActorProvider>
     </ThemeProvider>
   );
 }
 
 function Root() {
   const { mode } = useTheme();
-  const [loaded] = useFonts({ Figtree_400Regular, Figtree_500Medium, Figtree_600SemiBold, Figtree_700Bold, BricolageGrotesque_700Bold });
-  const pending = useAsync(() => api.listQuotes("pending_approval"), [], 20_000);
-  const tapped = Notifications.useLastNotificationResponse();
+  const [loaded] = useFonts({ PublicSans_400Regular, PublicSans_500Medium, PublicSans_600SemiBold, PublicSans_700Bold, PublicSans_800ExtraBold });
+  const waiting = useAsync(
+    async () => (await api.listQuotes("pending_approval")).length + (await api.listQuotes("needs_inspection")).length,
+    [],
+    20_000,
+  );
+  const tapped = useTappedNotification();
+  const count = waiting.data ?? 0;
 
-  useEffect(() => { void registerForPush(); }, []);
+  useEffect(() => { void refreshPush(); }, []);
+  useEffect(() => setBadge(count), [count]);
   useEffect(() => {
-    // a tapped notification opens that customer's quote
+    // a tapped notification opens that customer's quote, ready to approve
     const who = customerOf(tapped ?? null);
     if (who && navigation.isReady()) {
-      navigation.navigate("QuotesTab", { screen: "QuoteDetail", params: { userId: who.userId, name: who.name } });
+      navigation.navigate("ApproveTab", { screen: "QuoteDetail", params: { userId: who.userId, name: who.name } });
     }
   }, [tapped]);
 
@@ -130,7 +136,6 @@ function Root() {
       </View>
     );
   }
-  const count = pending.data?.length ?? 0;
 
   return (
     <SafeAreaProvider>
@@ -143,16 +148,14 @@ function Root() {
             tabBarInactiveTintColor: C.ink3,
             tabBarStyle: { backgroundColor: C.paper, borderTopColor: C.line },
             tabBarLabelStyle: { fontFamily: F.semi, fontSize: 11 },
-            tabBarBadgeStyle: { backgroundColor: C.tape, color: "#041B2D" },
+            tabBarBadgeStyle: { backgroundColor: C.blue, color: "#FFFFFF" },
           }}
         >
-          <Tabs.Screen name="QuotesTab" component={QuotesStack} options={{ title: "Quotes", tabBarIcon: icon("document-text", "document-text-outline"), tabBarBadge: count > 0 ? count : undefined }} />
-          <Tabs.Screen name="PipelineTab" component={PipelineStack} options={{ title: "Pipeline", tabBarIcon: icon("albums", "albums-outline") }} />
-          <Tabs.Screen name="CalendarTab" component={CalendarStack} options={{ title: "Calendar", tabBarIcon: icon("calendar", "calendar-outline") }} />
-          <Tabs.Screen name="SettingsTab" component={SettingsStack} options={{ title: "Settings", tabBarIcon: icon("settings", "settings-outline") }} />
+          <Tabs.Screen name="ApproveTab" component={ApproveStack} options={{ title: "Approve", tabBarIcon: icon("checkmark-circle", "checkmark-circle-outline"), tabBarBadge: count > 0 ? count : undefined }} />
+          <Tabs.Screen name="JobsTab" component={JobsStack} options={{ title: "Jobs", tabBarIcon: icon("briefcase", "briefcase-outline") }} />
+          <Tabs.Screen name="MoreTab" component={MoreStack} options={{ title: "More", tabBarIcon: icon("ellipsis-horizontal-circle", "ellipsis-horizontal-circle-outline") }} />
         </Tabs.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
   );
 }
-

@@ -1,6 +1,6 @@
 """Run the dashboard on this machine with a fake WhatsApp sender, so Approve works without a WhatsApp account.
 
-    python scripts/run_local_demo.py            # http://localhost:8000/app, password: local-demo
+    python scripts/run_local_demo.py            # http://localhost:8000/app, sign up at /signup
     PORT=8001 BUSINESS_CONFIG=config/business_config.second.example.json DATABASE_PATH=data/second.db \
         python scripts/run_local_demo.py        # a second business on :8001 for the hub's business switcher
 
@@ -31,7 +31,6 @@ class PrintSender:
 def main():
     load_dotenv()
     env = dict(os.environ)
-    env.setdefault("DASHBOARD_PASSWORD", "local-demo")
     env.setdefault("SESSION_SECRET", "local-session-secret")
     env["STT_WARMUP"] = "0"
     port = int(env.get("PORT", "8000"))

@@ -165,6 +165,12 @@ export const api = {
   },
 
   /** The phone tells the backend where to send push notifications (a customer needs the owner, a quote waits). */
+  /** Sends a test notification to every registered phone. */
+  testPush(): Promise<unknown> {
+    if (config.mock) return guard(async () => ({ sent: 1 }));
+    return http("POST", "/api/push/test");
+  },
+
   registerPush(token: string, platform: string): Promise<unknown> {
     if (config.mock) return guard(async () => ({ registered: true }));
     return http("POST", "/api/push/register", { token, platform });

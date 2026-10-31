@@ -5,6 +5,7 @@ import { api, explainError } from "../../../shared/api";
 import { money, phone } from "../../../shared/format";
 import { STAGES, validateParams } from "../../../shared/params";
 import type { ParamValue, QuoteDetail as Detail, QuoteDraft } from "../../../shared/types";
+import { useActor } from "../actor";
 import { useAsync } from "../hooks";
 import { AuditList } from "../quote/AuditList";
 import { ChatView } from "../quote/ChatView";
@@ -34,6 +35,7 @@ export default function QuoteDetailScreen() {
 
 function Loaded({ d, reload }: { d: Detail; reload: () => Promise<void> }) {
   useTheme();
+  const { canDecide } = useActor();
   const nav = useNavigation<any>();
   const [tab, setTab] = useState<Tab>("quote");
 
@@ -98,7 +100,7 @@ function Loaded({ d, reload }: { d: Detail; reload: () => Promise<void> }) {
   const canSend = !readOnly && !hasErrors && calc.status === "idle" && manualValid && finalTotal > 0;
   const stage = STAGES.find((s) => s.id === d.stage);
 
-  const goCalendar = () => nav.getParent()?.navigate("CalendarTab", { screen: "CalendarHome", params: { book: d.user_id } });
+  const goCalendar = () => nav.navigate("Calendar", { book: d.user_id });
 
   async function send() {
     setSending(true);
@@ -149,17 +151,21 @@ function Loaded({ d, reload }: { d: Detail; reload: () => Promise<void> }) {
         <T v="foot">Rejected, nothing was sent. Change a value if something was wrong, then put it back for approval.</T>
         <Btn label="Put back for approval" busy={sending} onPress={reopen} />
       </View>
+    ) : tab === "quote" && !readOnly && quote && !canDecide ? (
+      <T v="foot">View only: your role cannot approve or reject. Switch role in More.</T>
     ) : tab === "quote" && !readOnly && quote ? (
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-        <View style={{ flex: 1 }}>
+      <View style={{ gap: 10 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
           <T v="foot">The customer gets</T>
           <T v="money">{money(finalTotal, cur)}</T>
         </View>
-        <View style={{ flex: 0.8 }}>
-          <Btn kind="tinted" label="Reject" disabled={sending} onPress={() => { setRejectErr(null); setRejecting(true); }} />
-        </View>
-        <View style={{ flex: 1.2 }}>
-          <Btn label={calc.status === "loading" ? "Recalculating…" : "Approve and send"} disabled={!canSend} onPress={() => { setSendErr(null); setConfirm(true); }} />
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <View style={{ flex: 0.8 }}>
+            <Btn kind="tinted" label="Reject" disabled={sending} onPress={() => { setRejectErr(null); setRejecting(true); }} />
+          </View>
+          <View style={{ flex: 1.2 }}>
+            <Btn label={calc.status === "loading" ? "Recalculating…" : "Approve and send"} disabled={!canSend} onPress={() => { setSendErr(null); setConfirm(true); }} />
+          </View>
         </View>
       </View>
     ) : undefined;
@@ -176,7 +182,7 @@ function Loaded({ d, reload }: { d: Detail; reload: () => Promise<void> }) {
 
         {(d.needs_human || d.attention) && tab !== "chat" ? <Banner kind="warn" text="Needs you: open Chat to reply." action="Open chat" onAction={() => setTab("chat")} /> : null}
 
-        <Segmented value={tab} onChange={setTab} options={[{ id: "quote", label: "Quote" }, { id: "chat", label: `Chat · ${d.chat.length}` }, { id: "activity", label: `Activity · ${d.audit.length}` }]} />
+        <Segmented value={tab} onChange={setTab} options={[{ id: "quote", label: "Quote" }, { id: "chat", label: `Chat · ${d.photos.length} photos` }, { id: "activity", label: `Activity · ${d.audit.length}` }]} />
 
         {tab === "chat" && <ChatView name={d.job.name ?? "Customer"} number={d.job.phone ?? d.user_id} chat={d.chat} photos={d.photos} userId={d.user_id} needsHuman={d.needs_human} humanActive={d.human_active} onSent={() => void reload()} />}
         {tab === "activity" && <AuditList entries={d.audit} />}
@@ -289,4 +295,3 @@ function Loaded({ d, reload }: { d: Detail; reload: () => Promise<void> }) {
     </>
   );
 }
-

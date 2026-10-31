@@ -10,8 +10,10 @@ from src import webauth
 from src.server import create_app
 from tests.test_dashboard_calendar import Sender, priced_service
 
-ENV = {"INCOMING_API_KEY": "key", "SESSION_SECRET": "s3cret", "DASHBOARD_PASSWORD": "open sesame",
+ENV = {"INCOMING_API_KEY": "key", "SESSION_SECRET": "s3cret",
        "MESSAGE_WINDOW_SECONDS": "0"}
+SIGNUP = ("name=Aisyah+Tan&business=Tan+Painting&trade=painting&email=aisyah%40example.com"
+          "&password=open+sesame12")
 
 
 class WebAuthTests(unittest.TestCase):
@@ -24,6 +26,10 @@ class WebAuthTests(unittest.TestCase):
         self.assertFalse(webauth.valid_cookie(secret, "9999999999.abc"))
         self.assertFalse(webauth.valid_cookie(secret, webauth.make_cookie(secret, now=time.time() - 13 * 3600)))
         self.assertFalse(webauth.valid_cookie(secret, ""))
+        named = webauth.make_cookie(secret, email="a@b.co")
+        self.assertEqual(webauth.read_cookie(secret, named), (True, "a@b.co"))
+        forged = named.replace(b"a@b.co".hex(), b"x@b.co".hex())
+        self.assertEqual(webauth.read_cookie(secret, forged), (False, "x@b.co"))
         self.assertFalse(webauth.valid_cookie(b"", cookie))
 
     def test_next_must_stay_on_the_site(self):
@@ -59,9 +65,17 @@ class SiteTests(unittest.TestCase):
     def tearDown(self):
         self.dir.cleanup()
 
-    def login(self, password="open sesame", next="/app/quotes", api=None):
-        return (api or self.api).post("/login", content=f"password={password}&next={next}".replace(" ", "+"),
-                                      headers={"content-type": "application/x-www-form-urlencoded"})
+    FORM = {"content-type": "application/x-www-form-urlencoded"}
+
+    def signup(self, body=SIGNUP, next="/app/quotes", api=None, headers=None):
+        return (api or self.api).post("/signup", content=f"{body}&next={next}", headers={**self.FORM, **(headers or {})})
+
+    def login(self, password="open sesame12", next="/app/quotes", api=None, headers=None):
+        if not self.service.store.get_setting("accounts"):
+            self.signup(api=api)
+            (api or self.api).cookies.clear()
+        return (api or self.api).post("/login", content=f"email=aisyah%40example.com&password={password}&next={next}".replace(" ", "+"),
+                                      headers={**self.FORM, **(headers or {})})
 
     def test_the_root_is_the_sign_in_page_then_the_app(self):
         page = self.api.get("/")
@@ -106,8 +120,7 @@ class SiteTests(unittest.TestCase):
         self.assertEqual(self.api.get("/api/quotes").status_code, 401)
 
     def test_secure_cookie_behind_https_proxy(self):
-        res = self.api.post("/login", content="password=open+sesame", headers={
-            "content-type": "application/x-www-form-urlencoded", "x-forwarded-proto": "https"})
+        res = self.login(headers={"x-forwarded-proto": "https"})
         self.assertIn("secure", res.headers["set-cookie"].lower())
 
     def test_open_redirect_is_refused(self):
@@ -119,8 +132,7 @@ class SiteTests(unittest.TestCase):
             self.assertEqual(self.login("nope").status_code, 401)
         self.assertEqual(self.login("nope").status_code, 429)
         self.assertEqual(self.login().status_code, 429)                              # even the right one, for now
-        other = self.api.post("/login", content="password=open+sesame", headers={
-            "content-type": "application/x-www-form-urlencoded", "x-forwarded-for": "203.0.113.9"})
+        other = self.login(headers={"x-forwarded-for": "203.0.113.9"})
         self.assertEqual(other.status_code, 303)
         self.assertIn("login_failed", [e["kind"] for e in self.service.store.events(10)])
 
@@ -138,10 +150,54 @@ class SiteTests(unittest.TestCase):
         res = self.api.get("/api/nothing-here")
         self.assertEqual((res.status_code, res.json()), (404, {"detail": "Not Found"}))
 
-    def test_login_is_unavailable_until_a_password_is_set(self):
-        api = TestClient(create_app(self.service, Sender(), {**self.env, "DASHBOARD_PASSWORD": ""}), follow_redirects=False)
-        self.assertEqual(self.login(api=api).status_code, 503)
-        self.assertIn("DASHBOARD_PASSWORD", api.get("/login").text)
+    def test_sign_in_is_unavailable_until_a_secret_is_set(self):
+        api = TestClient(create_app(self.service, Sender(), {**self.env, "SESSION_SECRET": "", "INCOMING_API_KEY": ""}),
+                         follow_redirects=False)
+        self.assertEqual(self.signup(api=api).status_code, 503)
+
+    def test_signup_creates_an_account_signs_in_and_remembers_the_trade(self):
+        page = self.api.get("/signup?next=/app/pipeline")
+        self.assertIn('value="aircon"', page.text)
+        self.assertIn('value="painting"', page.text)
+        res = self.signup()
+        self.assertEqual((res.status_code, res.headers["location"]), (303, "/app/quotes"))
+        self.assertIn("dashboard shell", self.api.get("/app/quotes").text)
+        me = self.api.get("/api/me").json()
+        self.assertEqual((me["email"], me["business"], me["trade"]), ("aisyah@example.com", "Tan Painting", "painting"))
+        self.assertNotIn("password", me)
+        self.assertNotIn("open sesame12", self.service.store.get_setting("accounts"))      # only a hash is kept
+
+    def test_both_trades_can_sign_up_and_use_the_same_api(self):
+        self.signup(SIGNUP.replace("trade=painting", "trade=aircon"))
+        self.assertEqual(self.api.get("/api/me").json()["trade"], "aircon")
+        self.assertEqual(self.api.get("/api/quotes").status_code, 200)
+
+    def test_signup_refuses_bad_input_and_a_second_account_with_the_same_email(self):
+        for body, word in ((SIGNUP.replace("trade=painting", "trade=plumbing"), "trade"),
+                           (SIGNUP.replace("open+sesame12", "short"), "password"),
+                           (SIGNUP.replace("aisyah%40example.com", "nope"), "email"),
+                           (SIGNUP.replace("name=Aisyah+Tan", "name="), "name")):
+            res = self.signup(body)
+            self.assertEqual(res.status_code, 400, word)
+            self.assertIn(word, res.text.lower())
+            self.assertNotIn("set-cookie", res.headers)
+        self.assertEqual(self.signup().status_code, 303)
+        again = self.signup()
+        self.assertEqual(again.status_code, 400)
+        self.assertIn("already has an account", again.text)
+
+    def test_the_wrong_email_and_the_wrong_password_look_the_same(self):
+        self.signup()
+        wrong_pw = self.login("nope")
+        wrong_email = self.api.post("/login", content="email=nobody%40example.com&password=open+sesame12", headers=self.FORM)
+        self.assertEqual((wrong_pw.status_code, wrong_email.status_code), (401, 401))
+        for res in (wrong_pw, wrong_email):
+            self.assertIn("That email or password is not right.", res.text)
+
+    def test_me_needs_a_session_that_names_an_account(self):
+        self.assertEqual(self.api.get("/api/me").status_code, 401)
+        self.api.cookies.set(webauth.COOKIE, webauth.make_cookie(b"s3cret"))                # signed in, but names nobody
+        self.assertEqual(self.api.get("/api/me").status_code, 401)
 
     def test_without_a_built_dashboard_everything_stays_as_before(self):
         api = TestClient(create_app(self.service, Sender(), {**ENV, "DASHBOARD_DIR": "/nonexistent"}), follow_redirects=False)

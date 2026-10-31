@@ -363,7 +363,7 @@ class CrossSiteTests(unittest.TestCase):
         self.sender = SentRecorder()
         self.service = ServiceTests().quoting_service()
         self.service.handle(IncomingEvent("m1", "60123456789", text="yes"))
-        env = {**ENV, "SESSION_SECRET": "s3cret", "DASHBOARD_PASSWORD": "pw", "ORBYTE_ORIGIN": "https://hub.example.com"}
+        env = {**ENV, "SESSION_SECRET": "s3cret", "ORBYTE_ORIGIN": "https://hub.example.com"}
         self.api = TestClient(create_app(self.service, self.sender, env), base_url="https://gesir.example.com")
         self.api.cookies.set(webauth.COOKIE, webauth.make_cookie(b"s3cret"))
 
@@ -390,7 +390,7 @@ class DashboardRoleTests(unittest.TestCase):
         self.sender = SentRecorder()
         self.service = ServiceTests().quoting_service()
         self.service.handle(IncomingEvent("m1", "60123456789", text="yes"))
-        env = {**ENV, "SESSION_SECRET": "s3cret", "DASHBOARD_PASSWORD": "pw"}
+        env = {**ENV, "SESSION_SECRET": "s3cret"}
         self.api = TestClient(create_app(self.service, self.sender, env))
         self.api.cookies.set(webauth.COOKIE, webauth.make_cookie(b"s3cret"))
 

@@ -24,7 +24,7 @@ The first version is built for Malaysian painting businesses.
 | ----------------- | ---------------------------------------------- |
 | GitHub Repository | https://github.com/Azer884/Bridge-app          |
 | Replit Project    | https://replit.com/@AzerHamdaoui/Bridge-app    |
-| Live Demo         | https://gesir-ai.replit.app (the dashboard is at `/app`; the password is set in the `DASHBOARD_PASSWORD` secret, ask the team) |
+| Live Demo         | https://gesir-ai.replit.app (the dashboard is at `/app`; create an account at `/signup`, choosing painting or aircon; both trades work for every account) |
 | RunPod Endpoints  | text model `ose8agxpb9p1mr`, vision model `m3a8r7m8ebibba`, speech-to-text (Faster Whisper) `nvnrh39cdxgymr` (`https://api.runpod.ai/v2/<id>/runsync`) |
 | Slide Deck        | https://canva.link/gesir-ai                    |
 | Demo Video        | https://youtu.be/tXOuRwmwh6g              |
@@ -202,7 +202,7 @@ Set these in Replit **Secrets**, or in a local `.env` (never commit it). `.env.e
 | `RUNPOD_VISION_API_KEY`, `RUNPOD_VISION_ENDPOINT_ID` | photo model endpoint |
 | `STT_RUNPOD_ENDPOINT_ID`, `STT_RUNPOD_API_KEY` | voice-note transcription on RunPod's Faster Whisper endpoint; empty means the server transcribes on its own CPU |
 | `INCOMING_API_KEY` | key for the dashboard API and scripts (`x-api-key`) |
-| `DASHBOARD_PASSWORD`, `SESSION_SECRET` | dashboard sign-in and its cookie signing |
+| `SESSION_SECRET` | signs the dashboard's session cookie (accounts are created at `/signup`) |
 | `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_APP_SECRET` | receiving WhatsApp webhooks |
 | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` | sending messages, downloading photos and voice notes |
 | `DATABASE_URL` | PostgreSQL (Replit sets it); without it a local SQLite file is used |
@@ -215,7 +215,7 @@ Set these in Replit **Secrets**, or in a local `.env` (never commit it). `.env.e
 2. Add the secrets above. Add a PostgreSQL database in the Replit **Database** tool.
 3. Dependencies come from `pyproject.toml` (Replit uses uv). Click **Run**, or publish with Replit **Deployments** (Reserved VM).
 4. In the Meta developer dashboard, set the WhatsApp callback URL to `https://<your-app>.replit.app/webhook` with your verify token, and subscribe to `messages` (and `calls` for calls).
-5. Open `https://<your-app>.replit.app/app`, sign in with `DASHBOARD_PASSWORD`.
+5. Open `https://<your-app>.replit.app/app`, create an account at `/signup`.
 
 ### Option 2 — Run locally
 
@@ -230,7 +230,7 @@ cp .env.example .env            # then fill in your values
 uvicorn src.server:create_app --factory --port 8000
 ```
 
-Without `DATABASE_URL` the app keeps its data in `data/bridge.db`. `python scripts/run_local_demo.py` runs the app with a fake WhatsApp sender (password `local-demo`).
+Without `DATABASE_URL` the app keeps its data in `data/bridge.db`. `python scripts/run_local_demo.py` runs the app with a fake WhatsApp sender (sign up at `/signup`).
 
 To rebuild the web dashboard:
 

@@ -30,7 +30,8 @@
     POST /api/vision/assess RUNPOD_VISION_ENDPOINT_ID vision model, one photo in, validated assessment out
     GET  /api/models/health                           worker and job counts for each model
   GET  /health
-  GET  /login, POST /login, POST /logout    the dashboard's password sign-in (DASHBOARD_PASSWORD), sets a cookie
+  GET/POST /signup, GET/POST /login, POST /logout   the dashboard's accounts (name, email, password, trade), sets a cookie
+  GET  /api/me                              the signed-in account
   GET  /, /app/...                          the built dashboard from ./dashboard (/app/... needs the sign-in)
 
 The model APIs are raw access to the models, so they are for internal use. Customer messages
@@ -229,7 +230,7 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
     service.use_ai_intents = isinstance(service.client, RunPodClient) and str(env.get("AI_INTENTS", "1")) != "0"
 
     session_secret = (env.get("SESSION_SECRET") or env.get("INCOMING_API_KEY") or "").encode()
-    dashboard_password = env.get("DASHBOARD_PASSWORD") or ""
+    accounts = webauth.Accounts(service.store)
     site = Path(env.get("DASHBOARD_DIR") or ROOT / "dashboard")
     limiter = webauth.LoginLimiter()
 
@@ -418,7 +419,7 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         if (site / "index.html").is_file():
             if has_session(request):
                 return RedirectResponse("/app", status_code=303)
-            return HTMLResponse(webauth.login_page("/app", enabled=bool(dashboard_password)))
+            return HTMLResponse(webauth.auth_page("login", "/app"))
         return {"ok": True}
 
     @app.get("/webhook")
@@ -820,31 +821,73 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         forwarded = request.headers.get("x-forwarded-for", "")
         return forwarded.split(",")[-1].strip() or (request.client.host if request.client else "?")
 
-    @app.get("/login")
-    def login_form(next: str = "/app"):
-        return HTMLResponse(webauth.login_page(webauth.safe_next(next), enabled=bool(dashboard_password)))
-
-    @app.post("/login")
-    async def login(request: Request):
-        form = {k: v[0] for k, v in parse_qs((await request.body()).decode("utf-8", "replace")).items()}
-        target = webauth.safe_next(form.get("next"))
-        who = client_id(request)
-        if not dashboard_password or not session_secret:
-            return HTMLResponse(webauth.login_page(target, enabled=False), status_code=503)
-        if limiter.blocked(who):
-            return HTMLResponse(webauth.login_page(target, "Too many wrong passwords. Try again in ten minutes."),
-                                status_code=429)
-        if not _same(form.get("password", ""), dashboard_password):
-            limiter.fail(who)
-            service.store.log_event("login_failed", who)
-            return HTMLResponse(webauth.login_page(target, "That password is not right."), status_code=401)
-        limiter.clear(who)
+    def sign_in(request, account, target):
         response = RedirectResponse(target, status_code=303)
         secure = request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
         # inside a hub on another site the browser only sends the cookie when it is SameSite=None (and https)
-        response.set_cookie(webauth.COOKIE, webauth.make_cookie(session_secret), max_age=webauth.MAX_AGE,
-                            httponly=True, samesite="none" if embed_origin and secure else "lax", secure=secure)
+        response.set_cookie(webauth.COOKIE, webauth.make_cookie(session_secret, email=account["email"]),
+                            max_age=webauth.MAX_AGE, httponly=True,
+                            samesite="none" if embed_origin and secure else "lax", secure=secure)
         return response
+
+    async def read_form(request):
+        return {k: v[0] for k, v in parse_qs((await request.body()).decode("utf-8", "replace")).items()}
+
+    @app.get("/login")
+    def login_form(next: str = "/app"):
+        return HTMLResponse(webauth.auth_page("login", webauth.safe_next(next)))
+
+    @app.get("/signup")
+    def signup_form(next: str = "/app"):
+        return HTMLResponse(webauth.auth_page("signup", webauth.safe_next(next)))
+
+    @app.post("/login")
+    async def login(request: Request):
+        form = await read_form(request)
+        target, ip = webauth.safe_next(form.get("next")), client_id(request)
+        values = {"email": form.get("email", "")}
+        if not session_secret:
+            return HTMLResponse(webauth.auth_page("login", target, "Sign-in is not set up on the server yet (SESSION_SECRET).",
+                                                  values), status_code=503)
+        if limiter.blocked(ip):
+            return HTMLResponse(webauth.auth_page("login", target, "Too many wrong attempts. Try again in ten minutes.",
+                                                  values), status_code=429)
+        account = accounts.authenticate(form.get("email"), form.get("password"))
+        if not account:
+            limiter.fail(ip)
+            service.store.log_event("login_failed", ip)
+            return HTMLResponse(webauth.auth_page("login", target, "That email or password is not right.", values),
+                                status_code=401)
+        limiter.clear(ip)
+        return sign_in(request, account, target)
+
+    @app.post("/signup")
+    async def signup(request: Request):
+        form = await read_form(request)
+        target, ip = webauth.safe_next(form.get("next")), client_id(request)
+        values = {k: form.get(k, "") for k in ("name", "business", "trade", "email")}
+        if not session_secret:
+            return HTMLResponse(webauth.auth_page("signup", target, "Sign-up is not set up on the server yet (SESSION_SECRET).",
+                                                  values), status_code=503)
+        if limiter.blocked(ip):
+            return HTMLResponse(webauth.auth_page("signup", target, "Too many attempts. Try again in ten minutes.", values),
+                                status_code=429)
+        try:
+            account = accounts.create(form.get("name"), form.get("email"), form.get("password"),
+                                      form.get("business"), form.get("trade"))
+        except ValueError as err:
+            limiter.fail(ip)
+            return HTMLResponse(webauth.auth_page("signup", target, str(err), values), status_code=400)
+        service.store.log_event("signup", f"{account['business']} ({account['trade']})")
+        return sign_in(request, account, target)
+
+    @app.get("/api/me")
+    def me(request: Request):
+        ok, email = webauth.read_cookie(session_secret, request.cookies.get(webauth.COOKIE))
+        account = accounts.get(email) if ok else None
+        if not account:
+            raise HTTPException(401, "not signed in")
+        return account
 
     @app.post("/logout")
     def logout():
