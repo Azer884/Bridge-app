@@ -194,9 +194,9 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
                 raise HTTPException(503, str(err))
         return clients[name]
 
-    def assess_photo(media_id):
+    def assess_photo(media_id, trade="painting"):
         image, mime = sender.fetch_media(media_id)
-        assessment, _ = assess_image(model_client("vision"), image, mime)
+        assessment, _ = assess_image(model_client("vision"), image, mime, trade=trade)
         return assessment
 
     def suggest_colour(media_id):
@@ -215,8 +215,12 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
 
     if service is None:
         config_path = env.get("BUSINESS_CONFIG") or ROOT / "config" / "business_config.example.json"
-        service = IncomingService(make_store(env, ROOT / "data" / "bridge.db"),
-                                  json.loads(Path(config_path).read_text(encoding="utf-8")), text_client,
+        config = json.loads(Path(config_path).read_text(encoding="utf-8"))
+        # one chat can serve more than one trade (the customer is asked, or it is read from what they say); "" turns it off
+        extra = [name.strip() for name in str(env.get("EXTRA_TRADES", "aircon")).split(",") if name.strip()]
+        if extra and "extra_trades" not in config:
+            config["extra_trades"] = extra
+        service = IncomingService(make_store(env, ROOT / "data" / "bridge.db"), config, text_client,
                                   photo_assessor=assess_photo if sender else None,
                                   colour_assessor=suggest_colour if sender else None,
                                   transcriber=transcribe_voice if sender and transcriber else None)
@@ -541,11 +545,12 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
     def reject_quote(user_id: str, body: RejectRequest, request: Request):
         role, name = require_decider(request)
         try:
-            service.reject_quote(user_id, body.reason, by=f"{name or role} ({role})")
+            notified = service.reject_quote(user_id, body.reason, by=f"{name or role} ({role})",
+                                            send=(lambda text: sender.send_text(user_id, text)) if sender else None)
         except ValueError as err:
             raise HTTPException(409, str(err))
         emitter.emit("quote.rejected", {"user_id": user_id, "reason": body.reason, "by": name or role, "role": role})
-        return {"rejected": True}
+        return {"rejected": True, "notified": bool(notified)}
 
     @app.get("/api/quotes/{user_id}")
     def quote_detail(user_id: str, request: Request):

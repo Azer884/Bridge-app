@@ -159,7 +159,7 @@ _NAME_EXPLICIT = re.compile(
 
 _NAME_INTRO = re.compile(
     r"(?:^|[.!?,]\s*|\bhi\s+|\bhello\s+|\bhai\s+)(?:i'?m|i am|this is|saya)\s+([^\W\d_][\w'\-]*(?:\s+[^\W\d_][\w'\-]*)?)"
-    r"(?=\s*(?:$|[.,!]|and\b|dan\b|from\b|my\b|calling\b))", re.I)
+    r"(?=\s*(?:$|[.,!]|and\b|dan\b|from\b|my\b|calling\b|speaking\b|here\b))", re.I)
 _NOT_AN_INTRO = {"looking", "interested", "trying", "planning", "wanting", "thinking", "ready", "just", "not", "here",
                  "new", "sorry", "sure", "happy", "also", "still", "going", "having", "moving", "want", "need", "nak",
                  "mahu", "cari", "ingin", "at", "in", "from", "a", "an", "the",
@@ -180,6 +180,8 @@ def explicit_name(message):
     words = match.group(1).split()
     while words and words[-1].lower() in {"and", "phone", "number", "address", "i", "my", "can", "please", "thanks"}:
         words.pop()
+    from .contact import strip_name_filler
+    words = strip_name_filler(words)
     name = " ".join(w.capitalize() if w.islower() else w for w in words)
     return name if name and is_name(name) else None
 

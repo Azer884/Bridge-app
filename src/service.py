@@ -6,11 +6,12 @@ from dataclasses import asdict, replace
 from datetime import datetime
 
 from .assessment import LOW_CONFIDENCE, combine, from_dict
-from . import consent, contact, flow, geo, intent, persona as persona_module, scheduling, views
-from .assistant import PHOTO_CONDITION, advance, handle_message
+from . import consent, contact, flow, geo, intent, persona as persona_module, scheduling, trades as trades_module, views
+from .assistant import PHOTO_CONDITION, _current_question, advance, handle_message
 from .guard import clean_profile_name, clean_profile_phone
 from .i18n import COLOUR_MS, ISSUE_MS, STRINGS, detect, t
 from .pricing import PricingError, compute_quotation
+from .prompt import trade_of
 from .quote_message import approved_quote_message, duration_text, final_quote_message
 from .schema import ask_for
 
@@ -42,23 +43,32 @@ class IncomingService:
         self.photo_assessor, self.transcriber = photo_assessor, transcriber
         self.colour_assessor = colour_assessor      # colour_assessor(media_id) -> {"current", "suggestions"} or None
         self.notify = notify                        # notify(title, body, data) -> push to the owner's phone
+        self.trades = trades_module.load(config)       # {trade: config}: more than one when the business offers several
         self.use_ai_intents = False                 # the server turns this on when a real model is connected (see intent.py)
         self.intent_client = None                   # the model that reads meanings; the chat model when not set
 
-    def _turn_config(self):
-        """The business config plus the persona the dashboard has selected right now."""
-        persona = persona_module.active(self.config, self.store)
-        return {**self.config, "persona": persona} if persona else self.config
+    def _cfg(self, state=None):
+        """The config for the trade this customer's job is about (the main one until the trade is known)."""
+        return self.trades.get(getattr(state, "trade", "") or "") or self.config
+
+    def _turn_config(self, state=None):
+        """The business config for this customer's trade plus the persona in use right now."""
+        cfg = self._cfg(state)
+        if cfg is self.config:
+            persona = persona_module.active(cfg, self.store)          # the character the dashboard has selected
+        else:
+            persona = (cfg.get("personas") or {}).get(cfg.get("active_persona"))   # another trade has its own characters
+        return {**cfg, "persona": persona} if persona else cfg
 
     def _owner(self, state):
-        return (self.config.get("owner") or {}).get("name") or ("pasukan kami" if state.lang == "ms" else "our team")
+        return (self._cfg(state).get("owner") or {}).get("name") or ("pasukan kami" if state.lang == "ms" else "our team")
 
     def _price(self, state, params=None):
         """The estimate from the chat's answers plus the owner's corrections (`params` overrides the saved ones)."""
         photo = from_dict(state.photo_assessment) if state.photo_assessment else None
         verified, overrides = views.engine_inputs(state, params)
         try:
-            quote = compute_quotation(verified, self.config["pricing"], photo, overrides)
+            quote = compute_quotation(verified, self._cfg(state)["pricing"], photo, overrides)
         except PricingError as err:
             state.pricing_note = str(err)[:200]
             return None                     # the team prices it by hand
@@ -82,7 +92,7 @@ class IncomingService:
         """When the job and contact details are complete, price once and keep the draft for the SME.
         The customer sees no number until the SME approves it. A size corrected afterwards re-prices the
         draft silently (until the SME has approved it)."""
-        if "pricing" not in self.config or state.stage != "done":
+        if "pricing" not in self._cfg(state) or state.stage != "done":
             return reply
         uid = state.conversation_id
         if state.quote is not None:
@@ -250,9 +260,10 @@ class IncomingService:
                     self.store.log_event("send_failed", f"{user_id}: the estimate PDF could not be sent")
             return True
 
-    def reject_quote(self, user_id, reason, by=None):
-        """The owner says no: nothing is sent to the customer and the job leaves the approval queue. Editing the
-        job values re-prices it and puts it back in the queue. Raises ValueError when nothing is waiting."""
+    def reject_quote(self, user_id, reason, by=None, send=None):
+        """The owner says no: the job leaves the approval queue and the customer is told, without the reason or any price,
+        that the team will be in touch. Editing the job values re-prices it and puts it back in the queue.
+        Returns True when the customer was told. Raises ValueError when nothing is waiting."""
         reason = (reason or "").strip()
         if not reason:
             raise ValueError("a reason is required to reject an estimate")
@@ -261,11 +272,19 @@ class IncomingService:
             if state.quote_status not in ("pending_approval", "needs_inspection"):
                 raise ValueError("no quote is waiting for approval")
             state.quote["rejected"] = {"reason": reason[:200], "by": by, "at": time.time()}
-            state.quote_status, state.attention = "rejected", False
+            state.quote_status, state.attention, state.needs_human = "rejected", False, False
             self.store.save(state)
             self.store.add_audit(user_id, "owner", "state_change",
                                  f"Estimate rejected: {reason[:150]}" + (f" (by {by})" if by else ""))
-            return True
+            if send is None:
+                return False
+            message = t("quote_rejected", state.lang, owner=self._owner(state))
+            if send(message):
+                self.store.log_message(user_id, "out", message)
+                self.store.add_audit(user_id, "system", "send", "The customer was told the team will be in touch (no price sent)")
+                return True
+            self.store.add_audit(user_id, "system", "send", "The customer could not be told: the message was not sent")
+            return False
 
     def confirm_final(self, user_id, send, total):
         """After the team has measured on site: send the final price. Raises ValueError unless the
@@ -461,7 +480,39 @@ class IncomingService:
             return reply
         if self.colour_assessor and state.stage == "job" and flow.wants_colour_suggestion(text):
             return self._colour_reply(state, text)
-        return self._with_quote(state, self.handler(state, text, self._turn_config(), self.client).reply)
+        if len(self.trades) > 1:
+            asked = self._pick_trade(state, text)
+            if asked is not None:
+                return asked
+        return self._with_quote(state, self.handler(state, text, self._turn_config(state), self.client).reply)
+
+    def _read_trade(self, text):
+        """The trade the model reads from a message the fixed words could not settle, or None."""
+        if not self.use_ai_intents or not text:
+            return None
+        label, confidence = intent.read_trade(self.intent_client or self.client, text, list(self.trades))
+        return label if label in self.trades and confidence >= intent.MIN_TRADE_CONFIDENCE else None
+
+    def _pick_trade(self, state, text):
+        """Which trade the customer means, when the business offers several: from their words, then from the model,
+        and when it is still unclear a question. Returns the question to send, or None to carry on with the trade set."""
+        found = trades_module.detect(text)
+        if state.stage == "done":
+            if state.trade and found in self.trades and found != state.trade:
+                flow.start_new_order(state)             # asking for the other service after a finished job is a new job
+                state.trade = found
+            return None
+        if not state.trade and (state.verified or state.history):
+            state.trade = trade_of(self.config)         # a chat that began before the business offered several trades
+        if state.trade:
+            return None
+        if found not in self.trades:                    # nothing said, or both trades in one message
+            found = self._read_trade(text)
+        if found in self.trades:
+            state.trade = found
+            return None
+        state.service_misses += 1
+        return t("which_service" if state.service_misses == 1 else "which_service_again", state.lang)
 
     def _colour_options(self, state, result):
         names = [COLOUR_MS.get(c, c) if state.lang == "ms" else c for c in result["suggestions"]]
@@ -491,9 +542,34 @@ class IncomingService:
             result = None
         return self._colour_options(state, result) if result else t("colour_failed", state.lang)
 
+    def _aircon_photo_reply(self, state, media_id):
+        """A photo of an aircon unit: the model names the unit and what it sees (dirty filter, water stains, ice...), the
+        words are checked against fixed lists, and the technician still confirms. It never supplies a number."""
+        assessment = None
+        if self.photo_assessor and media_id:
+            try:
+                assessment = self.photo_assessor(media_id, "aircon")
+            except Exception:
+                log.exception("aircon photo assessment failed for media %s", media_id)
+        if assessment is not None and not assessment.surface:
+            self.store.log_event("photo_not_a_unit", f"{state.conversation_id}: {assessment.subject or 'unknown'}")
+            return t("photo_not_unit", state.lang)
+        if state.stage == "job":
+            state.verified.setdefault("aircon_issue", PHOTO_CONDITION)        # the photo answers "is anything wrong"
+        if assessment is None or assessment.confidence < LOW_CONFIDENCE:
+            return t("photo_aircon", state.lang)
+        previous = from_dict(state.photo_assessment) if state.photo_assessment else None
+        state.photo_assessment = asdict(combine(previous, assessment))
+        unit = t("unit_" + (assessment.details.get("unit_type") or "unknown"), state.lang)
+        names = [ISSUE_MS.get(i, i) if state.lang == "ms" else i.replace("_", " ") for i in assessment.issues]
+        issues = (" (" + ", ".join(names) + ")") if names else ""
+        return t("photo_aircon_seen", state.lang, unit=unit, issues=issues)
+
     def _photo_reply(self, state, media_id):
         if media_id:
             state.last_photo_id = media_id
+        if state.trade == "aircon":
+            return self._aircon_photo_reply(state, media_id)
         assessment = None
         if self.photo_assessor and media_id:
             try:
@@ -598,19 +674,28 @@ class IncomingService:
             self.store.log_event("data_erased", f"{user_id} erased by {by}")
             return True
 
-    def _meaning(self, text, always=False):
+    def _asked(self, state):
+        """The question the customer is answering right now, for the model to read their message against ("" when none)."""
+        if state.stage == "done":
+            return ""
+        if len(self.trades) > 1 and not state.trade and not (state.verified or state.history):
+            return t("which_service", state.lang)
+        return _current_question(state, self._turn_config(state), service=True)
+
+    def _meaning(self, text, always=False, asked=""):
         """What the customer means, read by the model for messages that may hold a withdrawal, a cancel or a restart.
         "other" when the model is off, down, not sure, or the message is an ordinary answer."""
         if not self.use_ai_intents or not text or not (always or intent.worth_reading(text)):
             return "other"
-        label, confidence = intent.classify(self.intent_client or self.client, text)
+        label, confidence = intent.classify(self.intent_client or self.client, text, asked=asked)
         return intent.decided(label, confidence)
 
     def _consent_gate(self, state, event):
         """Returns (replies, erased) when the PDPA notice decides this message, else None. Nothing a customer sends is
         read, saved or sent to a model until they answer the notice with 1; STOP erases everything."""
-        if not consent.required(self.config) or event.channel == "voice":
+        if not consent.required(self.config):
             return None
+        voice = event.channel == "voice"            # on a call the notice is spoken and the answer is "yes" or "no"
         text = event.text if event.type == "text" else ""
         owner = self._owner(state)
         if consent.withdraws(text) and state.consent in ("granted", "pending", "declined"):
@@ -631,7 +716,7 @@ class IncomingService:
             state.lang = detect(text, state.lang) if text else state.lang
             state.consent, state.consent_asks = "pending", 1
             state.greeted = False
-            return [t("consent_notice", state.lang, business=self.config.get("business_name", "Gesir.AI"), owner=owner)], False
+            return [t("consent_notice_voice" if voice else "consent_notice", state.lang, business=self.config.get("business_name", "Gesir.AI"), owner=owner)], False
         if state.consent == "":                                  # a chat that began before consent was required
             state.consent = "pending"
         if consent.agrees(text):
@@ -650,7 +735,7 @@ class IncomingService:
         state.consent_asks += 1                                 # anything else: ask again, a few times, then stay quiet
         if state.consent_asks > consent.MAX_ASKS:
             return [], False
-        return [t("consent_again", state.lang)], False
+        return [t("consent_again_voice" if voice else "consent_again", state.lang)], False
 
     def _handle_locked(self, event):
         state = self.store.load(event.user_id)
@@ -667,6 +752,8 @@ class IncomingService:
             state.channel = {k: v for k, v in channel.items() if v}
         if not state.created_at:
             state.created_at = time.time()
+            via = "a phone call" if event.channel == "voice" else "WhatsApp"
+            self.store.add_audit(event.user_id, "customer", "state_change", f"New enquiry from the customer on {via}")
         if event.channel == "voice":
             state.greeted = True        # the call greets the caller itself
 
@@ -674,7 +761,13 @@ class IncomingService:
             self.store.log_message(event.user_id, "in", event.text)
             said = event.text
             # on a call the words come from speech to text and are often misheard, so every message after a finished job is read
-            meaning = self._meaning(said, always=event.channel == "voice" and state.stage == "done")
+            asked = self._asked(state) if self.use_ai_intents else ""
+            meaning = self._meaning(said, always=event.channel == "voice", asked=asked)
+            if meaning == "confused" and asked:
+                reply = f"{t('confused_lead', state.lang)} {asked}"       # "hello?": the question again, nothing stored
+                self.store.save(state)
+                self.store.log_message(event.user_id, "out", reply)
+                return [reply]
             if meaning == "cancel_job" and not flow.wants_cancel(said):
                 said = "cancel"                         # the model read a cancel in other words: the usual cancel handling takes over
             elif meaning == "restart" and not flow._RESTART.search(said):
@@ -702,7 +795,7 @@ class IncomingService:
                 suggested = True
                 if flow.wants_colour_suggestion(caption):
                     caption = ""
-            nxt = state.next_missing(self.config) if state.stage == "job" else None
+            nxt = state.next_missing(self._cfg(state)) if state.stage == "job" else None
             if suggested and not caption:
                 pass                                        # the colour question is already asked
             elif caption and state.stage != "done":
@@ -712,7 +805,7 @@ class IncomingService:
                 reply = f"{reply} {answer}".strip()
             elif nxt:
                 reply += " " + ask_for(nxt, state)
-            elif state.stage == "job" and state.service_checked and self._turn_config().get("persona"):
+            elif state.stage == "job" and state.service_checked and self._turn_config(state).get("persona"):
                 reply += " " + flow.contact_intro(state)      # the photo answered the last open question
         elif event.type == "location":
             place = event.location or {}
@@ -726,10 +819,10 @@ class IncomingService:
                 return [reply]
             state.verified["location"] = {**place}
             self.store.log_message(event.user_id, "in", "[location] " + (event.text or f"{lat:.5f}, {lon:.5f}"))
-            if state.stage == "job" and state.next_missing(self.config) == "address":
+            if state.stage == "job" and state.next_missing(self._cfg(state)) == "address":
                 label = event.text or t("pinned", state.lang, lat=lat, lon=lon)
                 state.verified["address"] = label                               # the shared location is the address
-                reply = advance(state, self._turn_config(), label, t("location_saved", state.lang))
+                reply = advance(state, self._turn_config(state), label, t("location_saved", state.lang))
             else:
                 reply = t("location_saved", state.lang)
         elif event.type == "unsupported":
@@ -741,5 +834,8 @@ class IncomingService:
         self.store.save(state)
         if reply:
             self.store.log_message(event.user_id, "out", reply)
+        if (state.needs_human and not before[0]) or (state.attention and not before[1]):
+            said = (event.text or "").strip() or f"[{event.type}]"
+            self.store.add_audit(event.user_id, "system", "handoff", "Handed to the owner: " + said[:120])
         self._alert(state, before, event)
         return [reply] if reply else []

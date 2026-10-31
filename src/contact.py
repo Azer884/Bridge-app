@@ -9,7 +9,8 @@ from .i18n import t
 
 AFFIRMATIVE = {"yes", "yeah", "yep", "yup", "ok", "okay", "sure", "correct", "right",
                "confirm", "confirmed", "fine", "good", "perfect", "please", "ya", "yea",
-               "ye", "betul", "boleh", "setuju", "okey", "baik", "sila", "bagus", "tepat", "same", "sama"}
+               "ye", "betul", "boleh", "setuju", "okey", "baik", "sila", "bagus", "tepat", "same", "sama",
+               "definitely", "absolutely", "indeed", "uh-huh", "mm-hmm", "mhm", "mmhm", "uhuh"}
 NEGATIVE = {"no", "nope", "nah", "wrong", "different", "change", "tak", "tidak", "bukan", "salah", "tukar",
             "lain", "taknak"}
 _NOT_NAMES = AFFIRMATIVE | NEGATIVE | {"the", "same", "my", "it", "a", "an", "this", "that", "thanks",
@@ -68,11 +69,28 @@ def find_phone(message):
     return phone if 7 <= len(re.sub(r"\D", "", phone)) <= 15 else None
 
 
+_LEAD_FILLER = {"uh", "um", "umm", "uhh", "er", "erm", "ah", "hmm", "so", "well", "yeah", "yes", "yep", "okay", "ok", "its",
+                "it's", "it", "is", "this", "i", "i'm", "im", "am", "ini", "saya", "nama", "aku", "name", "my", "the", "hi",
+                "hello", "hai", "actually", "like"}
+_TAIL_FILLER = {"here", "speaking", "please", "pls", "la", "lah", "ya", "kan", "thanks", "thank", "you", "calling", "ok", "okay",
+                "sir", "madam", "also", "and", "je", "saja", "um", "uh", "er"}
+
+
+def strip_name_filler(words):
+    """"uh it's Ali speaking" is Ali: the sounds and phrases around a name said aloud are dropped. A single word is kept."""
+    words = [w for w in words if w.strip(",.!?")]
+    while len(words) > 1 and words[0].lower().strip(",.!?") in _LEAD_FILLER:
+        words = words[1:]
+    while len(words) > 1 and words[-1].lower().strip(",.!?") in _TAIL_FILLER:
+        words = words[:-1]
+    return [w.strip(",.!?") for w in words]
+
+
 def find_name(message, allow_bare):
     match = _NAME_AFTER.search(message)
     candidate = match.group(1) if match else None
     if candidate is None and allow_bare:
-        bare = message.strip()
+        bare = " ".join(strip_name_filler(re.sub(r"[,.!?]+", " ", message.strip()).split()))
         without_phone = re.sub(r"\+?\d[\d\s().\-]{5,}\d", " ", bare).strip(" ,.")
         if without_phone != bare and set(_words(without_phone)) & _PHONE_TALK:
             without_phone = ""                  # "use 555 123 4567 instead" has no name in it
@@ -82,7 +100,7 @@ def find_name(message, allow_bare):
             candidate = bare
     if not candidate:
         return None
-    words = candidate.split()
+    words = strip_name_filler(candidate.split())
     from .answers import _NOT_AN_INTRO          # "yes I'm doctor", "I'm busy": a job or a state, not a name
     if words[0].lower() in _NOT_NAMES or words[0].lower() in _NOT_AN_INTRO or len(candidate) > 40:
         return None

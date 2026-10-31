@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import { configureApi } from "@shared/api";
 import App from "./App";
+import { ErrorBoundary } from "./ui/ErrorBoundary";
 import { ToastProvider } from "./ui/Toast";
 import "./styles.css";
 import "./orbyte.css";
@@ -18,7 +19,9 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <ToastProvider>
-        <App />
+        <ErrorBoundary>
+          <App />
+        </ErrorBoundary>
       </ToastProvider>
     </BrowserRouter>
   </StrictMode>,

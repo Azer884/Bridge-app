@@ -122,10 +122,30 @@ class FlowTests(unittest.TestCase):
         out = say(svc, "hi paint my room", "a")
         self.assertNotIn("PDPA", out[0])
 
-    def test_calls_are_not_gated(self):
+    def test_a_call_gets_a_spoken_notice_and_nothing_is_read(self):
         svc = service(reply("Hello! Which surfaces?"))
-        out = svc.handle(IncomingEvent("v1", UID, text="hi", channel="voice"))
-        self.assertNotIn("PDPA", out[0] if out else "")
+        out = svc.handle(IncomingEvent("v1", UID, text="hi I want to paint my room", channel="voice"))
+        self.assertIn("PDPA", out[0])
+        self.assertIn("say yes or no", out[0])                       # spoken: no "reply 1"
+        self.assertNotIn("Reply 1", out[0])
+        state = svc.store.load(UID)
+        self.assertEqual((state.consent, state.verified), ("pending", {}))
+
+    def test_saying_yes_on_a_call_carries_on_with_the_first_words(self):
+        svc = service(reply("Got it. Which surfaces?"))
+        svc.handle(IncomingEvent("v1", UID, text="hi I want to paint my room", channel="voice"))
+        out = svc.handle(IncomingEvent("v2", UID, text="yes", channel="voice"))
+        self.assertIn("Which surfaces", out[0])
+        self.assertEqual(svc.store.load(UID).consent, "granted")
+
+    def test_saying_no_on_a_call_stops_and_something_else_asks_again_by_voice(self):
+        svc = service()
+        svc.handle(IncomingEvent("v1", UID, text="hello", channel="voice"))
+        again = svc.handle(IncomingEvent("v2", UID, text="what do you mean", channel="voice"))
+        self.assertIn("say yes or no", again[0])
+        out = svc.handle(IncomingEvent("v3", UID, text="no", channel="voice"))
+        self.assertEqual(svc.store.load(UID).consent, "declined")
+        self.assertNotIn("Reply 1", out[0] + again[0])
 
 
 class OwnerErasureTests(unittest.TestCase):

@@ -20,6 +20,20 @@ MINIMUM = "Minimum charge top-up"
 REQUIRED_AIRCON = ["unit_count", "service_type"]
 
 
+_SEVERE_ISSUE = re.compile(r"\b(compressor|pcb|inverter|trip\w*|blink\w*|kelip|copper|concealed|hidden pipe)\b", re.I)
+_MODERATE_ISSUE = re.compile(r"\b(drip\w*|leak\w*|menitis|bocor|not cold|not cooling|tak sejuk|tidak sejuk|noise\w*|bising|"
+                             r"smell\w*|bau|ice|freez\w*)\b", re.I)
+
+
+def _issue_assessment(text):
+    """What the customer notices with the unit. Painting's wording rules do not apply: a dripping unit is a normal job
+    (a chemical wash), while a dead compressor or a tripping supply is for the technician to look at."""
+    from .assessment import ConditionAssessment
+    text = str(text or "")
+    level = "severe" if _SEVERE_ISSUE.search(text) else "moderate" if _MODERATE_ISSUE.search(text) else "minor"
+    return ConditionAssessment(level, (), (), 1.0, "customer_text")
+
+
 def _extract_units(value):
     """Extract integer unit count from numbers or phrases ('3 units', 'dua biji')."""
     if isinstance(value, (int, float)):
@@ -47,6 +61,8 @@ def _match_service_type(text, service_types, default="chemical_wash"):
     for st in service_types:
         if st in t:
             return st
+    if ("gas" in t or "freon" in t or "refrigerant" in t) and "general_service" in service_types:
+        return "general_service"        # a gas top-up is the light visit plus the gas line, not a chemical wash
     return default
 
 
@@ -91,7 +107,9 @@ def compute_aircon_quotation(verified, pricing, vision=None, overrides=None):
     hp_multiplier = _d(hp_tiers.get(hp_key, 1.0))
 
     # 4. Condition assessment (checks for severe issues like burnt compressor or electrical tripping)
-    text_assessment = classify_text(verified.get("surface_condition") or str(verified.get("brand_or_issue", "")))
+    issue_text = verified.get("aircon_issue")
+    text_assessment = (_issue_assessment(issue_text) if issue_text else
+                       classify_text(verified.get("surface_condition") or str(verified.get("brand_or_issue", ""))))
     assessment = combine(text_assessment, vision)
     level = "minor"
     issues = ()
@@ -126,7 +144,7 @@ def compute_aircon_quotation(verified, pricing, vision=None, overrides=None):
     gas_requested = False
     req_text = (str(verified.get("service_type", "")) + " " +
                 str(verified.get("brand_or_issue", "")) + " " +
-                str(verified.get("surface_condition", ""))).lower()
+                str(verified.get("aircon_issue", "")) + " " + str(verified.get("surface_condition", ""))).lower()
     if "gas" in req_text or "freon" in req_text or overrides.get("gas_topup"):
         gas_requested = True
         gas_cfg = pricing.get("gas_topup", {})

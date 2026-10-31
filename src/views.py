@@ -15,6 +15,8 @@ def front_status(state):
     """The frontend's QuoteStatus for a conversation."""
     if state.quote_status == "final":
         return "completed"
+    if state.quote_status == "rejected":
+        return "rejected"               # whatever stage the chat was in: it is no longer waiting for the owner
     if state.stage != "done" or not state.quote_status:
         return "collecting"
     return state.quote_status
@@ -47,7 +49,9 @@ def job_view(state):
             "surface_condition": v.get("surface_condition"),
             "preferred_datetime": v.get("preferred_datetime"), "paint_tier": v.get("paint_tier"),
             "colour": v.get("colour"), "name": customer_name(state),
-            "phone": v.get("phone") or state.channel.get("phone"), "location": location_view(v.get("location"))}
+            "phone": v.get("phone") or state.channel.get("phone"), "location": location_view(v.get("location")),
+            "trade": getattr(state, "trade", "") or None, "service_type": v.get("service_type"),
+            "unit_count": v.get("unit_count"), "horsepower": v.get("horsepower"), "aircon_issue": v.get("aircon_issue")}
 
 
 def maps_url(lat, lon):
@@ -85,7 +89,27 @@ def quote_item(state, booked=False):
 
 
 # --- the editable parameters -----------------------------------------------------------------------
+AIRCON_SERVICES = [("general_service", "General service"), ("chemical_wash", "Chemical wash"),
+                   ("chemical_overhaul", "Chemical overhaul")]
+AIRCON_HORSEPOWER = ["1.0hp", "1.5hp", "2.0hp", "2.5hp", "3.0hp"]
+
+
+def is_aircon(state):
+    return getattr(state, "trade", "") == "aircon"
+
+
 def param_schema(state):
+    if is_aircon(state):
+        return [
+            {"key": "unit_count", "label": "Aircon units", "type": "number", "min": 1, "max": 20, "step": 1, "integer": True},
+            {"key": "service_type", "label": "Service", "type": "select",
+             "options": [{"value": k, "label": label} for k, label in AIRCON_SERVICES]},
+            {"key": "horsepower", "label": "Horsepower", "type": "select",
+             "options": [{"value": k, "label": k.replace("hp", " HP")} for k in AIRCON_HORSEPOWER]},
+            {"key": "surface_condition", "label": "Unit condition", "type": "select", "options": [
+                {"value": "good", "label": "Routine"}, {"value": "fair", "label": "Has a fault, such as dripping"},
+                {"value": "poor", "label": "Needs a technician's diagnosis"}]},
+        ]
     fields = [
         {"key": "length_m", "label": "Length" if single_wall(state.verified.get("surfaces")) else "Room length",
          "type": "number", "unit": "m", "min": 0.5, "max": 30, "step": 0.1},
@@ -110,6 +134,10 @@ def ai_values(state):
     """What the assistant read from the chat, in the form's keys. Never changes after the chat."""
     inputs = (state.quote or {}).get("inputs") or {}
     v = state.verified
+    if is_aircon(state):
+        return {"unit_count": inputs.get("unit_count", 1), "service_type": inputs.get("service_type", "chemical_wash"),
+                "horsepower": inputs.get("horsepower", "1.0hp"),
+                "surface_condition": CONDITION_UI.get(inputs.get("condition_level"), "good")}
     values = {"length_m": v.get("room_length_m"), "width_m": v.get("room_width_m"), "height_m": v.get("room_height_m"),
               "surface_condition": CONDITION_UI.get(inputs.get("condition_level"), "good"),
               "coats": inputs.get("coats", 2), "tier": inputs.get("paint_tier", "standard")}
@@ -121,6 +149,10 @@ def ai_values(state):
 def params_view(state):
     ai = ai_values(state)
     current = {**ai, **{k: v for k, v in state.overrides.items() if k in ai}}
+    if is_aircon(state):
+        unsure = {"horsepower": 0.5} if str(state.verified.get("horsepower", "")).lower() == "not sure" else {}
+        return {"kind": "aircon", "schema": param_schema(state), "ai": ai, "current": current,
+                "confidence": {k: unsure.get(k, 0.9) for k in ai}}
     confidence = {"length_m": 0.65 if "room_length_m" in state.estimated else 0.95,
                   "width_m": 0.65 if "room_width_m" in state.estimated else 0.95,
                   "height_m": 0.65 if "room_height_m" in state.estimated else 0.95,
@@ -135,6 +167,11 @@ def engine_inputs(state, params=None):
     values applied on top. `params` defaults to the saved overrides."""
     params = state.overrides if params is None else params
     verified = dict(state.verified)
+    if is_aircon(state):
+        overrides = {k: params[k] for k in ("unit_count", "service_type", "horsepower") if params.get(k) is not None}
+        if params.get("surface_condition") in CONDITION_ENGINE:
+            overrides["condition_level"] = CONDITION_ENGINE[params["surface_condition"]]
+        return verified, overrides
     for key, field in DIMENSIONS.items():
         if params.get(key) is not None:
             verified[field] = float(params[key])

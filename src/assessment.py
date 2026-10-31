@@ -4,7 +4,7 @@ An assessment never carries a price or a dimension. It only selects a configured
 configured flags; the pricing engine turns those into money.
 """
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 LEVELS = ["good", "minor", "moderate", "severe"]
 ISSUES = {"peeling", "flaking", "cracks", "stains", "bubbling", "holes", "damp", "mould",
@@ -22,6 +22,7 @@ class ConditionAssessment:
     source: str = "customer_text"
     surface: bool = True            # False: the photo does not show a wall or ceiling (a face, a shirt, food, a car...)
     subject: str = ""               # what the model says the photo shows; only used to cross-check, never shown
+    details: dict = field(default_factory=dict)     # trade extras, such as {"unit_type": "wall_mounted"} for an aircon photo
 
 
 _TEXT_RULES = [  # checked in order; first hit wins
@@ -84,10 +85,33 @@ def from_vision_output(raw):
     return ConditionAssessment(raw["condition_level"], issues, flags, confidence, "vision", True, subject)
 
 
+AIRCON_ISSUES = {"dirty_filter", "water_stains", "water_leak", "ice_buildup", "mould", "rust", "damaged_casing", "error_light"}
+UNIT_TYPES = {"wall_mounted", "ceiling_cassette", "ducted", "floor_standing", "outdoor_condenser"}
+
+
+def from_aircon_output(raw):
+    """Validate a vision model's JSON for a photo of an aircon unit. Only the allowed words are kept, and the model
+    supplies no number: no horsepower, no count, no price. Returns None if the level is unusable."""
+    if not isinstance(raw, dict) or raw.get("condition_level") not in LEVELS:
+        return None
+    issues = tuple(sorted({i for i in raw.get("issues", []) if i in AIRCON_ISSUES}))
+    try:
+        confidence = min(1.0, max(0.0, float(raw.get("confidence", 0.0))))
+    except (TypeError, ValueError):
+        confidence = 0.0
+    subject = str(raw.get("what_is_it") or "")[:60]
+    if raw.get("is_unit", False) not in (True, "true", "True", "yes", 1):
+        return ConditionAssessment("good", (), (), 0.0, "vision", False, subject)
+    unit = raw.get("unit_type") if raw.get("unit_type") in UNIT_TYPES else ""
+    return ConditionAssessment(raw["condition_level"], issues, (), confidence, "vision", True, subject,
+                               {"unit_type": unit} if unit else {})
+
+
 def from_dict(data):
     """Rebuild an assessment saved in the conversation state (JSON turns tuples into lists)."""
     return ConditionAssessment(data["level"], tuple(data["issues"]), tuple(data["complexity_flags"]),
-                               data["confidence"], data["source"], data.get("surface", True), data.get("subject", ""))
+                               data["confidence"], data["source"], data.get("surface", True), data.get("subject", ""),
+                               data.get("details") or {})
 
 
 def combine(*assessments):
@@ -101,4 +125,5 @@ def combine(*assessments):
         tuple(sorted({i for a in found for i in a.issues})),
         tuple(sorted({f for a in found for f in a.complexity_flags})),
         min(a.confidence for a in found),
-        "+".join(sorted({a.source for a in found})))
+        "+".join(sorted({a.source for a in found})),
+        details={k: v for a in found for k, v in a.details.items()})

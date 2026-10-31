@@ -85,5 +85,5 @@ sends a real WhatsApp message, so use test customers only.
 
 ## Not done yet
 
-- A different trade (not painting): its AI rules (`prompts/trades/<trade>.txt`) and pricing (`src/pricing_aircon.py`) can be added, but the chat flow and the fields it asks for are still painting-only. A second business of the same trade is a config change (`config/business_config.second.example.json`).
+- A different trade (not painting): its AI rules (`prompts/trades/<trade>.txt`), fields, rate card and pricing engine are added, then listed in `EXTRA_TRADES`. Aircon is done this way (`src/trades.py`, `src/pricing_aircon.py`). A second business of the same trade is a config change (`config/business_config.second.example.json`).
 - The real Orbyte site has no public API or embed settings, so the Orbyte-style dashboard in Gesir stays as the demo stand-in until Orbyte publishes one.

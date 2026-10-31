@@ -176,7 +176,7 @@ function Loaded({ d, reload }: { d: Detail; reload: () => Promise<void> }) {
 
         {(d.needs_human || d.attention) && tab !== "chat" ? <Banner kind="warn" text="Needs you: open Chat to reply." action="Open chat" onAction={() => setTab("chat")} /> : null}
 
-        <Segmented value={tab} onChange={setTab} options={[{ id: "quote", label: "Quote" }, { id: "chat", label: `Chat · ${d.photos.length} photos` }, { id: "activity", label: `Activity · ${d.audit.length}` }]} />
+        <Segmented value={tab} onChange={setTab} options={[{ id: "quote", label: "Quote" }, { id: "chat", label: `Chat · ${d.chat.length}` }, { id: "activity", label: `Activity · ${d.audit.length}` }]} />
 
         {tab === "chat" && <ChatView name={d.job.name ?? "Customer"} number={d.job.phone ?? d.user_id} chat={d.chat} photos={d.photos} userId={d.user_id} needsHuman={d.needs_human} humanActive={d.human_active} onSent={() => void reload()} />}
         {tab === "activity" && <AuditList entries={d.audit} />}

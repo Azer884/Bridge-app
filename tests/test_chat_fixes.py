@@ -2,13 +2,15 @@
 person, a request outside the services, abuse, other alphabets, and a voice for each character."""
 import json
 import unittest
+from datetime import date
 from unittest import mock
 
 from fastapi.testclient import TestClient
 
 from src import flow
 from src.assistant import handle_message
-from src.grounding import cued_sizes, numbers_in, sizes_in
+from src.events import IncomingEvent
+from src.grounding import cued_sizes, normalise_speech, numbers_in, sizes_in
 from src.guard import is_abusive
 from src.persona import clean
 from src.server import create_app
@@ -242,3 +244,27 @@ class WidthByLengthTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ImpossibleDateTests(unittest.TestCase):
+    TODAY = date(2026, 11, 2)
+
+    def test_days_that_do_not_exist_are_refused(self):
+        for text in ("32 December", "31 November", "30 February", "December 32", "0 Oct", "the 32nd of December",
+                     "thirty two December", "29 Feb 2027"):
+            self.assertEqual(flow.date_problem(normalise_speech(text), self.TODAY), "date_invalid", text)
+
+    def test_real_days_are_not(self):
+        for text in ("31 December", "Dec 31", "29 Feb 2028", "30 Nov", "fifth of November"):
+            self.assertNotEqual(flow.date_problem(normalise_speech(text), self.TODAY), "date_invalid", text)
+
+    def test_the_chat_asks_again_and_stores_nothing(self):
+        svc = make_service(reply("ok"), reply("ok"))
+        state = new_state()
+        state.greeted = state.service_checked = True
+        state.verified.update({"surfaces": ["walls"], "room_length_m": 4.0, "room_width_m": 3.0, "room_height_m": 2.5,
+                               "surface_condition": "good", "paint_tier": "standard", "colour": "white"})
+        svc.store.save(state)
+        out = svc.handle(IncomingEvent("d1", "u", text="32 December"))
+        self.assertIn("doesn't exist", out[0])
+        self.assertNotIn("preferred_datetime", svc.store.load("u").verified)

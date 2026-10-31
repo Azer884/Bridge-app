@@ -7,7 +7,7 @@ from types import SimpleNamespace
 
 from . import contact, flow, geo
 from .grounding import (HEDGES, ONES, UNIT_FACTORS, GroundingError, cued_sizes, estimate_in, ground_field,
-                        _bare_number, ground_measurement, numbers_in, sizes_in, sizes_metric, spoken_decimals,
+                        _bare_number, ground_measurement, normalise_speech, numbers_in, sizes_in, sizes_metric,
                         unit_factors_in)
 from .guard import MAX_STRIKES, clip_message, is_abusive, screen_input
 from . import rooms as rooms_module
@@ -66,7 +66,7 @@ def handle_message(state, message, config, client, max_retries=MAX_RETRIES):
 
 
 def _handle(state, message, config, client, max_retries=MAX_RETRIES):
-    message = spoken_decimals(fix_typos(clip_message(message)))
+    message = normalise_speech(fix_typos(clip_message(message)))
     message = re.sub(r"(?<=\d)'", " ft ", message)              # 12'x10' is feet
     if state.stage == "job":
         _volunteer(state, message)                              # a name, number or address mentioned in passing
@@ -173,9 +173,11 @@ def _handle(state, message, config, client, max_retries=MAX_RETRIES):
     if persona and geo.foreign_place(message):      # a job outside Malaysia is never quoted, and never stored
         return _finish(state, message, t("location_outside", state.lang), Status.COLLECTING.value, record=False)
 
+    trade = trade_of(config)
     lowered = message.lower()
     if any(k in lowered for k in config.get("inspection_keywords", [])):
-        if persona and (sizes_in(message, loose=True) or cued_sizes(message) or flow._SUPPORTED.search(message)):
+        if persona and (sizes_in(message, loose=True) or cued_sizes(message) or flow._SUPPORTED.search(message)
+                        or (trade == "aircon" and flow._AIRCON_SUPPORTED.search(message))):
             state.service_checked = True            # it is a painting job: the details are still taken
             state.needs_human = state.attention = True
             state._faq_prefix = t("inspection_reply", state.lang)
@@ -183,8 +185,8 @@ def _handle(state, message, config, client, max_retries=MAX_RETRIES):
             return _finish(state, message, t("inspection_reply", state.lang), Status.HUMAN.value, human=True)
 
     if persona and not state.service_checked:
-        service = flow.check_service(message)
-        if service == "unknown" and (sizes_in(message, loose=True) or cued_sizes(message)):
+        service = flow.check_service(message, trade)
+        if service == "unknown" and trade == "painting" and (sizes_in(message, loose=True) or cued_sizes(message)):
             service = "supported"       # sizes mean there is a room to paint, whatever else the message says
         owner = (config.get("owner") or {}).get("name") or ("pasukan kami" if state.lang == "ms" else "our team")
         if service == "unsupported" and not state.declined:
@@ -254,14 +256,17 @@ def _handle(state, message, config, client, max_retries=MAX_RETRIES):
     before, before_estimated = dict(state.verified), list(state.estimated)
     state._rooms_ack = ""
     work = message
-    if state.stage == "job":
+    painting = trade == "painting"
+    if state.stage == "job" and painting:
         added = _try_add_rooms(state, message, config)
         if added:
             state._rooms_ack = added
             work = rooms_module.strip_sizes(message)         # the sizes went to the rooms: do not read them twice
     _swap_answers(state, work, config)
     _prefill_job(state, work, config)
-    if not _COUNTED.search(work) or sizes_in(work):          # a number next to "one wall" is a count
+    if not painting:
+        _prefill_aircon(state, work, config)
+    elif not _COUNTED.search(work) or sizes_in(work):          # a number next to "one wall" is a count
         _prefill_measurement(state, work, config)
     rooms_module.fill_heights(state.verified)
     changed = {k for k, v in state.verified.items() if before.get(k) != v}   # read by the backend this turn
@@ -314,7 +319,7 @@ def _handle(state, message, config, client, max_retries=MAX_RETRIES):
     return out
 
 
-_FREE_TEXT = {"surface_condition": 160, "colour": 60, "address": 160}
+_FREE_TEXT = {"surface_condition": 160, "colour": 60, "address": 160, "aircon_issue": 160}
 _FILLER = contact.AFFIRMATIVE | contact.NEGATIVE | {"hi", "hello", "hai", "helo", "hey", "thanks", "thank",
                                                      "terima", "kasih", "bye", "lol", "haha", "hmm"}
 
@@ -366,7 +371,7 @@ def _ask_again(state, message, config, result, asked, attempt):
         result.reply = ask_for(missing[0], state) if missing else ""
         result.status = Status.COLLECTING.value if missing else Status.READY.value
     else:
-        if asked == "preferred_datetime" and flow.date_problem(message) in ("date_past", "date_past_year", "date_closed"):
+        if asked == "preferred_datetime" and flow.date_problem(message) in ("date_past", "date_invalid", "date_past_year", "date_closed"):
             key = flow.date_problem(message)
         elif asked == "preferred_datetime" and flow._DATE_NEEDS_DAY.search(message):
             key = "date_need_day"
@@ -378,7 +383,7 @@ def _ask_again(state, message, config, result, asked, attempt):
 
 
 _PRICED = ("room_length_m", "room_width_m", "room_height_m", "extra_rooms", "surfaces", "paint_tier",
-           "surface_condition")
+           "surface_condition", "service_type", "unit_count", "horsepower", "aircon_issue")
 _NOTED = ("colour", "preferred_datetime", "address")
 
 
@@ -392,7 +397,10 @@ def _after_done(state, message, config):
     if not fixed:
         state.stage = "job"                     # the readers below work on a job in progress
         try:
-            _try_add_rooms(state, message, config)
+            if trade_of(config) == "painting":
+                _try_add_rooms(state, message, config)
+            else:
+                _prefill_aircon(state, message, config, replace=True)
             _swap_answers(state, message, config)
         finally:
             state.stage = "done"
@@ -649,6 +657,56 @@ def _prefill_job(state, message, config):
             state.verified[key] = previous
 
 
+_UNIT_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "satu": 1, "dua": 2, "tiga": 3,
+               "empat": 4, "lima": 5, "enam": 6}
+_UNITS = re.compile(r"\b(\d{1,2}|one|two|three|four|five|six|satu|dua|tiga|empat|lima|enam)\s*(?:x\s*)?"
+                    r"(?:units?|aircon\w*|air[- ]?cond\w*|ac|biji|buah|pcs|pieces)\b", re.I)
+_HORSEPOWER = re.compile(r"\b(\d(?:[.,]\d)?)\s*(?:hp|h\.p\.|horse ?power|kuasa kuda)\b", re.I)
+_SERVICE_KINDS = [("chemical_overhaul", re.compile(r"\b(overhaul|dismantle|bongkar)\b", re.I), "chemical overhaul"),
+                  ("chemical_wash", re.compile(r"\b(chemical|kimia)\b", re.I), "chemical wash"),
+                  ("gas_topup", re.compile(r"\b(gas|freon|refrigerant|top[- ]?up|tambah gas)\b", re.I), "gas top-up"),
+                  ("general_service", re.compile(r"\b(general|normal|regular|routine|biasa|servis biasa|just (?:a )?service)\b", re.I),
+                   "general service")]
+_NOT_SURE = re.compile(r"\b(not sure|don'?t know|do not know|no idea|tak pasti|tidak pasti|tak tahu|idk)\b", re.I)
+_ISSUE = re.compile(r"\b(not cold|tak sejuk|tidak sejuk|water (?:is )?(?:drip\w*|leak\w*)|drip\w*|leak\w*|smell\w*|bau|noise\w*|"
+                    r"bising|blinking|beep\w*|ice|freez\w*|menitis|bocor|kelip|not cooling|warm)\b", re.I)
+
+
+def _prefill_aircon(state, message, config, replace=False):
+    """Answers about an aircon job the backend reads itself: how many units, the horsepower, the service. `replace` lets
+    a plain statement after the job was finished ("make it 3 units") change what was said before."""
+    required, v = set(state.required_fields(config)), state.verified
+    asked = state.next_missing(config)
+    if "unit_count" in required and (replace or "unit_count" not in v):
+        found = _UNITS.search(message)
+        if found:
+            word = found.group(1).lower()
+            v["unit_count"] = str(int(word) if word.isdigit() else _UNIT_WORDS[word])
+        elif asked == "unit_count" and re.fullmatch(r"\s*(\d{1,2}|one|two|three|four|five|six|satu|dua|tiga|empat|lima|enam)\s*[.!]?\s*", message, re.I):
+            word = message.strip(" .!").lower()
+            v["unit_count"] = str(int(word) if word.isdigit() else _UNIT_WORDS[word])
+    if "horsepower" in required and (replace or "horsepower" not in v):
+        found = _HORSEPOWER.search(message)
+        if found:
+            v["horsepower"] = found.group(1).replace(",", ".") + " HP"
+        elif asked == "horsepower" and _NOT_SURE.search(message):
+            v["horsepower"] = "not sure"                # the technician reads it from the unit
+        elif asked == "horsepower" and re.fullmatch(r"\s*\d(?:[.,]\d)?\s*[.!]?\s*", message):
+            v["horsepower"] = message.strip(" .!").replace(",", ".") + " HP"
+    if "service_type" in required and (replace or "service_type" not in v):
+        for _key, pattern, label in _SERVICE_KINDS:
+            if pattern.search(message):
+                v["service_type"] = label
+                break
+    if "aircon_issue" in required and "aircon_issue" not in v:
+        if _ISSUE.search(message) and "?" not in message:
+            v["aircon_issue"] = " ".join(message.split())[:160]
+        elif asked == "aircon_issue" and flow._BARE_NO.match(message):
+            v["aircon_issue"] = "no problem reported, routine service"
+    if state.photo_assessment is None and "aircon_issue" not in v and state.last_photo_id and "aircon_issue" in required:
+        v["aircon_issue"] = PHOTO_CONDITION             # a photo of the unit is the description
+
+
 # A plain number answering a size question is metres when it is a believable room size; 10 or 12 could
 # be feet, and a number next to "wall", "room", "coat"... is a count, so those are left to the model.
 PLAIN_METRES = (1.5, 8.0)
@@ -697,6 +755,15 @@ def _prefill_measurement(state, message, config):
     for key, value in cued.items():                     # "height of 3 meters", "4 m long", a square room's perimeter
         keep(key, value)
     open_fields = [k for k in open_fields if k not in cued]
+    known = [state.verified[k] for k in ("room_length_m", "room_width_m") if state.verified.get(k)]
+    numbers = numbers_in(message)
+    if len(open_fields) == 1 and known and len(numbers) == 2 and set(unit_factors_in(message)) <= {1.0} \
+            and estimate_in(message)[0] is None:          # not a range like "4 to 5 m"
+        # "it's eight by four": one of the two figures repeats a size already given, so the other answers the open one
+        left = [n for n in numbers if all(abs(n - k) > 1e-6 for k in known)]
+        if len(left) == 1 and PLAIN_METRES[0] <= left[0] <= PLAIN_METRES[1]:
+            keep(open_fields[0], left[0])
+            return
     loose = bool(_COUNT_NOUNS.search(message)) or _bare_number(message) or bool(re.fullmatch(r"[\d\s.,]+", message.strip()))
     sizes = sizes_in(message, loose=loose)
     if sizes and all(n > 0 for n in sizes) and len(open_fields) >= len(sizes):

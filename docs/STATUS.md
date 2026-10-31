@@ -38,13 +38,18 @@ the server class in `src/calendar_scheduler.py` are kept for later but are not u
 8. **Estimate PDF is a preview only**; it is not sent to the customer as a WhatsApp document.
 9. **Alerts for the owner.** The mobile app receives Expo push notifications; the web dashboard only shows new quotes and
    "needs a person" messages when it is open (it polls).
-10. **Privacy.** A PDPA consent notice before anything is read, STOP to erase, and owner erasure exist (see `docs/PDPA.md`). Still missing: a spoken notice for calls, automatic expiry, a customer data export.
+10. **Privacy.** A PDPA consent notice before anything is read (spoken on calls, answered by "yes" or "no"), STOP to erase, and owner erasure exist (see `docs/PDPA.md`). Still missing: automatic expiry, a customer data export.
 11. **Scope.** Only interior walls and ceilings are priced; trim, doors and exterior work go to a person.
 12. **Operations.** No automated alerting, no database backup routine, no automated frontend tests, no CI.
 13. **Orbyte.** The dashboard follows Orbyte's layout and the hub interface is assumed (`docs/ORBYTE.md`); there is no live
    Orbyte API to connect to.
-14. **Second trade in the chat.** Aircon has its pricing engine and AI rules, but the chat flow (`src/flow.py`, the fields it
-   asks for) is still painting-only.
+14. **Second trade in the chat.** One chat serves painting and aircon (`EXTRA_TRADES`, default `aircon`; `src/trades.py`). The
+   trade is read from the customer's words, then by the model, and asked when still unclear ("painting or aircon servicing?").
+   Aircon asks for the service, the number of units, the horsepower, any problem and the date, then prices from
+   `config/trades/aircon.json`; the dashboard form shows units, service, horsepower and condition. Aircon photos go to the vision model with an aircon prompt
+   (`src/vision.py`): it names the unit type and what it sees (dirty filter, water stains, ice...) from fixed lists, never a
+   number. Not done: no aircon-specific FAQ answers, and the second trade and its photo prompt have not been tried with the
+   live model.
 
 ## Stress testing the chat
 

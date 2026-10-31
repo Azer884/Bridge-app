@@ -138,7 +138,7 @@ async def entrypoint(ctx: agents.JobContext):
         # One backend call per finished turn. Preemptive generation would send a message to the assistant for every
         # partial transcript ("Hello?", "Hello? I want to paint...") and each one is stored as a customer message.
         preemptive_generation=False,
-        min_endpointing_delay=float(os.environ.get("VOICE_MIN_ENDPOINTING_DELAY", "0.7")),
+        min_endpointing_delay=float(os.environ.get("VOICE_MIN_ENDPOINTING_DELAY", "1.1")),    # callers pause between sizes: wait, do not answer half a list
         max_endpointing_delay=float(os.environ.get("VOICE_MAX_ENDPOINTING_DELAY", "3.0")),
         min_interruption_words=2,                  # one stray word or an echo of the agent does not cut it off
         stt=inference.STT(model=os.environ.get("VOICE_STT_MODEL", "deepgram/nova-3"),

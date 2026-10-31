@@ -55,6 +55,7 @@ class ConversationState:
     reasks: dict = field(default_factory=dict)   # times each question was asked again because it was not answered
     unit_factor: float = 1.0       # metres per unit the customer measures in (0.3048 once they said feet)
     declined: bool = False         # the request was outside the services offered (exterior work, say)
+    trade: str = ""                # the trade this job is for when the business offers several ("" until it is clear)
 
     def required_fields(self, config):
         wanted = set(config["required_fields"])

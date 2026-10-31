@@ -31,8 +31,10 @@ customer is told to reply STOP to erase everything or 1 to carry on. The model n
 Only messages that contain a related word, or are long, are sent to the model. Set `AI_INTENTS=0` to turn the model reading off.
 The same reading recognises a cancel and a restart said in other words, but only when the model is at least 85% sure.
 
-Calls are not covered yet: the voice agent answers without the notice. Either tell callers at the start of the call or turn
-calls off until a spoken notice is added.
+**Calls.** A caller gets the same notice, spoken (`consent_notice_voice`): what is recorded, who sees it, and that they can say
+"stop" to have it erased. Nothing they say is read or saved until they say "yes" (or "ya", "setuju"); "no" declines, and any
+other answer is asked again by voice (`consent_again_voice`) up to three times. The first thing the caller said is kept
+unread and replayed once they agree. The agent's greeting still says the call is recorded.
 
 ## Principles
 
@@ -53,7 +55,6 @@ shows the state per customer.
 
 ## Not done yet
 
-- A spoken notice for calls.
 - Automatic deletion after a retention period.
 - A data export for a customer.
 - Naming cross-border transfers in the notice.

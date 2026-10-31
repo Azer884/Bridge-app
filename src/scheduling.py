@@ -125,6 +125,7 @@ def _wanted(pref, start, hours):
         return 0, []
     bonus, matched = 0, []
     day = start.date()
+    asked_day = pref.get("date") is not None or pref.get("weekday") is not None
     if pref.get("date") is not None:
         if day == pref["date"]:
             bonus, matched = bonus + 40, matched + ["day"]
@@ -133,6 +134,8 @@ def _wanted(pref, start, hours):
             bonus, matched = bonus + 40, matched + ["day"]
     elif pref.get("after") is not None and day >= pref["after"]:
         bonus, matched = bonus + 15, matched + ["week"]
+    if asked_day and "day" not in matched:
+        return bonus, matched                           # "Thursday morning" is not met by a Monday morning
     if pref.get("hour") is not None:
         if abs(start.hour + start.minute / 60 - pref["hour"]) <= 1:
             bonus, matched = bonus + 25, matched + ["time"]
@@ -153,8 +156,9 @@ MAX_HOURS_PER_DAY = 8
 
 
 def work_windows(day, rules=RULES):
-    """The crew's working periods on `day` as (start, end) datetimes; [] on a day off."""
-    if day.weekday() not in rules.working_days:
+    """The crew's working periods on `day` as (start, end) datetimes; [] on a day off (a weekend or a public holiday)."""
+    from .flow import _closed_day
+    if _closed_day(day, rules.working_days):
         return []
     opening, close = rules.day_start, SATURDAY_CLOSE if day.weekday() == 5 else rules.day_end
     windows = []
@@ -258,7 +262,10 @@ def suggest_slots(bookings, hours, address="", now=None, rules=RULES, extra_busy
     busy = _busy(bookings, ignore_id, rules)
     extra = [(parse_time(s), parse_time(e)) for s, e in extra_busy]
     candidates = {}
-    for offset in range(rules.search_days + 1):
+    reach = rules.search_days
+    if preference and preference.get("date") is not None:       # a day further out than the usual window is still looked at
+        reach = min(90, max(reach, (preference["date"] - now.date()).days + 3))
+    for offset in range(reach + 1):
         day = now.date() + timedelta(days=offset)
         if day.weekday() not in rules.working_days:
             continue
@@ -290,7 +297,7 @@ def suggest_slots(bookings, hours, address="", now=None, rules=RULES, extra_busy
             first_day = segments[0][0].date()
             first_day_hours = sum((e - s).total_seconds() / 3600 for s, e in segments if s.date() == first_day)
             wanted, matched = _wanted(preference, segments[0][0], first_day_hours)
-            score, reason = 80 - 2 * offset + wanted, "Free time"
+            score, reason = 80 - 2 * min(offset, 10) + wanted, "Free time"      # a far-off day the customer asked for must still win
             if matched:
                 said = preference["text"][:40]
                 reason = (f'Matches what the customer asked for ("{said}")' if "time" in matched
@@ -316,16 +323,34 @@ def suggest_slots(bookings, hours, address="", now=None, rules=RULES, extra_busy
             if cluster:
                 score += cluster
                 reason = why_cluster if not matched else f"{reason}; {why_cluster[0].lower()}{why_cluster[1:]}"
-            candidates[start] = {"start": segments[0][0].isoformat(), "end": segments[-1][1].isoformat(),
+            candidates[start] = {"start": segments[0][0].isoformat(), "end": segments[-1][1].isoformat(), "hours": hours,
                                  "score": max(0, min(100, int(score))), "reason": reason, "_raw": score}
     plain = sorted((c for c in candidates.values() if c["reason"] == "Free time"), key=lambda c: c["start"])
     if plain:
         plain[0]["reason"] = "Earliest free time"
     ranked = sorted(candidates.values(), key=lambda c: (-c["_raw"], c["start"]))     # the raw score keeps ties apart
+    ranked = _spread(ranked, limit)
     top = max((c["_raw"] for c in ranked), default=100)
     scale = 100 / top if top > 100 else 1                   # keep the best at 100 and the rest in proportion
     return [{**{k: v for k, v in c.items() if k not in ("_raw", "score")}, "score": max(0, int(c["_raw"] * scale))}
             for c in ranked[:limit]]
+
+
+PER_DAY = 2
+
+
+def _spread(ranked, limit):
+    """The best slots with no more than PER_DAY on one day, so six suggestions are not two days of the same choice; the
+    rest only fill up when there are too few other days."""
+    first, rest, seen = [], [], {}
+    for c in ranked:
+        day = c["start"][:10]
+        if seen.get(day, 0) < PER_DAY:
+            seen[day] = seen.get(day, 0) + 1
+            first.append(c)
+        else:
+            rest.append(c)
+    return (first + rest)[:max(limit, 1)] if len(first) < limit else first
 
 
 def new_booking(user_id, customer, phone, address, start, hours, status="tentative", rules=RULES, location=None):

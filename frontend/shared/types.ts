@@ -94,7 +94,7 @@ export interface ParamField {
 
 export interface ExtractedParams {
   /** Which calculation engine and form layout apply. */
-  kind: "painting" | "plumbing" | "general";
+  kind: "painting" | "aircon" | "plumbing" | "general";
   schema: ParamField[];
   /** What the model extracted. Never changes. */
   ai: Record<string, ParamValue>;
@@ -120,7 +120,7 @@ export interface Photo {
 }
 
 export type AuditActor = "customer" | "ai" | "system" | "owner";
-export type AuditType = "state_change" | "ai_extraction" | "override" | "calculation" | "pdf" | "send" | "schedule";
+export type AuditType = "state_change" | "ai_extraction" | "override" | "calculation" | "pdf" | "send" | "schedule" | "consent" | "handoff";
 
 export interface AuditEntry {
   /** Position in the log. Increases by one, never reused. */
@@ -163,6 +163,8 @@ export interface PdfPreview {
 export interface Slot {
   start: string;
   end: string;
+  /** Working hours of the job. A job of more than one working day starts on `start` and ends on `end`, days later. */
+  hours?: number;
   /** 0 to 100. Higher is better. */
   score: number;
   reason: string;

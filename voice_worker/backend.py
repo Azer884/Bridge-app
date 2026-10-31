@@ -20,7 +20,15 @@ MAX_SPOKEN_CHARS = 1000
 # Words the speech model should favour; callers have accents and phone lines are noisy. Extend with VOICE_STT_KEYTERMS.
 KEYTERMS = ["sitting room", "living room", "master bedroom", "bedroom", "bathroom", "kitchen", "dining room",
             "ceiling", "skirting", "wall", "walls", "repaint", "meters", "feet", "Jotun", "Nippon Paint", "Dulux",
-            "economy", "standard", "premium", "ruang tamu", "bilik tidur", "dinding", "siling", "cat", "kali"]
+            "economy", "standard", "premium", "ruang tamu", "bilik tidur", "dinding", "siling", "cat", "kali",
+            # aircon servicing
+            "aircon", "air conditioner", "aircond", "chemical wash", "chemical overhaul", "general service", "gas top-up",
+            "horsepower", "HP", "wall-mounted", "cassette", "compressor", "servis", "cuci kimia", "kuasa kuda",
+            # Malaysian places and street words: callers say these quickly and with their own accent
+            "Jalan", "Lorong", "Taman", "Kuala Lumpur", "Petaling Jaya", "Shah Alam", "Subang Jaya", "Cheras", "Ampang",
+            "Klang", "Kajang", "Puchong", "Bangsar", "Mont Kiara", "Damansara", "Setapak", "Seri Kembangan", "Bukit Jalil",
+            "Sri Petaling", "Cyberjaya", "Putrajaya", "Selangor", "Johor Bahru", "Penang", "Ipoh",
+            "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "tomorrow", "Isnin", "Selasa", "Rabu", "Khamis", "Jumaat", "esok"]
 
 
 def keyterms():
@@ -32,11 +40,26 @@ _HYPE = re.compile(r"(?:(?<=[.?!])|^)\s*(?:perfect|great|wonderful|awesome|fanta
                    r"sure thing|of course|absolutely|bagus|hebat)\s*[.!,]+\s*(?=\S)", re.I)
 
 
+_PHONE_SAID = re.compile(r"(?<![\w.])(\+?)(\d[\d\s-]{6,}\d)(?![\w])")
+
+
+def _digits_aloud(match):
+    """A phone number is read digit by digit in groups ("0 1 2, 3 4 5, 6 7 8 9") so the caller hears each digit and can
+    correct a misheard one; a long number said as one figure is unintelligible."""
+    digits = re.sub(r"\D", "", match.group(2))
+    if not 8 <= len(digits) <= 13:
+        return match.group(0)
+    groups = [digits[:3], digits[3:6], digits[6:]] if len(digits) > 6 else [digits]
+    said = ", ".join(" ".join(g) for g in groups if g)
+    return ("plus " if match.group(1) else "") + said
+
+
 def spoken(replies):
     """Reply text as it should be said aloud: calm, no bullets, labels, symbols or line breaks, never "dot" or
     "slash", and not a wall of speech."""
     text = " ".join(r for r in replies if r)
     text = re.sub(r"https?://\S+", "", text)                    # a link cannot be said
+    text = _PHONE_SAID.sub(_digits_aloud, text)                 # "0123456789" is "0 1 2, 3 4 5, 6 7 8 9"
     text = re.sub(r"\(\s*demo\s*\)", "", text, flags=re.I)
     text = re.sub(r"^\s*[-*]\s*", "", text, flags=re.M)         # list bullets
     text = re.sub(r"\s*\n\s*", ". ", text)                      # one line per sentence

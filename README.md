@@ -111,7 +111,7 @@ One SME, one task, one run: a customer asks for a repaint on WhatsApp and ends w
 ## Reuse through Orbyte
 
 - **Same trade, new business:** copy `config/business_config.example.json`, set the name, owner, rate card and working rules. No code change.
-- **New trade:** add `prompts/trades/<trade>.txt` (what to collect, inspection cases, trade words) and a rate card such as `config/trades/aircon.json`, then set `"trade_type"` in the business config. The aircon pricing engine already exists (`src/pricing_aircon.py`); the chat flow for aircon is still being made trade-neutral.
+- **New trade:** add `prompts/trades/<trade>.txt` (what to collect, inspection cases, trade words) and a rate card such as `config/trades/aircon.json`, then set `"trade_type"` in the business config. The aircon pricing engine is `src/pricing_aircon.py`. One chat can offer several trades (`EXTRA_TRADES`, default `aircon`): the trade is read from what the customer says, by the model when the words are not enough, and asked when it is still unclear.
 - **Inside Orbyte:** a hub can call Gesir with the API key and a role, receive signed events, and embed the dashboard (`ORBYTE_ORIGIN`). See [`docs/ORBYTE.md`](docs/ORBYTE.md).
 
 See [`docs/STATUS.md`](docs/STATUS.md) for what is built and what is still missing.
@@ -324,7 +324,7 @@ curl -X POST https://api.runpod.ai/v2/$RUNPOD_ENDPOINT_ID/runsync \
 
 - [ ] Confirm voice notes and WhatsApp calls end to end in the live demo
 - [x] Exclude weekends and Malaysian public holidays (`config/holidays.json`)
-- [ ] Make the chat flow trade-neutral, so aircon chats run end to end
+- [x] Painting and aircon in the same chat (read from context, or asked); not yet tried with the live model
 - [ ] WhatsApp message templates, so estimates and slot offers work after the 24-hour window
 - [ ] Rate card and working-hours editor in the dashboard, with the SME's real prices
 - [ ] Owner notifications (WhatsApp or push) for new quotes and messages that need a person

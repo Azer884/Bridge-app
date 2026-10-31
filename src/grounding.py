@@ -120,7 +120,7 @@ _CUE_KEYS = {"height": "room_height_m", "tall": "room_height_m", "high": "room_h
              "length": "room_length_m", "long": "room_length_m", "panjang": "room_length_m",
              "width": "room_width_m", "wide": "room_width_m", "lebar": "room_width_m"}
 _CUE_WORD = re.compile(r"\b(" + "|".join(_CUE_KEYS) + r")\b", re.I)
-_UNIT_WORD = r"(m\b|metres?|meters?|meter|cm|ft|feet|foot|kaki)"
+_UNIT_WORD = r"(m\b|metres?|meters?|meter|centimet\w+|cm|ft|feet|foot|kaki)"
 _AMOUNT = re.compile(rf"\b({_NUM})(?:\s*{_UNIT_WORD})?", re.I)
 _DECIMAL = re.compile(rf"\b({_NUM})\s+(?:point|dot|titik)\s+({_NUM})\b", re.I)
 
@@ -131,6 +131,232 @@ def spoken_decimals(text):
         whole, part = numbers_in(match.group(1)), numbers_in(match.group(2))
         return f"{whole[0]:g}.{int(part[0])}" if whole and part else match.group(0)
     return _DECIMAL.sub(join, text)
+
+
+_HALF = re.compile(rf"\b({_NUM})\s+and\s+a\s+half\b", re.I)
+_HUNDRED = re.compile(r"\b(\d+|one|two|three|four|five|six|seven|eight|nine)\s+hundred\b(?:\s+(?:and\s+)?((?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[\s-](?:one|two|three|four|five|six|seven|eight|nine))?"
+                      r"|(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen))\b)?", re.I)
+_UNIT_DOT = re.compile(r"\b(m|cm|mm|ft)\.(?=\s|$)", re.I)                      # "5 m. long": speech-to-text ends the unit with a dot
+_UNIT_HYPHEN = re.compile(r"(?<=\w)-(?=(?:meters?|metres?|feet|foot|ft|cm|centimet\w+|m)\b)", re.I)   # "five-meter long"
+_IN_CUE = re.compile(r"\bin\s+(length|width|height)\b", re.I)
+_IN_CUE_WORD = {"length": "long", "width": "wide", "height": "high"}
+
+
+def spoken_sizes(text):
+    """How speech-to-text and people on a call write sizes, turned into what the readers expect: "three point five" and
+    "five and a half" are 3.5 and 5.5, "five hundred centimeters" is 500, "5 m." and "five-meter" lose the dot and hyphen,
+    and "five meters in length" is "five meters long"."""
+    text = spoken_decimals(str(text))
+
+    def half(match):
+        whole = numbers_in(match.group(1))
+        return f"{whole[0]:g}.5" if whole else match.group(0)
+
+    def hundred(match):
+        head = numbers_in(match.group(1))
+        if not head:
+            return match.group(0)
+        total = head[0] * 100
+        if match.group(2):
+            tail = numbers_in(match.group(2))
+            if len(tail) != 1:
+                return f"{total:g} {match.group(2)}"
+            total += tail[0]
+        return f"{total:g}"
+
+    text = _HALF.sub(half, text)
+    text = _HUNDRED.sub(hundred, text)
+    text = _UNIT_DOT.sub(lambda m: m.group(1), text)
+    text = _UNIT_HYPHEN.sub(" ", text)
+    return _IN_CUE.sub(lambda m: _IN_CUE_WORD[m.group(1).lower()], text)
+
+
+# --- the rest of what people say aloud: phone numbers, dates, street numbers ------------------------------------------------
+_DIGIT_WORDS = {"zero": "0", "oh": "0", "one": "1", "two": "2", "three": "3", "four": "4", "five": "5", "six": "6", "seven": "7",
+                "eight": "8", "nine": "9"}
+_DIGIT_RUN = re.compile(r"(?:\bplus\s+)?(?:\b(?:double|triple)\s+)?\b(?:" + "|".join(_DIGIT_WORDS) + r")\b"
+                        r"(?:[\s,.\-]+(?:(?:double|triple)\s+)?(?:" + "|".join(_DIGIT_WORDS) + r")\b){5,}", re.I)
+
+
+def spoken_digits(text):
+    """"zero one two three four five six seven eight nine" or "oh one two, double three ..." is a phone number: a run of at
+    least six digit words becomes digits ("plus six zero ..." keeps its plus). Shorter runs are left alone."""
+    def join(match):
+        out, repeat = [], 1
+        for word in re.findall(r"plus|double|triple|[a-z]+", match.group(0).lower()):
+            if word == "plus":
+                out.append("+")
+            elif word in ("double", "triple"):
+                repeat = 2 if word == "double" else 3
+            elif word in _DIGIT_WORDS:
+                out.append(_DIGIT_WORDS[word] * repeat)
+                repeat = 1
+        digits = "".join(out)
+        return digits if len(digits.lstrip("+")) >= 7 else match.group(0)
+    return _DIGIT_RUN.sub(join, text)
+
+
+_ORDINAL_WORDS = {"first": 1, "second": 2, "third": 3, "fourth": 4, "fifth": 5, "sixth": 6, "seventh": 7, "eighth": 8,
+                  "ninth": 9, "tenth": 10, "eleventh": 11, "twelfth": 12, "thirteenth": 13, "fourteenth": 14, "fifteenth": 15,
+                  "sixteenth": 16, "seventeenth": 17, "eighteenth": 18, "nineteenth": 19, "twentieth": 20, "thirtieth": 30}
+_ORDINAL_TENS = {"twenty": 20, "thirty": 30}
+_DAY_WORD = (r"(?:(?:twenty|thirty)[\s-](?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth)|" + "|".join(_ORDINAL_WORDS)
+             + r"|(?:twenty|thirty)(?:[\s-](?:one|two|three|four|five|six|seven|eight|nine))?|" + "|".join(w for w in ONES if w.isascii() and w != "zero")
+             + r"|\d{1,2}(?:st|nd|rd|th)?)")
+_MONTHS_SPOKEN = (r"(?:january|jan|february|feb|march|mar|april|apr|may|june|jun|july|jul|august|aug|september|sept|sep|october|oct|"
+                  r"november|nov|december|dec)")
+_THE_OF = re.compile(rf"\b(?:the\s+)?({_DAY_WORD})\s+(?:of\s+)({_MONTHS_SPOKEN})\b", re.I)
+_MONTH_THE = re.compile(rf"\b({_MONTHS_SPOKEN})\s+(?:the\s+)?({_DAY_WORD})\b", re.I)
+_MONTHS_NO_MAY = _MONTHS_SPOKEN.replace("may|", "")                 # "five may be enough" is not the 5th of May
+_WORD_MONTH = re.compile(rf"\b({_DAY_WORD})\s+({_MONTHS_NO_MAY})\b", re.I)
+_HOUR_WORD = re.compile(r"\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s*(a\.?m\.?|p\.?m\.?)(?=\W|$)", re.I)
+_AMPM_DOTS = re.compile(r"\b([ap])\.m\.?(?=\W|$)", re.I)
+_STREET_WORDS = (r"(?:jalan|jln|lorong|lrg|lebuh|persiaran|lengkok|taman|tmn|bandar|kampung|kg|block|blok|lot|unit|no|number)")
+
+
+def _day_number(word):
+    """The day a spoken day word means ("fifth", "twenty first", "5th", "five"), or None."""
+    word = word.lower().strip()
+    digits = re.fullmatch(r"(\d{1,2})(?:st|nd|rd|th)?", word)
+    if digits:
+        return int(digits.group(1))
+    if word in _ORDINAL_WORDS:
+        return _ORDINAL_WORDS[word]
+    parts = re.split(r"[\s-]+", word)
+    if parts[0] in _ORDINAL_TENS:
+        if len(parts) == 1:
+            return _ORDINAL_TENS[parts[0]]
+        tail = _ORDINAL_WORDS.get(parts[1]) or ONES.get(parts[1])
+        return _ORDINAL_TENS[parts[0]] + tail if tail else None
+    return ONES.get(word)
+
+
+def spoken_dates(text):
+    """"the fifth of November", "November the fifth", "five November" are "5 November" and "November 5"; "ten a.m." is
+    "10 am" and "p.m." is "pm"."""
+    def day_month(match):
+        day = _day_number(match.group(1))
+        return f"{day} {match.group(2)}" if day is not None else match.group(0)       # 32 stays: it is then refused as a date that does not exist
+
+    def month_day(match):
+        day = _day_number(match.group(2))
+        return f"{match.group(1)} {day}" if day is not None else match.group(0)
+
+    def hour(match):
+        return f"{ONES[match.group(1).lower()]} {match.group(2)[0].lower()}m"
+
+    text = _THE_OF.sub(day_month, text)
+    text = _WORD_MONTH.sub(day_month, text)
+    text = _MONTH_THE.sub(month_day, text)
+    text = _HOUR_WORD.sub(hour, text)
+    return _AMPM_DOTS.sub(lambda m: m.group(1).lower() + "m", text)
+
+
+_STREET_NUMBER_WORDS = re.compile(
+    rf"\b((?:(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)[\s-]?)?(?:one|two|three|four|five|six|seven|eight|nine|ten|"
+    rf"eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)|(?:twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety))"
+    rf"(?=\s+{_STREET_WORDS}\b)", re.I)
+_SECTION_WORDS = re.compile(rf"\b(ss|usj|pju|section|seksyen)\s+({_DAY_WORD})(?:\s+(?:slash|stroke|over)\s+({_DAY_WORD}))?", re.I)
+
+
+def spoken_places(text):
+    """"twelve Jalan Ampang" and "twenty five Jalan SS two slash three" are 12 and 25 Jalan SS 2/3."""
+    def number(match):
+        words = match.group(1).lower()
+        value = [numbers for numbers in numbers_in(words)]
+        return f"{value[0]:g}" if len(value) == 1 else match.group(0)
+
+    def section(match):
+        first = _day_number(match.group(2))
+        second = _day_number(match.group(3)) if match.group(3) else None
+        if first is None:
+            return match.group(0)
+        return f"{match.group(1)} {first}" + (f"/{second}" if second is not None else "")
+
+    return _SECTION_WORDS.sub(section, _STREET_NUMBER_WORDS.sub(number, text))
+
+
+_HOUR_W = r"(?:twelve|eleven|ten|nine|eight|seven|six|five|four|three|two|one|\d{1,2})"
+_PART_AFTER = r"(?:\s+(?:in\s+the\s+|at\s+)?(?P<part>morning|afternoon|evening|night)\b|\s*(?P<ap>[ap])\.?m\b\.?)?"
+_MIN_W = r"(?:five|ten|twenty[\s-]five|twenty|fifteen|thirty|forty[\s-]five)"
+_HALF_QUARTER = re.compile(rf"\b(half|quarter)\s+(past|to)\s+({_HOUR_W})\b{_PART_AFTER}", re.I)
+_MIN_PAST_TO = re.compile(rf"\b({_MIN_W})\s+(past)\s+({_HOUR_W})\b{_PART_AFTER}", re.I)     # "to" is left: "five to ten" is a range
+_OCLOCK = re.compile(rf"\b({_HOUR_W})\s+o'?\s?clock\b{_PART_AFTER}", re.I)
+_HOUR_MIN = re.compile(rf"\b(?:at\s+)?({_HOUR_W})\s+(thirty|fifteen|forty[\s-]five)\b{_PART_AFTER}", re.I)
+_MINUTES_OF = {"thirty": 30, "fifteen": 15, "forty five": 45, "forty-five": 45}
+
+
+def _hour_number(word):
+    word = word.lower()
+    return int(word) if word.isdigit() else ONES.get(word)
+
+
+def _clock(hour, minute, part):
+    """H:MM for a time said aloud. A part of the day makes it am or pm; without one, 1 to 6 means the afternoon (the crew works
+    9 to 6), and 7 to 12 is left as it is."""
+    if hour is None or not 1 <= hour <= 12 or not 0 <= minute < 60:
+        return None
+    if part:
+        pm = part.lower() != "morning" and not (hour == 12 and part.lower() == "morning")
+        pm = pm and hour != 12 or (hour == 12 and part.lower() != "morning")
+        suffix = " pm" if pm else " am"
+        return f"{hour}:{minute:02d}{suffix}"
+    return f"{hour}:{minute:02d} pm" if 1 <= hour <= 6 else f"{hour}:{minute:02d}"
+
+
+def _part(match):
+    """"morning" or "afternoon" from what followed a time said aloud ("in the morning", "pm"), or None."""
+    if match.group("part"):
+        return match.group("part")
+    if match.group("ap"):
+        return "morning" if match.group("ap").lower() == "a" else "afternoon"
+    return None
+
+
+def spoken_times(text):
+    """"half past two", "quarter to three", "ten past nine", "two o'clock" and "at two thirty" as 2:30 pm, 2:45 pm, 9:10, 2:00 pm."""
+    def half_quarter(match):
+        hour = _hour_number(match.group(3))
+        if hour is None:
+            return match.group(0)
+        kind, direction = match.group(1).lower(), match.group(2).lower()
+        if direction == "past":
+            minute, base = (30 if kind == "half" else 15), hour
+        elif kind == "quarter":
+            minute, base = 45, (hour - 1) or 12
+        else:
+            return match.group(0)                                   # "half to" is not a time
+        return _clock(base, minute, _part(match)) or match.group(0)
+
+    def min_past_to(match):
+        minutes = numbers_in(match.group(1).replace("-", " "))
+        hour = _hour_number(match.group(3))
+        if not minutes or hour is None:
+            return match.group(0)
+        minute = int(minutes[0])
+        if match.group(2).lower() == "to":
+            minute, hour = 60 - minute, (hour - 1) or 12
+        return _clock(hour, minute, _part(match)) or match.group(0)
+
+    def oclock(match):
+        return _clock(_hour_number(match.group(1)), 0, _part(match)) or match.group(0)
+
+    def hour_min(match):
+        minute = _MINUTES_OF.get(re.sub(r"\s+", " ", match.group(2).lower().replace("-", " ")).replace(" ", "-")) \
+            or _MINUTES_OF.get(match.group(2).lower().replace("-", " "))
+        if not _part(match) and not match.group(0).lower().startswith("at "):
+            return match.group(0)                                   # "two thirty" alone could be a size: it needs "at", am or pm
+        return _clock(_hour_number(match.group(1)), minute or 0, _part(match)) or match.group(0)
+
+    text = _HALF_QUARTER.sub(half_quarter, text)
+    text = _MIN_PAST_TO.sub(min_past_to, text)
+    text = _OCLOCK.sub(oclock, text)
+    return _HOUR_MIN.sub(hour_min, text)
+
+
+def normalise_speech(text):
+    """Everything said aloud that the readers expect written: sizes, phone numbers, dates, street numbers."""
+    return spoken_places(spoken_times(spoken_dates(spoken_digits(spoken_sizes(text)))))
 
 
 _PERIMETER = re.compile(rf"perim\w*\D{{0,12}}({_NUM})\s*(m\b|metres?|meters?|meter|cm|ft|feet|kaki)?", re.I)

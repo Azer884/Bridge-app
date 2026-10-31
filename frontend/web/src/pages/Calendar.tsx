@@ -119,7 +119,7 @@ export default function Calendar() {
   }, [slots.data]);
 
   const openSlot = (s: Slot) =>
-    setCreating({ user_id: suggestFor, date: dateInput(new Date(s.start)), time: timeInput(new Date(s.start)), hours: hoursOf(s) });
+    setCreating({ user_id: suggestFor, date: dateInput(new Date(s.start)), time: timeInput(new Date(s.start)), hours: slotHours(s) });
 
   const shift = (dir: number) =>
     setAnchor((a) => (view === "month" ? new Date(a.getFullYear(), a.getMonth() + dir, 1) : addDays(a, dir * (view === "week" ? 7 : 1))));
@@ -158,7 +158,7 @@ export default function Calendar() {
         {suggestFor && !slots.loading && slots.data && slots.data.length === 0 && <p className="muted">No free window found in the next two weeks. Book by hand, or free up some time.</p>}
         {slots.data && slots.data.length > 0 && (
           <>
-            <p className="muted">For {picked?.job.name ?? "this customer"}: about {hoursOf(slots.data[0])} h on site{picked?.job.preferred_datetime ? `. They asked for: ${picked.job.preferred_datetime}.` : "."}</p>
+            <p className="muted">For {picked?.job.name ?? "this customer"}: about {slotHours(slots.data[0])} h on site{picked?.job.preferred_datetime ? `. They asked for: ${picked.job.preferred_datetime}.` : "."}</p>
             <div className="slots">
               {slots.data.map((s, i) => (
                 <button key={s.start} className={`slot${i === 0 ? " best" : ""}`} onClick={() => openSlot(s)}>
@@ -312,18 +312,38 @@ function workProblem(date: string, time: string, hours: number): string | null {
   const start = hourOf(time);
   if (start < DAY_START || start >= DAY_END) return "Start between 9 am and 6 pm.";
   if (start >= LUNCH_START && start < LUNCH_END) return "1 pm to 2 pm is lunch. Start before 1 pm or from 2 pm.";
-  if (endOf(start, hours) == null) {
+  if (hours <= MAX_DAY_HOURS && endOf(start, hours) == null) {      // a job of more than a day carries on the next working days
     const longest = fits(time).pop();
     return longest ? `That runs past 6 pm. From this start the longest job is ${hoursLabel(longest)}.` : "There is no time left in the day from this start.";
   }
   return null;
 }
 
-/** The clock end of the booking, with lunch skipped. */
+const MAX_DAY_HOURS = 8;
+const hhmm = (h: number) => `${pad(Math.floor(h))}:${pad(Math.round((h % 1) * 60))}`;
+
+/** The clock end of the booking, with lunch skipped. A job longer than what is left of the day carries on at opening time on
+ * the next working days (weekends and public holidays skipped), so the end is always a real date. */
 function endAt(date: string, time: string, hours: number): Date {
   const start = hourOf(time);
-  const end = endOf(start, hours) ?? start + hours;
-  return combine(date, `${pad(Math.floor(end))}:${pad(Math.round((end % 1) * 60))}`);
+  const end = endOf(start, hours);
+  if (end != null) return combine(date, hhmm(end));
+  const left = start < LUNCH_START ? (LUNCH_START - start) + (DAY_END - LUNCH_END) : Math.max(0, DAY_END - Math.max(start, LUNCH_END));
+  let remaining = hours - left;
+  let day = combine(date, "12:00");
+  for (let i = 0; i < 120 && remaining > 1e-9; i++) {
+    day = addDays(day, 1);
+    const iso = dateInput(day);
+    if (day.getDay() % 6 === 0 || holidaysOn(iso).length) continue;
+    if (remaining <= MAX_DAY_HOURS) return combine(iso, hhmm(endOf(DAY_START, remaining) ?? DAY_END));
+    remaining -= MAX_DAY_HOURS;
+  }
+  return combine(date, hhmm(DAY_END));
+}
+
+/** The working hours of a suggested time: the job's own hours when the server says them, else the clock length. */
+function slotHours(s: Slot): number {
+  return s.hours && s.hours > 0 ? s.hours : workHours(s);
 }
 
 /** Working hours of a booking already saved: its clock length minus the lunch hour when it spans lunch. */
@@ -411,7 +431,7 @@ function CreateDialog({ draft, quotes, fetchEvents, fetchSlots, onClose, onSaved
     fetchSlots(uid).then((s) => {
       if (!live) return;
       setSug(s);
-      if (!touched && s[0]) setHours(workHours(s[0]));
+      if (!touched && s[0]) setHours(slotHours(s[0]));
     }).catch(() => live && setSug([]));
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -420,7 +440,7 @@ function CreateDialog({ draft, quotes, fetchEvents, fetchSlots, onClose, onSaved
   const use = (s: Slot) => {
     setDate(dateInput(new Date(s.start)));
     setTime(timeInput(new Date(s.start)));
-    setHours(workHours(s));
+    setHours(slotHours(s));
     setTouched(true);
   };
   const next = sug.find((s) => findConflicts({ start: s.start, end: s.end }, [{ start: combine(date, time).toISOString(), end: endAt(date, time, hours).toISOString() }]).length === 0) ?? sug[0];

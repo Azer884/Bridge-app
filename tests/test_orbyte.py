@@ -53,12 +53,30 @@ class HubLinkTests(unittest.TestCase):
     def test_reject_blocks_the_send_and_is_recorded(self):
         res = self.api.post(f"/api/quotes/{UID}/reject", json={"reason": "price too low"}, headers=hub("approver", "Aisha"))
         self.assertEqual(res.status_code, 200)
-        self.assertEqual(self.sender.sent, [])
+        self.assertTrue(res.json()["notified"])
         self.assertEqual(self.service.store.load(UID).quote_status, "rejected")
         self.assertTrue(any("rejected: price too low" in s for s in self.audit()))
+        # the customer is told the team will be in touch: no price, and the owner's reason stays internal
+        self.assertEqual(len(self.sender.sent), 1)
+        told = str(self.sender.sent[0])
+        self.assertIn("can't give you an estimate", told)
+        self.assertNotIn("price too low", told)
+        self.assertNotIn("RM", told)
+        self.assertTrue(any("The customer was told" in s for s in self.audit()))
         # a rejected estimate cannot be approved by mistake
         self.assertEqual(self.api.post(f"/api/quotes/{UID}/approve", json={}, headers=KEY).status_code, 409)
-        self.assertEqual(self.sender.sent, [])
+        self.assertEqual(len(self.sender.sent), 1)
+
+    def test_a_rejected_job_is_flagged_rejected_and_no_longer_needs_the_owner(self):
+        state = self.service.store.load(UID)
+        state.needs_human, state.attention = True, True
+        self.service.store.save(state)
+        self.api.post(f"/api/quotes/{UID}/reject", json={"reason": "check the height"}, headers=KEY)
+        state = self.service.store.load(UID)
+        self.assertFalse(state.needs_human or state.attention)
+        item = self.api.get(f"/api/quotes/{UID}", headers=KEY).json()
+        self.assertEqual(item["status"], "rejected")
+        self.assertEqual(item["stage"], "rejected")
 
     def test_reject_needs_a_reason_and_the_right_role(self):
         self.assertEqual(self.api.post(f"/api/quotes/{UID}/reject", json={}, headers=KEY).status_code, 422)

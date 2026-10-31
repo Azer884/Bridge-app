@@ -36,7 +36,7 @@ export default function Customers() {
                 return (
                   <tr key={c.user_id}>
                     <td>
-                      <b>{c.name ?? "Unnamed client"}</b>
+                      <b>{c.name ?? "Name not given yet"}</b>
                       {(c.needs_human || c.attention) && <span className="ob-pill warn" style={{ marginLeft: 8 }}>Needs you</span>}
                     </td>
                     <td className="num">{phone(c.phone ?? c.user_id)}</td>

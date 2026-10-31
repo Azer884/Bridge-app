@@ -16,6 +16,17 @@ export const SCHEMAS: Record<ExtractedParams["kind"], ParamField[]> = {
       options: [{ value: "economy", label: "Economy" }, { value: "standard", label: "Standard" }, { value: "premium", label: "Premium" }],
     },
   ],
+  aircon: [
+    { key: "unit_count", label: "Aircon units", type: "number", min: 1, max: 20, step: 1, integer: true },
+    {
+      key: "service_type", label: "Service", type: "select",
+      options: [{ value: "general_service", label: "General service" }, { value: "chemical_wash", label: "Chemical wash" }, { value: "chemical_overhaul", label: "Chemical overhaul" }],
+    },
+    {
+      key: "horsepower", label: "Horsepower", type: "select",
+      options: [{ value: "1.0hp", label: "1.0 HP" }, { value: "1.5hp", label: "1.5 HP" }, { value: "2.0hp", label: "2.0 HP" }, { value: "2.5hp", label: "2.5 HP" }, { value: "3.0hp", label: "3.0 HP" }],
+    },
+  ],
   plumbing: [
     { key: "labour_hours", label: "Labour", type: "number", unit: "h", min: 0.5, max: 40, step: 0.5, help: "Time on site for one plumber." },
     { key: "parts_cost", label: "Parts and fittings", type: "number", unit: "MYR", min: 0, max: 20000, step: 1 },

@@ -27,8 +27,15 @@ _INTERIOR = re.compile(r"\b(interior|inside|indoors?|dalam|dalaman)\b", re.I)
 _NO_WORDS = contact.NEGATIVE | {"not", "dont", "don't", "jangan"}
 
 
-def check_service(message):
+_AIRCON_SUPPORTED = re.compile(
+    r"\b(air ?con\w*|air[- ]?cond\w*|a/c|ac|units?|servic\w*|chemical|gas|filter|cool\w*|cold|leak\w*|drip\w*|smell\w*|"
+    r"clean\w*|wash\w*|overhaul|quot\w*|sebut ?harga|servis|cuci|kimia|sejuk|menitis|biji|penghawa dingin)\b", re.I)
+
+
+def check_service(message, trade="painting"):
     """supported | unsupported | unknown (greeting or a question with no job in it)."""
+    if trade == "aircon":
+        return "supported" if _AIRCON_SUPPORTED.search(message) else "unknown"
     if _PREP.search(message):
         return "unknown"
     if _UNSUPPORTED.search(message) and not _INTERIOR.search(message):
@@ -112,6 +119,10 @@ def recap(state):
     if v.get("surfaces"):
         shown = [(_SURFACE_MS.get(str(s).lower(), s) if lang == "ms" else s) for s in v["surfaces"]]
         parts.append(f"{t('recap_surfaces', lang)}: " + ", ".join(shown))
+    for key, label in (("service_type", "recap_service"), ("unit_count", "recap_units"), ("horsepower", "recap_horsepower"),
+                       ("aircon_issue", "recap_issue")):
+        if v.get(key):
+            parts.append(f"{t(label, lang)}: {v[key]}")
     dims = [v.get(k) for k in ("room_length_m", "room_width_m", "room_height_m")]
     if single_wall(v.get("surfaces")) and dims[0] is not None and dims[2] is not None:
         parts.append(t("recap_wall", lang, l=dims[0], h=dims[2]) + _approx(state))
@@ -157,6 +168,7 @@ _DATE_WORDS = re.compile(
     r"disember)\b|"
     r"\b(lunch ?time|noon|midday|day after( tomorrow)?|next (mon|tues|wednes|thurs|fri|satur|sun)day|"
     r"in \d+ (days?|weeks?)|\d+ (days?|weeks?) (later|from now)|tengah ?hari|minggu ini)\b|"
+    r"\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s?(am|pm)\b|"     # "three AM" from a call
     r"\b\d{1,2}\s?(am|pm)\b|\b\d{1,2}:\d{2}\b|\b\d{1,2}[/-]\d{1,2}\b", re.I)
 _DATE_FILLER = {"make", "it", "sorry", "actually", "wait", "nvm", "no", "ok", "okay", "change", "to", "on", "at", "la", "lah", "pls", "please", "then"}
 _NEGATED_DATE = re.compile(r"\b(except|not|bukan|kecuali|other than|besides|excluding|apart from)\b", re.I)
@@ -225,6 +237,22 @@ def explicit_date(message):
     if found:
         return int(found.group(2)), _MONTH_NUMBER[found.group(1).lower()[:3]], int(found.group(3)) if found.group(3) else None
     return None
+
+
+def impossible_date(message, today=None):
+    """True for a day that does not exist in its month ("32 December", "31 November", "30 Feb", "0 Oct"). It is asked
+    about again, never stored or booked. "29 Feb" is fine in a leap year (this year's or next year's, or the year given)."""
+    import calendar
+    from datetime import date as _date
+    found = explicit_date(message)
+    if not found:
+        return False
+    day, month, year = found
+    if day < 1:
+        return True
+    today = today or _date.today()
+    years = [year] if year else [today.year, today.year + 1]
+    return all(day > calendar.monthrange(y, month)[1] for y in years)
 
 
 def passed_this_year(message, today=None):
@@ -338,10 +366,13 @@ def outside_working_time(message, today=None):
 
 
 def date_problem(message, today=None):
-    """A date answer that cannot be booked: 'date_past' (yesterday), 'date_past_year' ("20 Oct" when that day has gone
-    by), 'date_closed' (weekend, public holiday, or 3 am) or 'date_need_day' ("after Raya"), else None."""
+    """A date answer that cannot be booked: 'date_past' (yesterday), 'date_invalid' ("32 December"), 'date_past_year'
+    ("20 Oct" when that day has gone by), 'date_closed' (weekend, public holiday, or 3 am) or 'date_need_day'
+    ("after Raya"), else None."""
     if _PAST_DATE.search(message):
         return "date_past"
+    if impossible_date(message, today):
+        return "date_invalid"
     if passed_this_year(message, today):
         return "date_past_year"
     if outside_working_time(message, today):
@@ -554,6 +585,7 @@ def start_new_order(state):
     state.pending_conflict, state.history, state.last_field = None, [], ""
     state.needs_human, state.created_at = False, time.time()
     state.greeted = state.service_checked = state.contact_confirmed = True
+    state.trade = ""                # a new job may be a different trade: it is read again from what the customer says
 
 
 # --- after the chat: waiting for the SME ----------------------------------------------------------
@@ -583,7 +615,7 @@ def after_done(state, message, config):
     faq = faq_answer(message, config, "done", lang)
     if _GREETING.match(message) and state.quote_status in ("approved", "final"):
         return t("welcome_back", lang)               # a returning customer saying hello
-    if _DATE_WORDS.search(message) and date_problem(message) in ("date_past", "date_past_year", "date_closed"):
+    if _DATE_WORDS.search(message) and date_problem(message) in ("date_past", "date_invalid", "date_past_year", "date_closed"):
         return t(date_problem(message), lang)           # a date that has gone by: ask again, keep the old preference
     if _DATE_WORDS.search(message):
         state.verified["preferred_datetime"] = message.strip()[:120]

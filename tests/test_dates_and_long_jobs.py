@@ -42,6 +42,9 @@ class PreferenceDateTests(unittest.TestCase):
 
 
 _GONE = date.today() - timedelta(days=2)                # a day that has certainly gone by this year
+while date(_GONE.year + 1, _GONE.month, _GONE.day if _GONE.day != 29 else 28).weekday() > 4 or (_GONE.month, _GONE.day) in {
+        (1, 1), (5, 1), (8, 31), (9, 16), (12, 25)}:      # next year's date must itself be a working day
+    _GONE -= timedelta(days=1)
 GONE = f"{_GONE.day} {_GONE.strftime('%b')}"
 SKIP_EARLY_JANUARY = date.today().timetuple().tm_yday < 3
 

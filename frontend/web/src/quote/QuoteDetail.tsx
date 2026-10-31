@@ -135,10 +135,12 @@ function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<voi
     setSending(true);
     setRejectErr(null);
     try {
-      await api.rejectQuote(d.user_id, reason.trim());
+      const res = (await api.rejectQuote(d.user_id, reason.trim())) as { notified?: boolean } | undefined;
       setRejecting(false);
       setReason("");
-      toast(`Estimate for ${d.job.name ?? "customer"} rejected. Nothing was sent.`);
+      toast(res?.notified === false
+        ? `Estimate for ${d.job.name ?? "customer"} rejected, but the customer could not be messaged.`
+        : `Estimate for ${d.job.name ?? "customer"} rejected. The customer was told.`);
       onChanged();
       await reload();
     } catch (e) {
@@ -155,7 +157,7 @@ function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<voi
       <section className="panel">
         <div className="detail-head">
           <div>
-            <h2>{d.job.name ?? "Unnamed customer"}</h2>
+            <h2>{d.job.name ?? "Name not given yet"}</h2>
             <p className="num">{phone(d.job.phone ?? d.user_id)}</p>
             <p className="muted">
               {d.job.address ?? "No address yet"}
@@ -167,7 +169,7 @@ function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<voi
         </div>
         {d.job.preferred_datetime && <p className="hint" style={{ marginTop: 14 }}>Customer asked for: <b>{d.job.preferred_datetime}</b></p>}
         <div className="ob-utabs" role="tablist" aria-label="Quote sections" style={{ marginTop: 16, marginBottom: 0 }}>
-          {([["quote", "Quote"], ["chat", `Chat and photos (${d.photos.length})`], ["activity", `Activity (${d.audit.length})`]] as [Tab, string][]).map(([id, label]) => (
+          {([["quote", "Quote"], ["chat", `Chat and photos (${d.chat.length})`], ["activity", `Activity (${d.audit.length})`]] as [Tab, string][]).map(([id, label]) => (
             <button key={id} role="tab" className={tab === id ? "on" : ""} aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>
           ))}
         </div>
@@ -288,10 +290,12 @@ function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<voi
                 <small className="muted">The customer gets</small>
                 <b className="num">{money(finalTotal, cur)}</b>
               </div>
-              <button className="btn" disabled={sending} onClick={() => { setRejectErr(null); setRejecting(true); }}>Reject</button>
-              <button className="btn primary" disabled={!canSend} onClick={() => { setSendErr(null); setConfirm(true); }}>
-                {calc.status === "loading" ? "Recalculating…" : "Approve and send"}
-              </button>
+              <div className="row-actions">
+                <button className="btn" disabled={sending} onClick={() => { setRejectErr(null); setRejecting(true); }}>Reject</button>
+                <button className="btn primary" disabled={!canSend} onClick={() => { setSendErr(null); setConfirm(true); }}>
+                  {calc.status === "loading" ? "Recalculating…" : "Approve and send"}
+                </button>
+              </div>
             </div>
           )}
           {!readOnly && hasErrors && <p className="err" role="alert">Fix the highlighted values before sending.</p>}
@@ -300,7 +304,7 @@ function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<voi
 
       {rejecting && (
         <Modal title="Reject this estimate?" onClose={() => !sending && setRejecting(false)}>
-          <p>Nothing is sent to the customer. Your reason is saved in the activity log. If you change the values later, the estimate comes back for approval.</p>
+          <p>The customer is told we cannot give an estimate yet and that the team will be in touch. No price is sent and your reason stays internal, in the activity log. If you change the values later, the estimate comes back for approval.</p>
           <label className="field">
             <span>Reason (required)</span>
             <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="For example: check the height with the customer" maxLength={200} autoFocus />

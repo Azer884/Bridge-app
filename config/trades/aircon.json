@@ -16,10 +16,10 @@
   ],
   "required_fields": [
     "address",
-    "unit_count",
     "service_type",
+    "unit_count",
     "horsepower",
-    "surface_condition",
+    "aircon_issue",
     "preferred_datetime"
   ],
   "inspection_keywords": [
@@ -31,7 +31,13 @@
     "copper pipe leak",
     "gas bocor teruk",
     "pcb board",
-    "inverter rosak"
+    "inverter rosak",
+    "compressor",
+    "kompresor",
+    "tripping",
+    "trips the power",
+    "blinking",
+    "lampu berkelip"
   ],
   "pricing": {
     "_note": "Malaysian market estimates (Klang Valley benchmark 2025-2026). Standard wall-mounted 1.0-1.5HP: General Service RM60/unit, Chemical Wash RM130/unit, Chemical Overhaul RM180/unit. Gas top-up RM70-90. Multi-unit discount applies for >=2 units.",
@@ -83,12 +89,22 @@
       "multi_unit_tier_2_pct": 15
     },
     "condition_levels": {
-      "good": { "multiplier": 1.0 },
-      "minor": { "multiplier": 1.0 },
-      "moderate": { "multiplier": 1.15 },
-      "severe": { "multiplier": 1.35 }
+      "good": {
+        "multiplier": 1.0
+      },
+      "minor": {
+        "multiplier": 1.0
+      },
+      "moderate": {
+        "multiplier": 1.15
+      },
+      "severe": {
+        "multiplier": 1.35
+      }
     },
-    "inspection_levels": ["severe"]
+    "inspection_levels": [
+      "severe"
+    ]
   },
   "owner": {
     "name": "Alex Wong",
