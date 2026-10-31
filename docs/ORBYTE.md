@@ -58,7 +58,7 @@ enough for the local mock hub because localhost on two ports is the same site.
 ## The Orbyte-style dashboard (served by Gesir at `/app`)
 
 Gesir's own dashboard follows the real Orbyte as seen in a signed-in account (October 2026). It uses no Orbyte code, logo or
-images and is labelled "on Orbyte". There is no second app: everything runs in the one Gesir deployment.
+images, and it keeps the Gesir name and logo. There is no second app: everything runs in the one Gesir deployment.
 
 | Screen | Copied from the real Orbyte | Assumed (Orbyte does not publish it) |
 | ------ | --------------------------- | ------------------------------------ |
@@ -67,13 +67,15 @@ images and is labelled "on Orbyte". There is no second app: everything runs in t
 | Organization: Clients, Projects | Yes | Customers become Clients and quotes become Projects |
 | Users (Role, Approver, Reviewer) | Yes | Company Admin and Approver may approve; Reviewer and Member may only read |
 | Wallet (balance, Transactions) | Yes | One credit is used per approved estimate (`GET /api/wallet`) |
-| Organization Settings, Integrations | Tab exists | A "Gesir" card and the recent activity list |
-| Workspace: Quotes, Calendar, WhatsApp, Personas, Status | | The Gesir functions, as menu items |
+| Organization Settings with Integrations | Yes | A "Gesir" row and the WhatsApp number with Unlink; Personas and Status tabs |
+| Projects ▸ a project | | The Gesir quote page: what the AI read, the price, approve or reject, chat and photos, PDF, activity |
+| Workspace: Job Calendar | | Month view laid out like Orbyte's Leave Calendar (Monday to Friday, holidays as pills); week and day hour grids |
 
 Choosing a person at the bottom left ("Act as") sends their role with every request (`x-orbyte-role`, `x-orbyte-user`). The
 signed-in owner may pick any role, and the server enforces it: a Reviewer gets 403 on approve and reject. Users and credits are
 simulated and kept in the store (`GET /api/hub/users`, `GET /api/wallet`). Not copied, because they would be invented: the Leave
-Calendar, leave requests, tasks, e-sign, top-up payments, Email Broadcast and reports. They show as greyed menu items.
+Calendar itself, leave requests, tasks, e-sign, top-up payments, Email Broadcast and reports. They show as greyed menu items.
+The users are the team members acting in the three roles (Azer Hamdaoui, Omar Bouhlel, Tarek Ben Slimen).
 
 ## A real hub
 
@@ -83,5 +85,5 @@ sends a real WhatsApp message, so use test customers only.
 
 ## Not done yet
 
-- A different trade (not painting): pricing, schema and prompts are not config-only yet. A second business of the same trade is a config change (`config/business_config.second.example.json`).
+- A different trade (not painting): its AI rules (`prompts/trades/<trade>.txt`) and pricing (`src/pricing_aircon.py`) can be added, but the chat flow and the fields it asks for are still painting-only. A second business of the same trade is a config change (`config/business_config.second.example.json`).
 - The real Orbyte site has no public API or embed settings, so the Orbyte-style dashboard in Gesir stays as the demo stand-in until Orbyte publishes one.

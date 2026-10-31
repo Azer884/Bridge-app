@@ -6,10 +6,16 @@
   sent in a burst read as one, "start over", repeat customers, shared locations, photos (with captions) and voice notes.
 - Estimates from a deterministic Malaysian rate card: breakdown for the owner only, customer gets the total, the time the job
   takes and a clear "estimate only" note. The owner edits the values, approves, and later sends the final price.
+- Booking rules: Monday to Friday, 9 am to 6 pm with lunch from 1 to 2 pm. Weekends, public holidays (`config/holidays.json`),
+  times like "3 am" and addresses outside Malaysia are refused in the chat and in the calendar.
 - Calendar: area-aware slot suggestions that respect what the customer asked for ("Monday evening"), travel gaps, no double
-  booking, an offer to the customer that they confirm on WhatsApp.
-- Dashboard (web) hosted on the same Replit app behind a password: quotes, review screen (edit, recalculate, PDF), pipeline,
-  calendar, personas, status, and writing to a customer in the assistant's place.
+  booking, an offer to the customer that they confirm on WhatsApp. The dashboard books real slots through `/api/bookings`;
+  a job that runs through lunch is shown in two parts.
+- Dashboard (web) in an Orbyte-style layout, hosted on the same Replit app behind a password: Dashboard (Pending Actions),
+  Clients, Projects (each opens the quote: review, edit, recalculate, approve or reject, PDF, chat, activity), Users,
+  Wallet, Organization settings (WhatsApp, personas, model status) and the Job Calendar. See `docs/ORBYTE.md`.
+- Roles: Company Admin and Approver may approve or reject, a Reviewer may only read; the server checks the role.
+- AI rules split into `prompts/global.txt` and one file per trade (`prompts/trades/painting.txt`, `aircon.txt`).
 - PostgreSQL storage, an audit trail per job, an events trail for debugging.
 
 ## Google Calendar
@@ -20,20 +26,25 @@ the server class in `src/calendar_scheduler.py` are kept for later but are not u
 1. **WhatsApp production setup.** The bot can only reply freely within 24 hours of the customer's last message. Estimates and
    slot offers sent later need Meta-approved message templates. Also needed: a real business number, business verification,
    the Meta app set to Live, and a permanent system-user token instead of the temporary one.
-2. **Calls.** The voice-agent branch is not connected (planned).
+2. **Calls.** `voice_worker/` answers WhatsApp calls through LiveKit (see `voice_worker/README.md`). It must run on a
+   machine of ours, and calls have not been tested end to end on the Meta test number.
 3. **Voice notes are untested on the live server.** `GET /api/voice/health` says whether the model loaded and why not.
-4. **Owner login.** One shared dashboard password; no per-person accounts or roles. Rotate `INCOMING_API_KEY` (it was pasted in chats).
+4. **Owner login.** One shared dashboard password; the people and roles in Users are simulated ("Act as"), not real accounts.
+   Rotate `INCOMING_API_KEY` (it was pasted in chats, and the Android app contains it).
 5. **Google Calendar** is not used for now (see above). Weekends and public holidays are excluded (`config/holidays.json`).
 6. **Rate card and settings editor.** Rates, crew size, working hours and services live in `config/business_config.example.json`;
    the SME cannot edit them from the dashboard. The rates are demo values until the real company supplies its own.
 7. **Customer-side scheduling.** The customer cannot reschedule or cancel on their own; a day-before reminder is not sent.
 8. **Estimate PDF is a preview only**; it is not sent to the customer as a WhatsApp document.
-9. **Alerts for the owner.** New quotes and "needs a person" messages are only visible by opening the dashboard (it polls).
-   A WhatsApp or push notification to the owner would close that gap.
+9. **Alerts for the owner.** The mobile app receives Expo push notifications; the web dashboard only shows new quotes and
+   "needs a person" messages when it is open (it polls).
 10. **Privacy.** A PDPA consent notice before anything is read, STOP to erase, and owner erasure exist (see `docs/PDPA.md`). Still missing: a spoken notice for calls, automatic expiry, a customer data export.
 11. **Scope.** Only interior walls and ceilings are priced; trim, doors and exterior work go to a person.
 12. **Operations.** No automated alerting, no database backup routine, no automated frontend tests, no CI.
-13. **Hackathon platform.** Orbyte is not integrated (put aside on purpose).
+13. **Orbyte.** The dashboard follows Orbyte's layout and the hub interface is assumed (`docs/ORBYTE.md`); there is no live
+   Orbyte API to connect to.
+14. **Second trade in the chat.** Aircon has its pricing engine and AI rules, but the chat flow (`src/flow.py`, the fields it
+   asks for) is still painting-only.
 
 ## Stress testing the chat
 

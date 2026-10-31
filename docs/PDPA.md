@@ -39,7 +39,7 @@ calls off until a spoken notice is added.
 | PDPA principle | In Gesir |
 | -------------- | -------- |
 | General, notice and choice | The notice above, shown before anything is processed. It names the purpose, the data, who sees it and how to withdraw. |
-| Disclosure | Only the business owner and staff with the approver or admin role see a customer's data. Quotes go to the customer on WhatsApp. Models run on RunPod, which receives the message text and photos only while a reply is prepared. |
+| Disclosure | Only the business's own users see a customer's data: admins and approvers can act on it, reviewers can only read it. Quotes go to the customer on WhatsApp. Models run on RunPod, which receives the message text, photos and voice notes only while a reply is prepared. Call audio goes through LiveKit to Deepgram (speech to text) and Cartesia (text to speech). Owner notifications go through Expo. |
 | Security | Dashboard login, API key, signed webhooks, role checks in the backend, a tamper-evident log (each entry carries a hash of the one before). |
 | Retention | Kept for the job only. The owner can erase a customer (`DELETE /api/customers/{id}/data`, admin or approver). There is no automatic expiry yet. |
 | Data integrity and access | The owner corrects values in the dashboard and every change is logged. A customer can ask the owner for their data. There is no self-service export yet. |
