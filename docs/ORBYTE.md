@@ -79,7 +79,7 @@ which role goes to the module.
 The local hub cannot work with a hosted Gesir as it is: the hosted app cannot send webhooks to `localhost`, and a login cookie from
 another site is not sent inside a frame. Run the hub on its own https address instead:
 
-1. Create a second Replit app from the same repository. Run command: `python scripts/mock_orbyte.py`. Deploy it as a Reserved VM or Autoscale.
+1. Create a second Replit app from the same repository. Both apps use the same `.replit`, whose run command is `python scripts/start.py`. In the hub app only, add the secret `ORBYTE_HUB` = `1`: that makes `start.py` run the hub instead of Gesir. Never edit `.replit` or run Sync from one app to fix the other.
 2. Secrets on the hub: `HUB_TENANTS` (for example `[{"id":"hrissa","name":"Hrissa","url":"https://gesir-ai.replit.app"}]`),
    `INCOMING_API_KEY` (the Gesir app's key) and `ORBYTE_SHARED_SECRET` (any long random string).
 3. Secrets on the Gesir app: `ORBYTE_ORIGIN` (the hub's https address), `ORBYTE_SHARED_SECRET` (the same string) and
