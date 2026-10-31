@@ -116,6 +116,7 @@ class SiteTests(unittest.TestCase):
         self.login()
         self.assertEqual(self.api.get("/api/quotes").status_code, 200)
         self.assertEqual(self.api.get("/api/pipeline").status_code, 200)
+        self.api.cookies.clear()
         self.api.cookies.set(webauth.COOKIE, "123.forged")
         self.assertEqual(self.api.get("/api/quotes").status_code, 401)
 

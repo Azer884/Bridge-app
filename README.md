@@ -356,8 +356,8 @@ curl -X POST https://api.runpod.ai/v2/$RUNPOD_ENDPOINT_ID/runsync \
 - [x] RunPod used, with proof of use in `submission/`
 - [x] Technical & Tools Declaration added to `submission/`
 - [x] Final report (`SDC2026_HRISSA_Final.pdf`) added to `submission/`
-- [ ] "How to Run" steps verified
-- [ ] No API keys or secrets committed to the repository
+- [x] "How to Run" steps verified (clean virtualenv, `pip install -r requirements.txt`, tests pass)
+- [x] No API keys or secrets committed to the repository
 
 ## License
 

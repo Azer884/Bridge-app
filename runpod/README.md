@@ -5,7 +5,7 @@ from `src/runpod_client.py` (chat and photos) and `src/transcribe.py` (voice not
 
 | Endpoint | Worker | Model | GPU | Used for |
 | -------- | ------ | ----- | --- | -------- |
-| `RUNPOD_ENDPOINT_ID` (`ose8agxpb9p1mr`) | vLLM | `Qwen/Qwen2.5-7B-Instruct` | 32 GB | reading what the customer writes, writing replies |
+| `RUNPOD_ENDPOINT_ID` (`ose8agxpb9p1mr`) | vLLM | `Qwen/Qwen2.5-7B-Instruct` | 24 GB | reading what the customer writes, writing replies |
 | `RUNPOD_VISION_ENDPOINT_ID` (`m3a8r7m8ebibba`) | vLLM | `Qwen/Qwen2.5-VL-7B-Instruct` | 24 GB | reading photos of walls and aircon units |
 | `STT_RUNPOD_ENDPOINT_ID` (`nvnrh39cdxgymr`) | Faster Whisper | `small` | 24 GB | voice-note transcription |
 
