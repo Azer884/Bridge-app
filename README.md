@@ -163,7 +163,6 @@ See [`docs/STATUS.md`](docs/STATUS.md) for what is built and what is still missi
 │   ├── store.py                       # SQLite and PostgreSQL storage
 │   └── views.py, pdf.py, webauth.py   # dashboard shapes, estimate PDF, dashboard login
 ├── voice_worker/                      # LiveKit voice agent that answers WhatsApp calls (own process)
-├── voice-agent/                       # earlier local voice experiments (Whisper + TTS)
 ├── tests/                             # unit tests (unittest)
 ├── submission/                        # required submission documents
 ├── pyproject.toml, uv.lock            # Python dependencies (uv)
