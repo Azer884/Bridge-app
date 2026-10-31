@@ -151,5 +151,49 @@ class OwnerErasureTests(unittest.TestCase):
         self.assertEqual(self.api.delete(f"/api/customers/{UID}/data").status_code, 401)
 
 
+class ObjectionTests(unittest.TestCase):
+    def test_objections_in_ordinary_words_are_read_as_a_withdrawal(self):
+        for text in ("Hey! You can't record my address", "You can't have my name or phone number or job details or messages or photos",
+                     "dont keep my details", "I do not consent", "please don't store my photos", "I withdraw my consent",
+                     "jangan simpan alamat saya", "you cannot use my messages", "stop recording my phone number"):
+            self.assertTrue(consent.objects(text), text)
+
+    def test_ordinary_sentences_are_not(self):
+        for text in ("I don't have my number", "I can't use the front door", "can't give my address now", "paint the walls",
+                     "my name is Siti", "you can come on Monday", "don't use cheap paint", "I don't know the height"):
+            self.assertFalse(consent.objects(text), text)
+
+    def test_the_customer_who_objects_is_not_answered_as_if_nothing_happened(self):
+        svc = service(reply("Got it. Which surfaces?"), reply("ok"))
+        say(svc, "hi paint my room", "a")
+        say(svc, "1", "b")
+        out = say(svc, "Hey! You can't record my address", "c")
+        self.assertIn("will not record or use anything more", out[0])
+        self.assertIn("STOP", out[0])
+        state = svc.store.load(UID)
+        self.assertEqual(state.consent, "pending")                        # processing is paused
+        self.assertTrue(state.attention)                                  # the owner is told
+        before = len(svc.store.messages(UID))
+        out = say(svc, "My address is 12 Jalan Ampang", "d")              # nothing more is read
+        self.assertIn("consent", out[0])
+        self.assertEqual(len(svc.store.messages(UID)), before)
+        self.assertNotIn("address", svc.store.load(UID).verified)
+
+    def test_they_can_then_erase_everything_or_carry_on(self):
+        svc = service(reply("Got it. Which surfaces?"), reply("ok"))
+        say(svc, "hi paint my room", "a")
+        say(svc, "1", "b")
+        say(svc, "You can't have my name", "c")
+        out = say(svc, "STOP", "d")
+        self.assertIn("erased", out[0])
+        self.assertEqual(svc.store.messages(UID), [])
+        svc2 = service(reply("Got it. Which surfaces?"), reply("ok"), reply("ok"))
+        say(svc2, "hi paint my room", "a")
+        say(svc2, "1", "b")
+        say(svc2, "You can't have my name", "c")
+        say(svc2, "1", "d")
+        self.assertEqual(svc2.store.load(UID).consent, "granted")
+
+
 if __name__ == "__main__":
     unittest.main()

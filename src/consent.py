@@ -30,5 +30,28 @@ def withdraws(text):
     return clean(text) in WITHDRAW
 
 
+_NOUN = (r"(?:address|name|phone|number|contact|details?|data|info|information|photos?|pictures?|images?|messages?|"
+         r"voice|alamat|nama|nombor|maklumat|gambar|mesej)")
+# "you can't record my address", "don't keep my details": an objection to the data being held, said in ordinary words
+_OBJECTIONS = [
+    re.compile(r"\byou\s+(?:can'?t|cannot|can\s+not|may\s+not|must\s+not|shouldn'?t|should\s+not|are\s+not\s+allowed\s+to|"
+               r"aren'?t\s+allowed\s+to|have\s+no\s+right\s+to)\s+(?:\w+\s+){0,2}?(?:record|have|keep|store|save|use|collect|process|"
+               r"share|read|take|hold|track)\b(?:\W+\w+){0,5}?\W+" + _NOUN + r"\b", re.I),
+    re.compile(r"\b(?:don'?t|do\s+not|dont|never|stop|please\s+don'?t)\s+(?:you\s+)?(?:record|keep|store|save|use|collect|process|"
+               r"share|track)(?:ing)?\b(?:\W+\w+){0,4}?\W+" + _NOUN + r"\b", re.I),
+    re.compile(r"\bi\s+(?:do\s*n'?t|do\s+not|dont|won'?t|will\s+not)\s+(?:consent|agree|give\s+(?:you\s+)?(?:my\s+)?permission)\b", re.I),
+    re.compile(r"\b(?:i\s+)?(?:withdraw|revoke|take\s+back)\s+(?:my\s+)?(?:consent|permission|agreement)\b", re.I),
+    re.compile(r"\b(?:jangan|tak\s+boleh|tidak\s+boleh|dilarang)\s+(?:\w+\s+){0,2}?(?:simpan|rekod|guna|ambil|kumpul|proses|kongsi)\b"
+               r"(?:\W+\w+){0,4}?\W+" + _NOUN + r"\b", re.I),
+    re.compile(r"\b(?:tarik\s+balik|tidak\s+setuju|tak\s+setuju)\b.*\b(?:persetujuan|data|maklumat)\b", re.I),
+]
+
+
+def objects(text):
+    """True when the customer says in their own words that the data must not be recorded or kept. That is a withdrawal of
+    consent: nothing more is processed until they say what they want. A plain "I don't have my number" is not one."""
+    return any(p.search(text or "") for p in _OBJECTIONS)
+
+
 def required(config):
     return bool((config.get("privacy") or {}).get("require_consent", False))

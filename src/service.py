@@ -589,6 +589,11 @@ class IncomingService:
             self.store.delete_conversation(event.user_id)
             self.store.log_event("data_erased", f"{event.user_id} withdrew consent")
             return [t("consent_withdrawn", lang)], True
+        if state.consent == "granted" and consent.objects(text):
+            # "you can't record my address": a withdrawal in ordinary words. Stop processing until they choose.
+            state.consent, state.consent_asks, state.attention = "pending", 1, True
+            self.store.add_audit(event.user_id, "customer", "consent", "Objected to their details being recorded; processing paused")
+            return [t("consent_objection", state.lang)], False
         if state.consent == "granted":
             return None
         if state.consent == "" and not state.history and not state.verified:
