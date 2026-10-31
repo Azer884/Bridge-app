@@ -22,6 +22,16 @@ _PAINT = re.compile(
 
 NAMES = {"painting": "painting", "aircon": "aircon servicing"}
 
+_ASKS_SERVICES = re.compile(
+    r"\b((?:what|which)\s+(?:other\s+)?(?:services?|jobs?|work)|(?:what|which)\s+(?:do|can)\s+you\s+(?:offer|do|provide|help)|"
+    r"services?\s+(?:do\s+)?you\s+(?:offer|provide|have|do)|do\s+you\s+(?:offer|provide|do)\b|what\s+(?:else|more)|"
+    r"apa\s+(?:perkhidmatan|servis)|perkhidmatan\s+apa)\b", re.I)
+
+
+def asks_services(message):
+    """"What service do you provide?": a question about what is offered, which names no service itself."""
+    return bool(_ASKS_SERVICES.search(message or ""))
+
 
 def detect(message):
     """"painting", "aircon", "both" or None, from the customer's words."""

@@ -486,6 +486,11 @@ class IncomingService:
                 return asked
         return self._with_quote(state, self.handler(state, text, self._turn_config(state), self.client).reply)
 
+    def _plainly_other(self, state, text):
+        """Another trade asked for in the middle of a chat: when little was said yet, or the customer says they want it instead."""
+        return len(state.verified) <= 3 or bool(re.search(
+            r"\b(how about|what about|instead|also|i (?:want|need|would like)|fix|repair)\b", text, re.I))
+
     def _read_trade(self, text):
         """The trade the model reads from a message the fixed words could not settle, or None."""
         if not self.use_ai_intents or not text:
@@ -513,9 +518,15 @@ class IncomingService:
             else:
                 state.trade = main
         if state.trade:
+            if found in self.trades and found != state.trade and self._plainly_other(state, text):
+                flow.restart_job(state)                 # "how about fixing the AC?" in the middle of a painting chat
+                state.trade = found
             return None
+        if found not in self.trades and trades_module.asks_services(text):
+            return t("services_all", state.lang, list="; ".join(
+                f"{trades_module.NAMES.get(name, name)} ({', '.join(cfg.get('services', [])[:4])})" for name, cfg in self.trades.items()))
         if found not in self.trades:                    # nothing said, or both trades in one message
-            found = self._read_trade(text)
+            found = self._read_trade(text) if len(text.split()) >= 4 else None     # a short message is too little to guess from
         if found in self.trades:
             state.trade = found
             return None

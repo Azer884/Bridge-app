@@ -253,3 +253,57 @@ class ReturningCustomerTests(unittest.TestCase):
         say(svc, "I'd like to fix my AC.", 1)
         saved = svc.store.load(UID)
         self.assertEqual((saved.trade, len(saved.orders)), ("aircon", 1))
+
+
+class TradeLockTests(unittest.TestCase):
+    """The chat that went wrong live: "what service do you provide?" must not lock the chat to painting."""
+
+    def test_a_question_about_what_is_offered_lists_both_and_asks(self):
+        svc = mixed()
+        out = say(svc, "Alright. So what service do you provide, please?", 1)
+        self.assertIn("We offer", out)
+        self.assertIn("painting", out)
+        self.assertIn("aircon servicing", out)
+        self.assertEqual(svc.store.load(UID).trade, "")
+
+    def test_the_model_is_not_asked_to_guess_from_a_question_about_services(self):
+        svc = mixed()
+        svc.use_ai_intents = True
+        spy = ModelClient(json.dumps({"trade": "painting", "confidence": 0.99}))
+        svc.intent_client = spy
+        say(svc, "what service do you provide", 1)
+        self.assertEqual(spy.calls, [])
+        self.assertEqual(svc.store.load(UID).trade, "")
+
+    def test_a_short_vague_message_is_asked_not_guessed(self):
+        svc = mixed()
+        svc.use_ai_intents = True
+        spy = ModelClient(json.dumps({"trade": "painting", "confidence": 0.99}))
+        svc.intent_client = spy
+        out = say(svc, "need help please", 1)
+        self.assertEqual(spy.calls, [])
+        self.assertIn("painting or aircon", out)
+
+    def test_then_the_ac_request_starts_the_aircon_job(self):
+        svc = mixed()
+        say(svc, "So what service do you provide, please?", 1)
+        say(svc, "How about what about fixing the AC?", 2)
+        self.assertEqual(svc.store.load(UID).trade, "aircon")
+
+    def test_a_painting_chat_just_begun_can_switch_to_aircon(self):
+        svc = mixed()
+        say(svc, "I want to paint my wall", 1)
+        self.assertEqual(svc.store.load(UID).trade, "painting")
+        say(svc, "actually how about fixing the AC instead", 2)
+        saved = svc.store.load(UID)
+        self.assertEqual(saved.trade, "aircon")
+        self.assertNotIn("surfaces", saved.verified)
+
+    def test_a_long_painting_job_is_not_switched_by_a_passing_word(self):
+        svc = mixed()
+        say(svc, "I want to paint my wall", 1)
+        state = svc.store.load(UID)
+        state.verified.update({"room_length_m": 4.0, "room_height_m": 3.0, "colour": "white", "paint_tier": "standard"})
+        svc.store.save(state)
+        say(svc, "the AC room is 4 meters", 2)
+        self.assertEqual(svc.store.load(UID).trade, "painting")
