@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { explainError } from "../../../shared/api";
@@ -7,12 +7,13 @@ import type { QuoteStatus } from "../../../shared/types";
 import { loadAllQuotes } from "../data";
 import { useAsync } from "../hooks";
 import { STATUS_COLOR, useTheme } from "../theme";
-import { Banner, Empty, Group, OrbyteChip, Row, Screen, Segmented, T, success } from "../ui";
+import { Banner, Empty, Group, Row, Screen, Segmented, T, success } from "../ui";
 
 const TABS: { id: QuoteStatus; label: string }[] = [
   { id: "pending_approval", label: "Needs OK" },
   { id: "approved", label: "Approved" },
   { id: "needs_inspection", label: "Inspect" },
+  { id: "rejected", label: "Rejected" },
 ];
 
 export default function QuotesScreen() {
@@ -54,7 +55,7 @@ export default function QuotesScreen() {
               key={q.user_id}
               left={<View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: STATUS_COLOR[q.status] }} />}
               title={q.job.name ?? phone(q.job.phone ?? q.user_id)}
-              subtitle={<View style={{ gap: 4 }}><T v="foot">{q.job.address ?? "No address yet"}</T><OrbyteChip q={q} /></View>}
+              subtitle={q.job.address ?? "No address yet"}
               right={
                 <View style={{ alignItems: "flex-end" }}>
                   <T v="headline">{q.quote?.total != null ? money(q.quote.total, q.quote.currency) : "Inspect"}</T>

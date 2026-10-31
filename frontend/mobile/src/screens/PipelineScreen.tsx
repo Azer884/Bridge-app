@@ -11,7 +11,7 @@ import { C, useTheme } from "../theme";
 import { Banner, Chip, Empty, Group, Pill, Row, Screen, Segmented, T } from "../ui";
 
 type View_ = "list" | "board";
-const STAGE_DOT: Record<Stage, string> = { pending_extraction: "#6B8290", requires_approval: "#E9B949", quote_sent: "#3FB5C8", scheduled: "#1C8F63", completed: "#6B8290" };
+const STAGE_DOT: Record<Stage, string> = { pending_extraction: "#6B8290", requires_approval: "#E9B949", quote_sent: "#3FB5C8", scheduled: "#1C8F63", completed: "#6B8290", rejected: "#C0392B" };
 
 export default function PipelineScreen() {
   useTheme();

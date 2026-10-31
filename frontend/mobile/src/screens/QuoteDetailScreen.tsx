@@ -5,24 +5,23 @@ import { api, explainError } from "../../../shared/api";
 import { money, phone } from "../../../shared/format";
 import { STAGES, validateParams } from "../../../shared/params";
 import type { ParamValue, QuoteDetail as Detail, QuoteDraft } from "../../../shared/types";
+import { useActor } from "../actor";
 import { useAsync } from "../hooks";
 import { AuditList } from "../quote/AuditList";
 import { ChatView } from "../quote/ChatView";
 import { ParamsEditor } from "../quote/ParamsEditor";
 import { FinalCard } from "../quote/FinalCard";
 import { PdfCard } from "../quote/PdfCard";
-import { RejectSheet } from "../quote/RejectSheet";
 import { PriceCard, type CalcState } from "../quote/PriceCard";
 import { C, F, useTheme } from "../theme";
-import { Banner, Btn, Empty, Group, OrbyteChip, Pill, Row, Screen, Segmented, Sheet, T, success } from "../ui";
+import { Banner, Btn, Empty, Field, Group, Pill, Row, Screen, Segmented, Sheet, T, success } from "../ui";
 
 type Tab = "quote" | "chat" | "activity";
 
 export default function QuoteDetailScreen() {
   useTheme();
   const { userId } = useRoute<any>().params as { userId: string };
-  const [tab, setTab] = useState<Tab>("quote");
-  const { data, error, loading, reload } = useAsync(() => api.getQuoteDetail(userId), [userId], 3_000);
+  const { data, error, loading, reload } = useAsync(() => api.getQuoteDetail(userId), [userId]);
 
   if (!data) {
     return (
@@ -31,14 +30,14 @@ export default function QuoteDetailScreen() {
       </Screen>
     );
   }
-  // Tab lives here so it survives the remount when the status changes. The activity list reads straight from `d`, so it updates on each poll.
-  return <Loaded key={userId + data.status + !!data.revising} d={data} reload={reload} tab={tab} setTab={setTab} />;
+  return <Loaded key={userId + data.status + data.audit.length} d={data} reload={reload} />;
 }
 
-function Loaded({ d, reload, tab, setTab }: { d: Detail; reload: () => Promise<void>; tab: Tab; setTab: (t: Tab) => void }) {
+function Loaded({ d, reload }: { d: Detail; reload: () => Promise<void> }) {
   useTheme();
+  const { canDecide } = useActor();
   const nav = useNavigation<any>();
-  const [rejecting, setRejecting] = useState(false);
+  const [tab, setTab] = useState<Tab>("quote");
 
   const params = d.params;
   const server = params?.current ?? {};
@@ -51,9 +50,12 @@ function Loaded({ d, reload, tab, setTab }: { d: Detail; reload: () => Promise<v
   const [confirm, setConfirm] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState<unknown>(null);
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+  const [rejectErr, setRejectErr] = useState<unknown>(null);
   const seq = useRef(0);
 
-  const readOnly = d.locked || d.status === "collecting" || !!d.revising || !d.quote || !params;
+  const readOnly = d.locked || d.status === "collecting" || !d.quote || !params;
   const errors = useMemo(() => (params ? validateParams(params.schema, values) : {}), [params, values]);
   const hasErrors = Object.keys(errors).length > 0;
   const dirty = JSON.stringify(values) !== JSON.stringify(server);
@@ -98,7 +100,7 @@ function Loaded({ d, reload, tab, setTab }: { d: Detail; reload: () => Promise<v
   const canSend = !readOnly && !hasErrors && calc.status === "idle" && manualValid && finalTotal > 0;
   const stage = STAGES.find((s) => s.id === d.stage);
 
-  const goCalendar = () => nav.getParent()?.navigate("CalendarTab", { screen: "CalendarHome", params: { book: d.user_id } });
+  const goCalendar = () => nav.navigate("Calendar", { book: d.user_id });
 
   async function send() {
     setSending(true);
@@ -116,17 +118,53 @@ function Loaded({ d, reload, tab, setTab }: { d: Detail; reload: () => Promise<v
     }
   }
 
+  async function reject() {
+    setSending(true);
+    setRejectErr(null);
+    try {
+      await api.rejectQuote(d.user_id, reason.trim());
+      success();
+      setRejecting(false);
+      setReason("");
+      await reload();
+    } catch (e) {
+      setRejectErr(e);
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function reopen() {
+    setSending(true);
+    try {
+      await api.saveParams(d.user_id, values); // saving re-prices the job and puts it back in the approval list
+      success();
+      await reload();
+    } finally {
+      setSending(false);
+    }
+  }
+
   const footer =
-    tab === "quote" && !readOnly && quote ? (
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-        <View style={{ flex: 1 }}>
+    tab === "quote" && !readOnly && quote && d.status === "rejected" ? (
+      <View style={{ gap: 8 }}>
+        <T v="foot">Rejected, nothing was sent. Change a value if something was wrong, then put it back for approval.</T>
+        <Btn label="Put back for approval" busy={sending} onPress={reopen} />
+      </View>
+    ) : tab === "quote" && !readOnly && quote && !canDecide ? (
+      <T v="foot">View only: your role cannot approve or reject. Switch role in More.</T>
+    ) : tab === "quote" && !readOnly && quote ? (
+      <View style={{ gap: 10 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
           <T v="foot">The customer gets</T>
           <T v="money">{money(finalTotal, cur)}</T>
         </View>
-        <View style={{ flex: 1.2 }}>
-          <View style={{ gap: 8 }}>
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <View style={{ flex: 0.8 }}>
+            <Btn kind="tinted" label="Reject" disabled={sending} onPress={() => { setRejectErr(null); setRejecting(true); }} />
+          </View>
+          <View style={{ flex: 1.2 }}>
             <Btn label={calc.status === "loading" ? "Recalculating…" : "Approve and send"} disabled={!canSend} onPress={() => { setSendErr(null); setConfirm(true); }} />
-            <Btn kind="danger" small label="Reject and re-prompt" disabled={calc.status === "loading"} onPress={() => setRejecting(true)} />
           </View>
         </View>
       </View>
@@ -136,7 +174,7 @@ function Loaded({ d, reload, tab, setTab }: { d: Detail; reload: () => Promise<v
     <>
       <Screen footer={footer}>
         <Group>
-          <Row title={d.job.name ?? "Unnamed customer"} subtitle={d.job.address ?? "No address yet"} right={<View style={{ alignItems: "flex-end", gap: 6 }}><Pill status={d.stage} label={stage?.label} /><OrbyteChip q={d} /></View>} />
+          <Row title={d.job.name ?? "Unnamed customer"} subtitle={d.job.address ?? "No address yet"} right={<Pill status={d.stage} label={stage?.label} />} />
           <Row title="WhatsApp" value={phone(d.job.phone ?? d.user_id)} onPress={() => Linking.openURL(`https://wa.me/${(d.job.phone ?? d.user_id).replace(/\D/g, "")}`)} />
           {d.job.location ? <Row title="Shared location" value={d.job.location.name ?? d.job.location.address ?? "Open in Maps"} onPress={() => Linking.openURL(d.job.location!.maps_url)} /> : null}
           {d.job.preferred_datetime ? <Row title="They asked for" value={d.job.preferred_datetime} chevron={false} /> : null}
@@ -145,8 +183,6 @@ function Loaded({ d, reload, tab, setTab }: { d: Detail; reload: () => Promise<v
         {(d.needs_human || d.attention) && tab !== "chat" ? <Banner kind="warn" text="Needs you: open Chat to reply." action="Open chat" onAction={() => setTab("chat")} /> : null}
 
         <Segmented value={tab} onChange={setTab} options={[{ id: "quote", label: "Quote" }, { id: "chat", label: `Chat · ${d.photos.length} photos` }, { id: "activity", label: `Activity · ${d.audit.length}` }]} />
-
-        {d.revising ? <Banner kind="info" text="Gesir is redrafting this quote with your note. Nothing was sent to the customer. The new draft appears here in a moment." /> : null}
 
         {tab === "chat" && <ChatView name={d.job.name ?? "Customer"} number={d.job.phone ?? d.user_id} chat={d.chat} photos={d.photos} userId={d.user_id} needsHuman={d.needs_human} humanActive={d.human_active} onSent={() => void reload()} />}
         {tab === "activity" && <AuditList entries={d.audit} />}
@@ -237,7 +273,12 @@ function Loaded({ d, reload, tab, setTab }: { d: Detail; reload: () => Promise<v
         )}
       </Screen>
 
-      <RejectSheet visible={rejecting} userId={d.user_id} name={d.job.name ?? "the customer"} onClose={() => setRejecting(false)} onDone={() => { setRejecting(false); void reload(); }} />
+      <Sheet visible={rejecting} title="Reject this estimate?" onClose={() => !sending && setRejecting(false)}>
+        <T v="sub">Nothing is sent to the customer. Your reason is saved in the activity log. If you change the values later, the estimate comes back for approval.</T>
+        <Field label="Reason (required)" value={reason} onChangeText={setReason} placeholder="For example: check the height with the customer" maxLength={200} />
+        {rejectErr != null ? <Banner text={explainError(rejectErr)} /> : null}
+        <Btn label="Reject estimate" busy={sending} disabled={reason.trim().length < 3} onPress={reject} />
+      </Sheet>
 
       <Sheet visible={confirm} title="Send this quote?" onClose={() => !sending && setConfirm(false)}>
         <Group>
@@ -254,4 +295,3 @@ function Loaded({ d, reload, tab, setTab }: { d: Detail; reload: () => Promise<v
     </>
   );
 }
-

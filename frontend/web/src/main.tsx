@@ -5,6 +5,8 @@ import { configureApi } from "@shared/api";
 import App from "./App";
 import { ToastProvider } from "./ui/Toast";
 import "./styles.css";
+import "./orbyte.css";
+import "./orbyte-app.css";
 
 configureApi({
   baseUrl: "",

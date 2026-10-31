@@ -52,9 +52,6 @@ The quote screen, pipeline and calendar suggestions are front end only. They cal
 |---|---|---|
 | GET | `/api/quotes/{id}` | `QuoteDetail`: job, quote, `stage`, `params` (schema, ai, current, confidence), `chat`, `photos`, `audit`, `duration_hours`, `locked` |
 | POST | `/api/quotes/{id}/recalculate` body `{params}` | `Recalculation`: `quote` (with `labor_hours`) and `duration_hours`. The UI never computes prices |
-| POST | `/api/quotes/{id}/reject` body `{note}` | Not on the backend yet. Owner rejects the draft; Gesir redrafts with the note and nothing goes to the customer. While it works, `GET /api/quotes/{id}` should return `revising: true`; the dashboard polls every 3 s and shows the new draft and audit entries |
-
-Orbyte chips: the quote item may carry `orbyte: "staged" | "synced" | null`. If the backend does not send it, the UI derives it (`pending_approval` is "Staged in Orbyte Hub", `approved` and `completed` are "Synced to Orbyte CRM"). The "Role: SME Owner" chip is static until the backend sends roles.
 | PUT | `/api/quotes/{id}/params` body `{params}` | saves overrides, appends audit entries |
 | POST | `/api/quotes/{id}/pdf` body `{params}` | `PdfPreview`: `url` (or `base64`), `filename`, `generated_at` |
 | GET | `/api/pipeline` | `PipelineRow[]` (quote plus `stage`) |

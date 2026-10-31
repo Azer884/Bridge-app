@@ -8,9 +8,7 @@ import { useAsync } from "../hooks";
 import { Modal } from "../ui/Modal";
 import { useToast } from "../ui/Toast";
 import { AuditLog } from "./AuditLog";
-import { OrbyteChip } from "../ui/StatusChip";
 import { FinalPrice } from "./FinalPrice";
-import { RejectModal } from "./RejectModal";
 import { ChatPanel } from "./ChatPanel";
 import { ParamsForm } from "./ParamsForm";
 import { PdfPanel } from "./PdfPanel";
@@ -20,9 +18,7 @@ type Tab = "quote" | "chat" | "activity";
 
 export function QuoteDetail({ userId, onChanged }: { userId: string; onChanged: () => void }) {
   const nav = useNavigate();
-  const { data, error, loading, reload } = useAsync(() => api.getQuoteDetail(userId), [userId], 3_000);
-  // Kept here so the chosen tab survives the remount when the status changes.
-  const [tab, setTab] = useState<Tab>("quote");
+  const { data, error, loading, reload } = useAsync(() => api.getQuoteDetail(userId), [userId]);
 
   if (!data) {
     return (
@@ -36,13 +32,14 @@ export function QuoteDetail({ userId, onChanged }: { userId: string; onChanged: 
       </>
     );
   }
-  // The activity log reads straight from `d`, so new entries appear on the next poll without remounting (which would drop unsaved edits).
-  return <Loaded key={userId + data.status + !!data.revising} d={data} reload={reload} onChanged={onChanged} tab={tab} setTab={setTab} />;
+  return <Loaded key={userId + data.status + data.audit.length} d={data} reload={reload} onChanged={onChanged} />;
 }
 
-function Loaded({ d, reload, onChanged, tab, setTab }: { d: Detail; reload: () => Promise<void>; onChanged: () => void; tab: Tab; setTab: (t: Tab) => void }) {
+function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<void>; onChanged: () => void }) {
   const nav = useNavigate();
   const toast = useToast();
+  const [tab, setTab] = useState<Tab>("quote");
+
   const params = d.params;
   const server = params?.current ?? {};
   const [values, setValues] = useState<Record<string, ParamValue>>(server);
@@ -54,10 +51,12 @@ function Loaded({ d, reload, onChanged, tab, setTab }: { d: Detail; reload: () =
   const [confirm, setConfirm] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendErr, setSendErr] = useState<unknown>(null);
+  const [rejecting, setRejecting] = useState(false);
+  const [reason, setReason] = useState("");
+  const [rejectErr, setRejectErr] = useState<unknown>(null);
   const seq = useRef(0);
 
-  const [rejecting, setRejecting] = useState(false);
-  const readOnly = d.locked || d.status === "collecting" || !!d.revising || !d.quote || !params;
+  const readOnly = d.locked || d.status === "collecting" || !d.quote || !params;
   const errors = useMemo(() => (params ? validateParams(params.schema, values) : {}), [params, values]);
   const hasErrors = Object.keys(errors).length > 0;
   const dirty = JSON.stringify(values) !== JSON.stringify(server);
@@ -120,6 +119,35 @@ function Loaded({ d, reload, onChanged, tab, setTab }: { d: Detail; reload: () =
     }
   }
 
+  async function reopen() {
+    setSending(true);
+    try {
+      await api.saveParams(d.user_id, values);          // saving re-prices the job and puts it back in the approval list
+      toast("Back in the approval list");
+      onChanged();
+      await reload();
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function reject() {
+    setSending(true);
+    setRejectErr(null);
+    try {
+      await api.rejectQuote(d.user_id, reason.trim());
+      setRejecting(false);
+      setReason("");
+      toast(`Estimate for ${d.job.name ?? "customer"} rejected. Nothing was sent.`);
+      onChanged();
+      await reload();
+    } catch (e) {
+      setRejectErr(e);
+    } finally {
+      setSending(false);
+    }
+  }
+
   return (
     <>
       <button className="btn small back" onClick={() => nav("/app/quotes")}>Back to list</button>
@@ -135,15 +163,12 @@ function Loaded({ d, reload, onChanged, tab, setTab }: { d: Detail; reload: () =
             </p>
             {(d.needs_human || d.attention) && <p className="alert warm" role="status">Needs you: open the chat tab to reply.</p>}
           </div>
-          <div className="chip-stack">
-            <span className={`stage-chip s-${d.stage}`} title={stage?.hint}>{stage?.label}</span>
-            <OrbyteChip q={d} />
-          </div>
+          <span className={`stage-chip s-${d.stage}`} title={stage?.hint}>{stage?.label}</span>
         </div>
         {d.job.preferred_datetime && <p className="hint" style={{ marginTop: 14 }}>Customer asked for: <b>{d.job.preferred_datetime}</b></p>}
-        <div className="tabs" role="tablist" aria-label="Quote sections" style={{ marginTop: 16 }}>
+        <div className="ob-utabs" role="tablist" aria-label="Quote sections" style={{ marginTop: 16, marginBottom: 0 }}>
           {([["quote", "Quote"], ["chat", `Chat and photos (${d.photos.length})`], ["activity", `Activity (${d.audit.length})`]] as [Tab, string][]).map(([id, label]) => (
-            <button key={id} role="tab" className="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>
+            <button key={id} role="tab" className={tab === id ? "on" : ""} aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>
           ))}
         </div>
       </section>
@@ -168,10 +193,6 @@ function Loaded({ d, reload, onChanged, tab, setTab }: { d: Detail; reload: () =
                 <Link className="btn primary" to={`/app/calendar?book=${d.user_id}`}>Book a site visit</Link>
               </div>
             </section>
-          )}
-
-          {d.revising && (
-            <div className="alert info" role="status">Gesir is redrafting this quote with your note. Nothing was sent to the customer. The new draft appears here in a moment.</div>
           )}
 
           {d.status === "collecting" && (
@@ -252,16 +273,25 @@ function Loaded({ d, reload, onChanged, tab, setTab }: { d: Detail; reload: () =
             </section>
           )}
 
-          {!readOnly && quote && (
+          {!readOnly && quote && d.status === "rejected" && (
+            <div className="sendbar">
+              <div>
+                <small className="muted">Rejected, nothing was sent</small>
+                <span>Change a value if something was wrong, then put it back for approval.</span>
+              </div>
+              <button className="btn primary" disabled={sending} onClick={reopen}>{sending ? "Working…" : "Put back for approval"}</button>
+            </div>
+          )}
+          {!readOnly && quote && d.status !== "rejected" && (
             <div className="sendbar">
               <div>
                 <small className="muted">The customer gets</small>
                 <b className="num">{money(finalTotal, cur)}</b>
               </div>
-              <div className="row-actions"><button className="btn danger" disabled={calc.status === "loading"} onClick={() => setRejecting(true)}>Reject and re-prompt</button>
+              <button className="btn" disabled={sending} onClick={() => { setRejectErr(null); setRejecting(true); }}>Reject</button>
               <button className="btn primary" disabled={!canSend} onClick={() => { setSendErr(null); setConfirm(true); }}>
                 {calc.status === "loading" ? "Recalculating…" : "Approve and send"}
-              </button></div>
+              </button>
             </div>
           )}
           {!readOnly && hasErrors && <p className="err" role="alert">Fix the highlighted values before sending.</p>}
@@ -269,12 +299,18 @@ function Loaded({ d, reload, onChanged, tab, setTab }: { d: Detail; reload: () =
       )}
 
       {rejecting && (
-        <RejectModal
-          userId={d.user_id}
-          name={d.job.name ?? "the customer"}
-          onClose={() => setRejecting(false)}
-          onDone={() => { setRejecting(false); toast("Draft rejected. Gesir is redrafting."); onChanged(); void reload(); }}
-        />
+        <Modal title="Reject this estimate?" onClose={() => !sending && setRejecting(false)}>
+          <p>Nothing is sent to the customer. Your reason is saved in the activity log. If you change the values later, the estimate comes back for approval.</p>
+          <label className="field">
+            <span>Reason (required)</span>
+            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="For example: check the height with the customer" maxLength={200} autoFocus />
+          </label>
+          {rejectErr != null && <div className="alert">{explainError(rejectErr)}</div>}
+          <div className="modal-actions">
+            <button className="btn" onClick={() => setRejecting(false)} disabled={sending}>Cancel</button>
+            <button className="btn primary" onClick={reject} disabled={sending || reason.trim().length < 3}>{sending ? "Rejecting…" : "Reject estimate"}</button>
+          </div>
+        </Modal>
       )}
 
       {confirm && (

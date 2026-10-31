@@ -1,0 +1,102 @@
+/* The Orbyte-style look of the dashboard (simulated: no Orbyte code, logo or images). Orbyte is a light interface, so the
+   dashboard stays light whatever the browser prefers. Everything is scoped to .shell.ob so the landing page is untouched. */
+@import url("https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap");
+
+.shell.ob {
+  --wall: #f4f8ff;
+  --paper: #ffffff;
+  --ink: #1c3153;
+  --ink-2: #3d5073;
+  --ink-3: #6b7a93;
+  --line: #dbe2ee;
+  --blue: #0767e8;
+  --blue-deep: #0555c0;
+  --blue-wash: #e5f0ff;
+  --side: #f4f8ff;
+  --chip: #e8eef8;
+  --muted: #edf2fa;
+  --field: #ffffff;
+  --tape: #e9b949;
+  --tape-wash: #faefcb;
+  --danger: #c93a24;
+  --danger-wash: #f6dcd6;
+  --ok: #1c8f63;
+  --ok-wash: #d5f0e2;
+  --cancel-bg: #e1e4e3;
+  --ok-ink: #0f5c3b;
+  --danger-ink: #8e2412;
+  color-scheme: light;
+  --font: "Public Sans", system-ui, sans-serif;
+  --display: "Public Sans", system-ui, sans-serif;
+  background: var(--wall);
+  color: var(--ink);
+  font-family: var(--font);
+}
+.shell.ob { grid-template-columns: 272px minmax(0, 1fr); }
+
+.shell.ob .side {
+  background: var(--side); color: var(--ink); border-right: 1px solid var(--line);
+  padding: 0; gap: 0; display: flex; flex-direction: column; height: 100svh; position: sticky; top: 0; overflow: auto;
+}
+.shell.ob .brand { padding: 18px 18px 8px; color: var(--ink); font-size: 24px; font-weight: 800; }
+.shell.ob .brand small { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--ink-3); border: 1px solid var(--line); border-radius: 99px; padding: 1px 8px; }
+.shell.ob .org { margin: 8px 14px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; display: flex; flex-direction: column; }
+.shell.ob .org label { font-size: 11px; color: var(--ink-3); }
+.shell.ob .org b { font-weight: 700; }
+.shell.ob .menu-search { margin: 6px 14px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+.shell.ob .nav { display: block; padding: 4px 14px; flex: 1; overflow: auto; }
+.shell.ob .nav-label { font-size: 13px; color: var(--ink-3); margin: 10px 4px 4px; }
+.shell.ob .nav .grp {
+  display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 8px 10px; border-radius: 8px;
+  font-weight: 500; color: var(--ink); background: none; border: 0; text-align: left; text-decoration: none; cursor: pointer;
+}
+.shell.ob .nav .grp.leaf.active { background: var(--blue-wash); color: var(--blue); }
+.shell.ob .nav .grp.dim, .shell.ob .nav .item.dim { color: var(--ink-3); cursor: default; }
+.shell.ob .nav .item {
+  display: flex; align-items: center; padding: 8px 10px 8px 34px; border-radius: 8px; margin: 1px 0; color: var(--ink); text-decoration: none;
+}
+.shell.ob .nav .item:not(.dim):hover { background: rgba(28, 49, 83, .05); }
+.shell.ob .nav .item.active { background: var(--blue-wash); color: var(--blue); }
+.shell.ob .nav .count { margin-left: auto; background: var(--blue); color: #fff; }
+.shell.ob .side-foot { color: var(--ink-3); padding: 8px 14px; margin: 0; }
+.shell.ob .pill { background: var(--chip); color: var(--ink); }
+
+.shell.ob .user { border-top: 1px solid var(--line); padding: 12px 14px; display: flex; gap: 10px; align-items: center; cursor: pointer; position: relative; }
+.shell.ob .av { width: 34px; height: 34px; border-radius: 50%; background: #cfe3ff; color: var(--blue); font-weight: 700; display: flex; align-items: center; justify-content: center; flex: none; }
+.shell.ob .user b { display: block; font-size: 14px; }
+.shell.ob .user small { color: var(--ink-3); font-size: 12px; }
+.shell.ob .pop { position: absolute; bottom: 62px; left: 12px; right: 12px; background: #fff; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px -12px rgba(0, 0, 0, .3); padding: 6px; z-index: 5; }
+.shell.ob .pop .h { font-size: 12px; color: var(--ink-3); padding: 6px 8px; }
+.shell.ob .pop .o { display: flex; justify-content: space-between; width: 100%; padding: 8px; border: 0; border-radius: 8px; background: none; text-align: left; }
+.shell.ob .pop .o:hover { background: rgba(28, 49, 83, .05); }
+
+/* page pieces used by the new Orbyte pages */
+.ob-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+.ob-card h2 { font-size: 18px; margin-bottom: 8px; }
+.greet { margin: 0 0 14px; }
+.ob-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 10px 0; }
+.ob-tab { padding: 6px 12px; border-radius: 8px; border: 1px solid transparent; background: none; font-weight: 600; font-size: 14px; color: var(--ink-3); cursor: default; }
+button.ob-tab { cursor: pointer; color: var(--ink); }
+.ob-tab.on { background: var(--blue-wash); border-color: rgba(7, 103, 232, .25); color: var(--blue); }
+.ob-tab.review { color: #8a5a14; }
+.ob-tab.approve { color: #1a7f4b; }
+.ob-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: 14px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+.ob-row b { display: block; }
+.ob-row small { color: var(--ink-3); }
+.ob-link { color: var(--blue); font-weight: 700; font-size: 14px; text-decoration: none; }
+.ob-pill { display: inline-block; border-radius: 99px; padding: 2px 10px; font-size: 12px; font-weight: 600; white-space: nowrap; background: rgba(28, 49, 83, .07); color: var(--ink-3); }
+.ob-pill.ok { background: #e3f5ea; color: #1a7f4b; }
+.ob-pill.warn { background: #fff3d6; color: #9a5a00; }
+.ob-pill.bad { background: #fbe5e2; color: #b3261e; }
+.ob-table { width: 100%; border-collapse: collapse; }
+.ob-table th { font-size: 13px; font-weight: 800; text-align: left; padding: 8px; border-bottom: 1px solid var(--line); }
+.ob-table td { padding: 10px 8px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.ob-table tr:last-child td { border-bottom: 0; }
+.ob-kicker { color: var(--ink-3); font-weight: 700; }
+.ob-big { font-size: 56px; font-weight: 700; line-height: 1.1; }
+.note { font-size: 12px; color: var(--ink-3); margin-top: 6px; }
+@media (max-width: 800px) {
+  .shell.ob { grid-template-columns: 1fr; }
+  .shell.ob .side { height: auto; position: static; }
+  .ob-row { grid-template-columns: 1fr; }
+}

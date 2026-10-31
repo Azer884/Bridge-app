@@ -3,6 +3,7 @@ import { api, explainError } from "@shared/api";
 import { money, phone } from "@shared/format";
 import { useAsync } from "../hooks";
 
+/** Orbyte's Client List: everyone Gesir has talked to, with their jobs. */
 export default function Customers() {
   const { data, error, loading, reload } = useAsync(() => api.listCustomers(), [], 30_000);
   const list = data ?? [];
@@ -11,38 +12,44 @@ export default function Customers() {
     <>
       <div className="page-head">
         <div>
-          <h1>Customers</h1>
-          <p>Everyone Gesir has talked to, with every job they have had. Open a customer to see the chat and the quote.</p>
+          <h1>Client List</h1>
+          <p>Manage client records and open each client's project workspace. Open a client to see the chat and the quote.</p>
         </div>
       </div>
 
       {error != null && <div className="alert">{explainError(error)}<button className="btn small" onClick={reload}>Try again</button></div>}
-      {loading && !data && <div className="panel empty">Loading customers…</div>}
+      {loading && !data && <div className="panel ob-card empty">Loading clients…</div>}
       {data && list.length === 0 && (
-        <div className="panel empty"><b>No customers yet</b>They appear here after their first WhatsApp message.</div>
+        <div className="panel ob-card empty"><b>No clients yet</b>They appear here after their first WhatsApp message.</div>
       )}
 
-      <div className="list">
-        {list.map((c) => (
-          <Link key={c.user_id} to={`/app/quotes/${c.user_id}`} className="row-chip" style={{ textDecoration: "none", color: "inherit" }}>
-            <span className="strip" style={{ ["--c" as string]: c.needs_human || c.attention ? "var(--tape)" : undefined }} />
-            <span className="body">
-              <b>{c.name ?? "Unnamed customer"}</b>
-              <small>
-                {phone(c.phone ?? c.user_id)} · {c.orders.length} {c.orders.length === 1 ? "job" : "jobs"}
-                {(c.needs_human || c.attention) && " · Needs you"}
-              </small>
-            </span>
-            <span className="amt">
-              {(() => {
+      {list.length > 0 && (
+        <section className="panel ob-card">
+          <table className="ob-table">
+            <thead>
+              <tr><th>Client</th><th>Phone</th><th>Projects</th><th>Latest price</th><th></th></tr>
+            </thead>
+            <tbody>
+              {list.map((c) => {
                 const last = c.orders[c.orders.length - 1]?.quote;
                 const t = last?.final_total ?? last?.approved_total ?? last?.total;
-                return last && t != null ? money(t, last.currency) : <small>No price yet</small>;
-              })()}
-            </span>
-          </Link>
-        ))}
-      </div>
+                return (
+                  <tr key={c.user_id}>
+                    <td>
+                      <b>{c.name ?? "Unnamed client"}</b>
+                      {(c.needs_human || c.attention) && <span className="ob-pill warn" style={{ marginLeft: 8 }}>Needs you</span>}
+                    </td>
+                    <td className="num">{phone(c.phone ?? c.user_id)}</td>
+                    <td>{c.orders.length}</td>
+                    <td className="num">{last && t != null ? money(t, last.currency) : "-"}</td>
+                    <td><Link className="ob-link" to={`/app/quotes/${c.user_id}`}>Open</Link></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </section>
+      )}
     </>
   );
 }

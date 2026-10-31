@@ -15,7 +15,10 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
   return (
     <div className="scrim" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal" role="dialog" aria-modal="true" aria-label={title} ref={ref}>
-        <h2>{title}</h2>
+        <header className="modal-head">
+          <h2>{title}</h2>
+          <button type="button" className="modal-x" aria-label="Close" onClick={onClose}>×</button>
+        </header>
         {children}
       </div>
     </div>

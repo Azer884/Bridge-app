@@ -4,7 +4,6 @@ import { PERSONA_LIMITS, type Persona } from "@shared/types";
 import { useAsync } from "../hooks";
 import { useToast } from "../ui/Toast";
 
-const COLORS = ["#083c57", "#129a8d", "#1c8f63", "#041b2d", "#3fb5c8", "#59a36f"];
 const FIELDS: { key: keyof Persona; label: string; hint: string; area: boolean }[] = [
   { key: "name", label: "Name", hint: "What customers see as the sender.", area: false },
   { key: "style", label: "Voice", hint: "How the assistant talks. Tone, length, slang.", area: true },
@@ -71,13 +70,13 @@ export default function Personas() {
 
   return (
     <>
-      <div className="page-head">
+      <div className="ob-sec-head">
         <div>
-          <h1>Personas</h1>
-          <p>The character who chats with your customers. A new voice applies from the next customer message.</p>
+          <h2 className="ob-sec">Personas</h2>
+          <p className="ob-sec-sub">The character who chats with your customers. A new voice applies from the next customer message.</p>
         </div>
         <button
-          className="btn dark"
+          className="btn primary"
           onClick={() => {
             setIsNew(true);
             setSel(null);
@@ -91,22 +90,29 @@ export default function Personas() {
       {error != null && !data && <div className="alert">{explainError(error)}</div>}
       {loading && !data && <div className="empty">Loading personas…</div>}
 
-      <div className="cards">
-        {Object.entries(personas).map(([id, p], i) => (
-          <button key={id} className="persona-card" aria-pressed={sel === id && !isNew} onClick={() => pick(id)}>
-            <span className="swatch" style={{ "--c": COLORS[i % COLORS.length] } as React.CSSProperties}>{p.name}</span>
-            <span className="label">
-              <span>{p.style.slice(0, 90)}{p.style.length > 90 ? "…" : ""}</span>
-              {id === active && <span className="status-chip approved">Active</span>}
+      <div className="ob-list">
+        {Object.entries(personas).map(([id, p]) => (
+          <div key={id} className={`ob-item${sel === id && !isNew ? " picked" : ""}`}>
+            <span className="ob-ico">{p.name.slice(0, 1).toUpperCase()}</span>
+            <span className="ob-item-main">
+              <b>{p.name}</b>
+              {id === active && <span className="ob-badge ok">Active</span>}
+              <small>{p.style.slice(0, 120)}{p.style.length > 120 ? "…" : ""}</small>
             </span>
-          </button>
+            <span className="ob-item-actions">
+              <button className="btn" onClick={() => pick(id)}>Edit</button>
+              {id !== active && (
+                <button className="btn" disabled={busy} onClick={() => run(() => api.setActivePersona(id), "Persona is now active")}>Make active</button>
+              )}
+            </span>
+          </div>
         ))}
       </div>
 
       {(sel || isNew) && (
         <div className="edit-grid">
           <section className="panel form">
-            <h2>{isNew ? "New persona" : `Edit ${personas[sel!]?.name ?? ""}`}</h2>
+            <h2 className="ob-sec">{isNew ? "New persona" : `Edit ${personas[sel!]?.name ?? ""}`}</h2>
             {FIELDS.map((f) => {
               const len = form[f.key].length;
               const lim = PERSONA_LIMITS[f.key];
@@ -133,11 +139,6 @@ export default function Personas() {
             })}
             <div className="modal-actions" style={{ justifyContent: "flex-start" }}>
               <button className="btn primary" disabled={busy || over || empty} onClick={save}>Save persona</button>
-              {!isNew && sel !== active && (
-                <button className="btn" disabled={busy} onClick={() => run(() => api.setActivePersona(sel!), "Persona is now active")}>
-                  Make active
-                </button>
-              )}
             </div>
           </section>
 

@@ -29,6 +29,7 @@ export const STAGES: { id: Stage; label: string; hint: string }[] = [
   { id: "quote_sent", label: "Quote sent", hint: "Waiting for the customer." },
   { id: "scheduled", label: "Scheduled and booked", hint: "A slot is booked." },
   { id: "completed", label: "Completed", hint: "Job done." },
+  { id: "rejected", label: "Rejected", hint: "Nothing was sent. Change a value to send it back for approval." },
 ];
 
 /** Fallback when the backend does not send a stage. */
@@ -36,6 +37,7 @@ export function fallbackStage(status: QuoteStatus): Stage {
   if (status === "collecting") return "pending_extraction";
   if (status === "approved") return "quote_sent";
   if (status === "completed") return "completed";
+  if (status === "rejected") return "rejected";
   return "requires_approval";
 }
 
@@ -46,15 +48,4 @@ export function overlaps(a: Interval, b: Interval): boolean {
 /** Events that clash with a chosen window. Used by the double-booking guard. */
 export function findConflicts(window: Interval, events: (Interval & { id?: string })[], ignoreId?: string): (Interval & { id?: string })[] {
   return events.filter((e) => e.id !== ignoreId && overlaps(window, e));
-}
-
-export const ORBYTE_LABEL = { staged: "Staged in Orbyte Hub", synced: "Synced to Orbyte CRM" } as const;
-
-/** Drafts waiting for the owner are staged in the Hub. Once the owner approves, the quote is synced to the CRM. */
-export function orbyteState(q: { status: string; orbyte?: "staged" | "synced" | null; revising?: boolean }): "staged" | "synced" | null {
-  if (q.orbyte !== undefined) return q.orbyte;
-  if (q.revising) return null;
-  if (q.status === "pending_approval") return "staged";
-  if (q.status === "approved" || q.status === "completed") return "synced";
-  return null;
 }

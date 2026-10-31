@@ -1,7 +1,7 @@
-﻿export type QuoteStatus = "pending_approval" | "approved" | "needs_inspection" | "collecting" | "completed";
+export type QuoteStatus = "pending_approval" | "approved" | "needs_inspection" | "collecting" | "completed" | "rejected";
 
 /** Pipeline stage shown on the Pipeline page. Derived by the backend (or by stageOf in shared/calc.ts). */
-export type Stage = "pending_extraction" | "requires_approval" | "quote_sent" | "scheduled" | "completed";
+export type Stage = "pending_extraction" | "requires_approval" | "quote_sent" | "scheduled" | "completed" | "rejected";
 
 export interface Job {
   address?: string;
@@ -75,13 +75,7 @@ export interface QuoteItem {
   attention?: boolean;
   /** The owner is replying by hand: the assistant is paused for this customer. */
   human_active?: boolean;
-  /** The owner rejected the draft and Gesir is redrafting it with the owner's note. */
-  revising?: boolean;
-  /** Where the quote is in Orbyte. The dashboard derives it from the status when the backend does not send it. */
-  orbyte?: OrbyteState | null;
 }
-
-export type OrbyteState = "staged" | "synced";
 
 export type ParamValue = string | number | boolean | null;
 
@@ -250,6 +244,8 @@ export interface BookingInput {
   address: string;
   start: string;
   end: string;
+  /** Working hours chosen in the dashboard; the lunch hour is not counted. */
+  hours?: number;
 }
 
 

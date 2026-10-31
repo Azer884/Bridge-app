@@ -34,6 +34,37 @@ export function apiMode(): "mock" | "live" {
   return config.mock ? "mock" : "live";
 }
 
+/** Who is acting in the Orbyte-style dashboard. The role goes to the backend, which decides what it may do. */
+export interface HubUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  approver: boolean;
+  reviewer: boolean;
+  module_role: "admin" | "approver" | "reviewer";
+}
+export interface WalletInfo {
+  credits: number;
+  transactions: { at: number; type: string; change: number; balance: number; details: string }[];
+}
+let actor: { role: string; name: string } | null = null;
+export function setActor(next: { role: string; name: string } | null) {
+  actor = next;
+}
+const SAMPLE_USERS: HubUser[] = [
+  { id: "azer", name: "Azer Hamdaoui", email: "", role: "Company Admin", approver: false, reviewer: false, module_role: "admin" },
+  { id: "omar", name: "Omar Bouhlel", email: "", role: "Member", approver: true, reviewer: false, module_role: "approver" },
+  { id: "tarek", name: "Tarek Ben Slimen", email: "", role: "Member", approver: false, reviewer: true, module_role: "reviewer" },
+];
+
+/** Where to load a customer photo from. The backend gives "/api/media/<id>", which the web dashboard loads with its
+ * session cookie; the mobile app needs the full server address and its API key on the image request. */
+export function mediaSource(url: string): { uri: string; headers?: Record<string, string> } {
+  const uri = /^https?:\/\//.test(url) || !config.baseUrl ? url : `${config.baseUrl.replace(/\/$/, "")}${url}`;
+  return config.apiKey ? { uri, headers: { "x-api-key": config.apiKey } } : { uri };
+}
+
 export class ApiError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -68,6 +99,10 @@ export function explainError(e: unknown): string {
 async function http<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   if (config.apiKey) headers["x-api-key"] = config.apiKey;
+  if (actor) {
+    headers["x-orbyte-role"] = actor.role;
+    headers["x-orbyte-user"] = actor.name;
+  }
   if (body !== undefined) headers["content-type"] = "application/json";
   let res: Response;
   try {
@@ -123,6 +158,24 @@ export const api = {
     return http("POST", `/api/quotes/${encodeURIComponent(userId)}/approve`, total != null ? { total } : undefined);
   },
 
+  /** Says no to an estimate: nothing is sent to the customer, the reason is kept in the activity log. Editing the values brings it back. */
+  rejectQuote(userId: string, reason: string): Promise<unknown> {
+    if (config.mock) return guard(() => mockApi.rejectQuote(userId, reason));
+    return http("POST", `/api/quotes/${encodeURIComponent(userId)}/reject`, { reason });
+  },
+
+  /** The phone tells the backend where to send push notifications (a customer needs the owner, a quote waits). */
+  /** Sends a test notification to every registered phone. */
+  testPush(): Promise<unknown> {
+    if (config.mock) return guard(async () => ({ sent: 1 }));
+    return http("POST", "/api/push/test");
+  },
+
+  registerPush(token: string, platform: string): Promise<unknown> {
+    if (config.mock) return guard(async () => ({ registered: true }));
+    return http("POST", "/api/push/register", { token, platform });
+  },
+
   listPersonas(): Promise<PersonasResponse> {
     if (config.mock) return guard(() => mockApi.listPersonas());
     return http("GET", "/api/personas");
@@ -136,6 +189,16 @@ export const api = {
   setActivePersona(id: string): Promise<unknown> {
     if (config.mock) return guard(() => mockApi.setActivePersona(id));
     return http("POST", "/api/personas/active", { id });
+  },
+
+  async hubUsers(): Promise<HubUser[]> {
+    if (config.mock) return SAMPLE_USERS;
+    return toArray<HubUser>(await http<unknown>("GET", "/api/hub/users"), "users");
+  },
+
+  async wallet(): Promise<WalletInfo> {
+    if (config.mock) return { credits: 100, transactions: [] };
+    return http<WalletInfo>("GET", "/api/wallet");
   },
 
   async listEvents(limit = 50): Promise<AppEvent[]> {
@@ -181,12 +244,6 @@ export const api = {
   resumeAssistant(userId: string): Promise<unknown> {
     if (config.mock) return guard(async () => ({ resumed: true }));
     return http("POST", `/api/quotes/${encodeURIComponent(userId)}/resume`);
-  },
-
-  /** The owner rejects the draft and tells Gesir what to change. Gesir redrafts; nothing goes to the customer. */
-  rejectQuote(userId: string, note: string): Promise<unknown> {
-    if (config.mock) return guard(() => mockApi.rejectQuote(userId, note));
-    return http("POST", `/api/quotes/${encodeURIComponent(userId)}/reject`, { note });
   },
 
   /** After the site visit: sends the customer the final price. The backend refuses unless the estimate was approved. */
@@ -253,7 +310,7 @@ export const api = {
     return guard(() => mockApi.createBooking(input));
   },
 
-  updateBooking(id: string, patch: Partial<Pick<Booking, "start" | "end" | "status">>): Promise<Booking> {
+  updateBooking(id: string, patch: Partial<Pick<Booking, "start" | "end" | "status">> & { hours?: number }): Promise<Booking> {
     if (!config.mock && config.bookingsLive) return http("PATCH", `/api/bookings/${id}`, patch);
     return guard(() => mockApi.updateBooking(id, patch));
   },

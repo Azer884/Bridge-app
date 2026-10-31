@@ -18,7 +18,6 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ORBYTE_LABEL, orbyteState } from "../../shared/params";
 import { C, F, onThemeApplied, useTheme } from "./theme";
 
 export type IconName = keyof typeof Ionicons.glyphMap;
@@ -200,6 +199,7 @@ const pills = (): Record<string, { bg: string; fg: string; label: string }> => (
   pending_extraction: { bg: C.chip, fg: C.ink2, label: "Pending AI extraction" },
   requires_approval: { bg: C.tapeWash, fg: C.ink, label: "Needs your approval" },
   quote_sent: { bg: C.blueWash, fg: C.ink, label: "Quote sent" },
+  rejected: { bg: C.dangerWash, fg: C.dangerInk, label: "Rejected" },
   scheduled: { bg: C.okWash, fg: C.okInk, label: "Scheduled" },
 });
 export function Pill({ status, label }: { status: string; label?: string }) {
@@ -207,18 +207,6 @@ export function Pill({ status, label }: { status: string; label?: string }) {
   return (
     <View style={{ backgroundColor: p.bg, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 3, alignSelf: "flex-start" }}>
       <Text style={{ fontFamily: F.semi, fontSize: 12, color: p.fg }}>{label ?? p.label}</Text>
-    </View>
-  );
-}
-
-export function OrbyteChip({ q }: { q: { status: string; orbyte?: "staged" | "synced" | null; revising?: boolean } }) {
-  const s = orbyteState(q);
-  if (!s) return null;
-  const staged = s === "staged";
-  return (
-    <View accessibilityLabel={ORBYTE_LABEL[s]} style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: staged ? C.tapeWash : C.okWash, borderRadius: 99, paddingHorizontal: 10, paddingVertical: 3, alignSelf: "flex-start" }}>
-      <Ionicons name="cube-outline" size={12} color={staged ? C.ink : C.okInk} />
-      <Text style={{ fontFamily: F.semi, fontSize: 12, color: staged ? C.ink : C.okInk }}>{ORBYTE_LABEL[s]}</Text>
     </View>
   );
 }
