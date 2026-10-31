@@ -1,0 +1,7 @@
+# Same dependencies as pyproject.toml, for `pip install -r requirements.txt`
+av<19
+fastapi
+faster-whisper>=1.2.1
+livekit-api>=1.2.2,<2
+psycopg[binary,pool]>=3.3.6
+uvicorn

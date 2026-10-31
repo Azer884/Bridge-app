@@ -291,7 +291,7 @@ eas build -p android --profile preview
 - **Database:** conversations, jobs, bookings and the audit trail are stored in Replit's PostgreSQL, so data survives republishing.
 - **Secrets:** every API key and token lives in Replit Secrets, never in the code.
 
-📄 Proof of use: [`submission/REPLIT PROOF OF USE.pdf`](submission/REPLIT%20PROOF%20OF%20USE.pdf)
+📄 Proof of use: [`submission/SDC2026_HRISSA_Replit_POU.pdf`](submission/SDC2026_HRISSA_Replit_POU.pdf)
 
 ## How We Use RunPod *(Required)*
 
@@ -308,7 +308,7 @@ curl -X POST https://api.runpod.ai/v2/$RUNPOD_ENDPOINT_ID/runsync \
   -d '{"input": {"messages": [{"role": "user", "content": "Hello"}], "sampling_params": {"max_tokens": 50}}}'
 ```
 
-📄 Proof of use: [`submission/RUNPOD PROOF OF USE.pdf`](submission/RUNPOD%20PROOF%20OF%20USE.pdf)
+📄 Proof of use: [`submission/SDC2026_HRISSA_Runpod_POU.pdf`](submission/SDC2026_HRISSA_Runpod_POU.pdf)
 
 ---
 
@@ -351,8 +351,8 @@ curl -X POST https://api.runpod.ai/v2/$RUNPOD_ENDPOINT_ID/runsync \
 - [ ] Demo video link updated for the Final
 - [x] Replit used, with proof of use in `submission/`
 - [x] RunPod used, with proof of use in `submission/`
-- [ ] Technical & Tools Declaration added to `submission/`
-- [ ] Submission template completed in `submission/`
+- [x] Technical & Tools Declaration added to `submission/`
+- [x] Final report (`SDC2026_HRISSA_Final.pdf`) added to `submission/`
 - [ ] "How to Run" steps verified
 - [ ] No API keys or secrets committed to the repository
 
