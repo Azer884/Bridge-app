@@ -59,7 +59,8 @@ class IncomingService:
         verified, overrides = views.engine_inputs(state, params)
         try:
             quote = compute_quotation(verified, self.config["pricing"], photo, overrides)
-        except PricingError:
+        except PricingError as err:
+            state.pricing_note = str(err)[:200]
             return None                     # the team prices it by hand
         if state.estimated:
             quote.assumptions.append("customer estimated, not measured: " + ", ".join(state.estimated)
@@ -102,7 +103,12 @@ class IncomingService:
             return reply
         quote = self._price(state)
         if quote is None:
-            return reply
+            # the chat is complete but the engine cannot price it (a surface it does not cover, a missing size): it must not
+            # vanish. The owner sees it under "Inspect" and in the hub, with the reason, and is notified.
+            state.quote_status, state.needs_human, state.attention = "needs_inspection", True, True
+            self.store.add_audit(uid, "system", "calculation",
+                                 "Could not be priced automatically, so it needs the owner: " + (state.pricing_note or "unsupported job"))
+            return t("inspection_wrap", state.lang, owner=self._owner(state), message=t("inspection_message", state.lang))
         state.quote = quote.to_dict()
         fields = [{"field": k, "from": "", "to": str(v)} for k, v in state.verified.items()
                   if k not in ("customer_name", "phone")][:12]
@@ -217,6 +223,8 @@ class IncomingService:
             # a job flagged for inspection can be approved too, once the owner has checked it (or decided it is fine)
             if state.quote_status not in ("pending_approval", "needs_inspection"):
                 raise ValueError("no quote is waiting for approval")
+            if not state.quote:
+                raise ValueError("this job could not be priced automatically: reply to the customer, then price it by hand")
             amount = state.quote["total"] if total is None else total
             message = approved_quote_message(amount, state.quote["currency"], self.config.get("business_name", "us"),
                                              state.lang, state.quote.get("schedule"), state.verified,
@@ -579,10 +587,10 @@ class IncomingService:
             self.store.log_event("data_erased", f"{user_id} erased by {by}")
             return True
 
-    def _meaning(self, text):
+    def _meaning(self, text, always=False):
         """What the customer means, read by the model for messages that may hold a withdrawal, a cancel or a restart.
         "other" when the model is off, down, not sure, or the message is an ordinary answer."""
-        if not self.use_ai_intents or not text or not intent.worth_reading(text):
+        if not self.use_ai_intents or not text or not (always or intent.worth_reading(text)):
             return "other"
         label, confidence = intent.classify(self.intent_client or self.client, text)
         return intent.decided(label, confidence)
@@ -654,11 +662,14 @@ class IncomingService:
         if event.type == "text" and event.text.strip():
             self.store.log_message(event.user_id, "in", event.text)
             said = event.text
-            meaning = self._meaning(said)
+            # on a call the words come from speech to text and are often misheard, so every message after a finished job is read
+            meaning = self._meaning(said, always=event.channel == "voice" and state.stage == "done")
             if meaning == "cancel_job" and not flow.wants_cancel(said):
                 said = "cancel"                         # the model read a cancel in other words: the usual cancel handling takes over
             elif meaning == "restart" and not flow._RESTART.search(said):
                 said = "start over"
+            elif meaning == "new_job" and state.stage == "done" and not flow.new_job_intent(said, state):
+                said = "I want another painting job"           # the usual new-job handling takes over
             reply = self._answer(state, said)
         elif event.type == "audio":
             self.store.log_message(event.user_id, "in", "[voice note]", event.media_id)

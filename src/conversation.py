@@ -46,6 +46,7 @@ class ConversationState:
     pending_sizes: dict = None     # sizes given without a unit that could be feet; waiting for "meters or feet?"
     last_photo_id: str = ""        # the customer's latest photo, kept to suggest a colour from it later
     date_issue: str = ""           # the date the customer gave could not be booked (date_past_year...): said when the date is asked again
+    pricing_note: str = ""         # why the engine could not price a finished job (shown to the owner)
     consent: str = ""              # PDPA: "" (not asked) | pending | granted | declined
     consent_at: float = 0.0        # when the customer agreed
     consent_asks: int = 0          # times the notice was sent, so a silent customer is not nagged

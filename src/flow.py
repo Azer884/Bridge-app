@@ -450,8 +450,15 @@ _AGAIN = re.compile(
 _WANT = re.compile(r"\b(want|need|like|looking|planning|nak|mahu|hendak|perlu|ingin)\b", re.I)
 
 
+_NEW_JOB_WORDS = re.compile(
+    r"\b(?:another|a\s+new|new|second|next|one\s+more|lagi|baru)\s+(?:job|jobs|quote|quotation|booking|order|project|one|kerja)\b|"
+    r"\b(?:start|begin)\s+(?:again|over|afresh|a\s+new\s+\w+)\b|\bmula\s+(?:semula|balik)\b", re.I)
+
+
 def new_job_intent(message, state):
     """A customer who already finished a job asks for another one."""
+    if state.stage == "done" and _NEW_JOB_WORDS.search(message):
+        return True                     # "I want another job", "start again": no need to name the paint work again
     if not (_SUPPORTED.search(message) and _WANT.search(message)):
         return False
     if (SWAP.search(message) or is_correction(message)) and not re.search(r"\b(another|new|second|next|lagi|baru)\b", message, re.I):

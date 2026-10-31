@@ -159,5 +159,49 @@ class CancelAndRestartByMeaningTests(unittest.TestCase):
         self.assertTrue(out)
 
 
+class NewJobTests(unittest.TestCase):
+    def finished(self, reader=None, **extra):
+        service = make_service(reply("Which surfaces?"), reply("ok"), reply("ok"))
+        service.config = {**service.config, "privacy": {"require_consent": False}}
+        if reader:
+            service.intent_client, service.use_ai_intents = reader, True
+        service.handle(IncomingEvent("a", UID, text="hi"))
+        state = service.store.load(UID)
+        state.stage, state.quote_status = "done", "approved"
+        state.verified.update({"surfaces": ["walls"], "room_length_m": 4.0, "room_width_m": 3.0, "room_height_m": 2.5, "customer_name": "Siti"})
+        service.store.save(state)
+        return service
+
+    def test_another_job_is_understood_without_naming_the_paint_work(self):
+        from src import flow
+        service = self.finished()                                  # keep it: its temporary folder goes away with it
+        state = service.store.load(UID)
+        for text in ("Could you start the guy? I want another job, a new job.", "I want a new quote", "start again please",
+                     "one more job", "mula semula"):
+            self.assertTrue(flow.new_job_intent(text, state), text)
+        for text in ("thanks", "Could you tell us again?", "what is the price"):
+            self.assertFalse(flow.new_job_intent(text, state), text)
+
+    def test_a_new_job_starts_a_fresh_quote(self):
+        service = self.finished()
+        service.handle(IncomingEvent("b", UID, text="I want another job, a new job"))
+        state = service.store.load(UID)
+        self.assertEqual(len(state.orders), 1)                    # the finished job is kept as history
+        self.assertNotEqual(state.stage, "done")
+
+    def test_on_a_call_every_message_after_a_finished_job_is_read_by_the_model(self):
+        reader = FakeReader("new_job", 0.95)
+        service = self.finished(reader)
+        service.handle(IncomingEvent("b", UID, text="Salts again.", channel="voice"))     # speech to text misheard "start again"
+        self.assertEqual(reader.calls, ["Salts again."])
+        self.assertEqual(len(service.store.load(UID).orders), 1)
+
+    def test_in_a_chat_a_plain_message_is_not_sent_to_the_model(self):
+        reader = FakeReader("new_job", 0.95)
+        service = self.finished(reader)
+        service.handle(IncomingEvent("b", UID, text="thanks"))
+        self.assertEqual(reader.calls, [])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -130,8 +130,16 @@ def users():
 
 @app.get("/hub/{tid}/pending")
 def pending(tid: str):
-    rows = gesir(tid, "/api/quotes?status=pending_approval")["quotes"] + gesir(tid, "/api/quotes?status=needs_inspection")["quotes"]
-    return [project(q) for q in rows]
+    """Everything waiting for a person: estimates to approve or inspect, and customers who asked for a human or changed
+    something (the module flags them). Each row says which kind of action it is."""
+    rows = gesir(tid, "/api/pipeline")["quotes"]
+    out = []
+    for q in rows:
+        if q["status"] in ("pending_approval", "needs_inspection"):
+            out.append({**project(q), "kind": "approve"})
+        elif q["status"] not in ("rejected", "completed") and (q.get("needs_human") or q.get("attention")):
+            out.append({**project(q), "kind": "reply"})
+    return out
 
 
 @app.get("/hub/{tid}/projects")

@@ -105,7 +105,7 @@ const pill=p=>({pending_approval:'warn',needs_inspection:'warn',approved:'ok',co
 
 async function dash(){
  const rows=await j(`/hub/${ORG}/pending`),u=me(),canApprove=u.role==='Company Admin'||u.approver;
- const approve=canApprove?rows:[],review=canApprove?[]:rows;
+ const todo=rows.filter(x=>x.kind!=='reply'),reply=rows.filter(x=>x.kind==='reply'),approve=canApprove?todo:[],review=(canApprove?[]:todo).concat(reply);
  const shown=tab==='approve'?approve:tab==='review'?review:tab==='submit'?[]:rows;
  const cnt=(n)=>`(${n})`;
  m.innerHTML=`<h1>Dashboard</h1><p class="sub">${new Date().toLocaleDateString([], {weekday:'long',day:'numeric',month:'long',year:'numeric'})}</p>
@@ -114,7 +114,7 @@ async function dash(){
  <div class="tabs" style="margin:12px 0">
   <span class="tab ${tab==='all'?'on':''}" data-t="all">All ${cnt(rows.length)}</span><span class="tab dim ${tab==='submit'?'on':''}" data-t="submit">Submit ${cnt(0)}</span>
   <span class="tab review ${tab==='review'?'on':''}" data-t="review">Review ${cnt(review.length)}</span><span class="tab approve ${tab==='approve'?'on':''}" data-t="approve">Approve ${cnt(approve.length)}</span></div>
- ${shown.length?`<div class="mute" style="font-size:12px;padding:6px 0">${canApprove?'To approve':'To review'} <span class="pill mute">${shown.length}</span> from Gesir</div>`+shown.map(x=>`<div class="row"><div><b>${canApprove?'Approve':'Review'} estimate for ${esc(x.client)}</b><small>${esc(x.id)}</small></div>
+ ${shown.length?`<div class="mute" style="font-size:12px;padding:6px 0">${canApprove?'To approve':'To review'} <span class="pill mute">${shown.length}</span> from Gesir</div>`+shown.map(x=>x.kind==='reply'?`<div class="row"><div><b>Reply to ${esc(x.client)}</b><small>${esc(x.id)} · the customer needs a person</small></div><div class="mute">${esc(u.name)}</div><span class="pill info">Needs you</span><span class="mute">${x.amount==null?'':money(x.currency,x.amount)}</span><span class="link" data-open="${esc(x.id)}">Go to chat &#8599;</span></div>`:`<div class="row"><div><b>${canApprove?'Approve':'Review'} estimate for ${esc(x.client)}</b><small>${esc(x.id)}</small></div>
   <div class="mute">${esc(u.name)}</div><span class="pill warn">${x.status==='needs_inspection'?'Needs inspection':'Pending Approval'}</span><span class="mute">${money(x.currency,x.amount)}</span>
   <span class="link" data-open="${esc(x.id)}">Go to ${canApprove?'approval':'review'} &#8599;</span></div>`).join(''):`<div class="empty"><b>No pending items</b>Nothing is waiting for you.</div>`}</div>`}
 m.addEventListener('click',e=>{const t=e.target.closest('[data-t]');if(t){tab=t.dataset.t;dash();return}
