@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, explainError } from "@shared/api";
-import { googleCalendarUrl } from "@shared/gcal";
 import { money, slotLabel } from "@shared/format";
 import { findConflicts } from "@shared/params";
 import type { Booking, Interval, QuoteItem, Slot } from "@shared/types";
@@ -171,32 +170,6 @@ export default function Calendar() {
               ))}
             </div>
           </>
-        )}
-      </section>
-
-      <section className="panel gpanel">
-        <div>
-          <b>Google Calendar</b>
-          <p>
-            {g.connected
-              ? g.mode === "demo"
-                ? "Connected in demo mode. Sample Google events show in grey and nothing leaves this browser."
-                : "Connected. Your other events show in grey, and bookings made here are copied to your calendar."
-              : g.mode === "off"
-                ? "Not set up. Add VITE_GOOGLE_CLIENT_ID to the web .env to turn this on."
-                : "Connect to see your other events here and copy new bookings to your calendar."}
-          </p>
-        </div>
-        {g.connected ? (
-          <button className="btn small" onClick={() => g.disconnect()}>Disconnect</button>
-        ) : (
-          <button
-            className="btn small primary"
-            disabled={g.mode === "off"}
-            onClick={() => g.connect().catch((e: Error) => toast(e.message, true))}
-          >
-            Connect Google Calendar
-          </button>
         )}
       </section>
 
@@ -596,16 +569,6 @@ function EditDialog({ b, synced, fetchEvents, onClose, onSaved }: {
       </div>
       <div className="modal-actions">
         <button className="btn" onClick={onClose}>Close</button>
-        {!cancelled && !synced && (
-          <a
-            className="btn"
-            target="_blank"
-            rel="noreferrer"
-            href={googleCalendarUrl({ title: `${b.customer} (Gesir)`, start: b.start, end: b.end, location: b.address, details: b.phone ? `WhatsApp: +${b.phone}` : "" })}
-          >
-            Add to Google Calendar
-          </a>
-        )}
         {cancelled ? (
           <button className="btn danger" disabled={busy} onClick={() => run(() => api.deleteBooking(b.id), "Booking removed", true)}>Remove from calendar</button>
         ) : (

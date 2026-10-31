@@ -140,7 +140,7 @@ See [`docs/STATUS.md`](docs/STATUS.md) for what is built and what is still missi
 │   └── trades/aircon.json             # a second trade's rate card
 ├── dashboard/                         # built web dashboard served by the backend
 ├── docs/
-│   ├── STATUS.md                      # what works, what is missing, how to link Google Calendar
+│   ├── STATUS.md                      # what works and what is missing
 │   ├── PRICING.md, PDPA.md            # where the rates come from; privacy and consent
 │   └── ORBYTE.md                      # the assumed Orbyte interface
 ├── prompts/
@@ -155,7 +155,7 @@ See [`docs/STATUS.md`](docs/STATUS.md) for what is built and what is still missi
 │   │   grounding.py, guard.py
 │   ├── pricing.py                     # deterministic estimate and working-hours engine
 │   ├── scheduling.py                  # slot suggestions, area clustering, bookings
-│   ├── calendar_scheduler.py          # the team's calendar rules (working hours, Google Calendar)
+│   ├── calendar_scheduler.py          # the team's calendar rules (working hours)
 │   ├── whatsapp.py, events.py         # WhatsApp sending, media download, webhook parsing
 │   ├── whatsapp_calling.py            # call hand-off to LiveKit
 │   ├── transcribe.py, vision.py       # voice notes (Whisper) and photo assessment
@@ -324,7 +324,6 @@ curl -X POST https://api.runpod.ai/v2/$RUNPOD_ENDPOINT_ID/runsync \
 ## Future Improvements
 
 - [ ] Confirm voice notes and WhatsApp calls end to end in the live demo
-- [ ] Link Google Calendar on the server
 - [x] Exclude weekends and Malaysian public holidays (`config/holidays.json`)
 - [ ] Make the chat flow trade-neutral, so aircon chats run end to end
 - [ ] WhatsApp message templates, so estimates and slot offers work after the 24-hour window

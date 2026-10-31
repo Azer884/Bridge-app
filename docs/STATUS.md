@@ -12,17 +12,9 @@
   calendar, personas, status, and writing to a customer in the assistant's place.
 - PostgreSQL storage, an audit trail per job, an events trail for debugging.
 
-## Link Google Calendar
-The web dashboard already syncs with Google in the browser; it only needs a Google OAuth client id.
-1. Google Cloud console: create a project, then APIs and Services, Library, enable **Google Calendar API**.
-2. OAuth consent screen: type External, add your own Google account under Test users (testing mode is fine for the demo).
-3. Credentials, Create credentials, **OAuth client ID**, type **Web application**. Under Authorized JavaScript origins add
-   `https://gesir-ai.replit.app` and `http://localhost:5173`. Copy the client id (it is public, not a secret).
-4. Put `VITE_GOOGLE_CLIENT_ID=<the id>` in `frontend/web/.env`, run `scripts/build_dashboard.sh <path to frontend/web>`,
-   commit `dashboard/`, republish. The id is baked into the build, which is why a rebuild is needed.
-5. Dashboard, Calendar, Connect Google. Busy events from Google are sent with every slot request so they are never offered.
-Limits: it syncs only while the dashboard is open in a browser. The server-side route (the team's `GoogleCalendar` class
-in `src/calendar_scheduler.py`) needs a server-held OAuth token and is not connected yet.
+## Google Calendar
+Not part of the product for now: the dashboard no longer shows it. The old browser sync code (`frontend/web/src/google.ts`) and
+the server class in `src/calendar_scheduler.py` are kept for later but are not used.
 
 ## What is missing
 1. **WhatsApp production setup.** The bot can only reply freely within 24 hours of the customer's last message. Estimates and
@@ -31,7 +23,7 @@ in `src/calendar_scheduler.py`) needs a server-held OAuth token and is not conne
 2. **Calls.** The voice-agent branch is not connected (planned).
 3. **Voice notes are untested on the live server.** `GET /api/voice/health` says whether the model loaded and why not.
 4. **Owner login.** One shared dashboard password; no per-person accounts or roles. Rotate `INCOMING_API_KEY` (it was pasted in chats).
-5. **Google Calendar on the server** (see above), and Malaysian public holidays are not excluded from the calendar.
+5. **Google Calendar** is not used for now (see above). Weekends and public holidays are excluded (`config/holidays.json`).
 6. **Rate card and settings editor.** Rates, crew size, working hours and services live in `config/business_config.example.json`;
    the SME cannot edit them from the dashboard. The rates are demo values until the real company supplies its own.
 7. **Customer-side scheduling.** The customer cannot reschedule or cancel on their own; a day-before reminder is not sent.
