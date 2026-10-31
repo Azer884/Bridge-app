@@ -75,7 +75,7 @@ One SME, one task, one run: a customer asks for a repaint on WhatsApp and ends w
 | --------- | ----------------------- |
 | 1. One clear SME problem | One user (a painting contractor's owner) and one chore: WhatsApp enquiry to approved quote and booked visit. |
 | 2. Core automated journey | The six steps above run end to end on synthetic data, from the WhatsApp message to the recorded result. |
-| 3. Accuracy and ease of learning | The same details always give the same price (deterministic engine, 495 automated tests). The dashboard uses Orbyte's layout and plain words, so an Orbyte user needs no training. |
+| 3. Accuracy and ease of learning | The same details always give the same price (deterministic engine, 607 automated tests). The dashboard uses Orbyte's layout and plain words, so an Orbyte user needs no training. |
 | 4. People stay in control | Roles decide who can act; approval is enforced in the backend (a Reviewer gets 403); the activity log is written as each action happens. |
 | 5. Orbyte fit and reuse | The dashboard follows Orbyte's structure (Organization, Workspace, Pending Actions, Wallet); a second business or trade is configuration, not new code. |
 | 6. Business benefit and SDG | Benefit with assumptions below, tied to SDG 8.2 and 8.3. |
@@ -88,7 +88,7 @@ One SME, one task, one run: a customer asks for a repaint on WhatsApp and ends w
 - **Accuracy and exceptions.** Prices come from `src/pricing.py` and the rate table, never from a model. Inspection cases (damp, mould, structural damage), customers who ask for a person, jobs the engine cannot price, and repeated unclear answers go to the owner with a clear reason.
 - **Data and interfaces.** Synthetic customers and data only. The assumed Orbyte interface (roles, signed events, embedding) is documented in [`docs/ORBYTE.md`](docs/ORBYTE.md).
 - **Reuse.** Business settings live in `config/` (rate card, required fields, personas, working rules, holidays). The AI rules are split into `prompts/global.txt` (every trade) and `prompts/trades/<trade>.txt` (one file per trade).
-- **Engineering.** Deployed at the Live Demo link, 495 unit tests (`python -m unittest discover tests`), and steady commits on `main`.
+- **Engineering.** Deployed at the Live Demo link, 607 unit tests (`python -m unittest discover tests`), and steady commits on `main`.
 
 ## Impact & Evidence
 
