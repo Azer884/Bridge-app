@@ -75,7 +75,13 @@ export interface QuoteItem {
   attention?: boolean;
   /** The owner is replying by hand: the assistant is paused for this customer. */
   human_active?: boolean;
+  /** The owner rejected the draft and Gesir is redrafting it with the owner's note. */
+  revising?: boolean;
+  /** Where the quote is in Orbyte. The dashboard derives it from the status when the backend does not send it. */
+  orbyte?: OrbyteState | null;
 }
+
+export type OrbyteState = "staged" | "synced";
 
 export type ParamValue = string | number | boolean | null;
 

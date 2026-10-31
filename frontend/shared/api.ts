@@ -1,4 +1,4 @@
-﻿import { mockApi } from "./mock";
+import { mockApi } from "./mock";
 import type { AuditEntry, Interval, ParamValue, PdfPreview, PipelineRow, QuoteDetail, Recalculation, Slot } from "./types";
 import type {
   AppEvent,
@@ -181,6 +181,12 @@ export const api = {
   resumeAssistant(userId: string): Promise<unknown> {
     if (config.mock) return guard(async () => ({ resumed: true }));
     return http("POST", `/api/quotes/${encodeURIComponent(userId)}/resume`);
+  },
+
+  /** The owner rejects the draft and tells Gesir what to change. Gesir redrafts; nothing goes to the customer. */
+  rejectQuote(userId: string, note: string): Promise<unknown> {
+    if (config.mock) return guard(() => mockApi.rejectQuote(userId, note));
+    return http("POST", `/api/quotes/${encodeURIComponent(userId)}/reject`, { note });
   },
 
   /** After the site visit: sends the customer the final price. The backend refuses unless the estimate was approved. */

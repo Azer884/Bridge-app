@@ -19,3 +19,12 @@ export const IconStatus = () => (
   <svg {...p}><path d="M3 12h4l3-7 4 14 3-7h4" /></svg>
 );
 
+
+export const IconShield = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6l8-3z" /><path d="M9 12l2 2 4-4" /></svg>
+);
+
+/** Generic hexagon mark used beside the Orbyte name. */
+export const OrbyteMark = ({ size = 18 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true"><path d="M12 2.5l8.2 4.75v9.5L12 21.5l-8.2-4.75v-9.5L12 2.5z" /><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" /></svg>
+);

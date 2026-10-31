@@ -8,7 +8,9 @@ import { useAsync } from "../hooks";
 import { Modal } from "../ui/Modal";
 import { useToast } from "../ui/Toast";
 import { AuditLog } from "./AuditLog";
+import { OrbyteChip } from "../ui/StatusChip";
 import { FinalPrice } from "./FinalPrice";
+import { RejectModal } from "./RejectModal";
 import { ChatPanel } from "./ChatPanel";
 import { ParamsForm } from "./ParamsForm";
 import { PdfPanel } from "./PdfPanel";
@@ -18,7 +20,9 @@ type Tab = "quote" | "chat" | "activity";
 
 export function QuoteDetail({ userId, onChanged }: { userId: string; onChanged: () => void }) {
   const nav = useNavigate();
-  const { data, error, loading, reload } = useAsync(() => api.getQuoteDetail(userId), [userId]);
+  const { data, error, loading, reload } = useAsync(() => api.getQuoteDetail(userId), [userId], 3_000);
+  // Kept here so the chosen tab survives the remount when the status changes.
+  const [tab, setTab] = useState<Tab>("quote");
 
   if (!data) {
     return (
@@ -32,14 +36,13 @@ export function QuoteDetail({ userId, onChanged }: { userId: string; onChanged: 
       </>
     );
   }
-  return <Loaded key={userId + data.status + data.audit.length} d={data} reload={reload} onChanged={onChanged} />;
+  // The activity log reads straight from `d`, so new entries appear on the next poll without remounting (which would drop unsaved edits).
+  return <Loaded key={userId + data.status + !!data.revising} d={data} reload={reload} onChanged={onChanged} tab={tab} setTab={setTab} />;
 }
 
-function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<void>; onChanged: () => void }) {
+function Loaded({ d, reload, onChanged, tab, setTab }: { d: Detail; reload: () => Promise<void>; onChanged: () => void; tab: Tab; setTab: (t: Tab) => void }) {
   const nav = useNavigate();
   const toast = useToast();
-  const [tab, setTab] = useState<Tab>("quote");
-
   const params = d.params;
   const server = params?.current ?? {};
   const [values, setValues] = useState<Record<string, ParamValue>>(server);
@@ -53,7 +56,8 @@ function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<voi
   const [sendErr, setSendErr] = useState<unknown>(null);
   const seq = useRef(0);
 
-  const readOnly = d.locked || d.status === "collecting" || !d.quote || !params;
+  const [rejecting, setRejecting] = useState(false);
+  const readOnly = d.locked || d.status === "collecting" || !!d.revising || !d.quote || !params;
   const errors = useMemo(() => (params ? validateParams(params.schema, values) : {}), [params, values]);
   const hasErrors = Object.keys(errors).length > 0;
   const dirty = JSON.stringify(values) !== JSON.stringify(server);
@@ -131,7 +135,10 @@ function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<voi
             </p>
             {(d.needs_human || d.attention) && <p className="alert warm" role="status">Needs you: open the chat tab to reply.</p>}
           </div>
-          <span className={`stage-chip s-${d.stage}`} title={stage?.hint}>{stage?.label}</span>
+          <div className="chip-stack">
+            <span className={`stage-chip s-${d.stage}`} title={stage?.hint}>{stage?.label}</span>
+            <OrbyteChip q={d} />
+          </div>
         </div>
         {d.job.preferred_datetime && <p className="hint" style={{ marginTop: 14 }}>Customer asked for: <b>{d.job.preferred_datetime}</b></p>}
         <div className="tabs" role="tablist" aria-label="Quote sections" style={{ marginTop: 16 }}>
@@ -161,6 +168,10 @@ function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<voi
                 <Link className="btn primary" to={`/app/calendar?book=${d.user_id}`}>Book a site visit</Link>
               </div>
             </section>
+          )}
+
+          {d.revising && (
+            <div className="alert info" role="status">Gesir is redrafting this quote with your note. Nothing was sent to the customer. The new draft appears here in a moment.</div>
           )}
 
           {d.status === "collecting" && (
@@ -247,13 +258,23 @@ function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<voi
                 <small className="muted">The customer gets</small>
                 <b className="num">{money(finalTotal, cur)}</b>
               </div>
+              <div className="row-actions"><button className="btn danger" disabled={calc.status === "loading"} onClick={() => setRejecting(true)}>Reject and re-prompt</button>
               <button className="btn primary" disabled={!canSend} onClick={() => { setSendErr(null); setConfirm(true); }}>
                 {calc.status === "loading" ? "Recalculating…" : "Approve and send"}
-              </button>
+              </button></div>
             </div>
           )}
           {!readOnly && hasErrors && <p className="err" role="alert">Fix the highlighted values before sending.</p>}
         </>
+      )}
+
+      {rejecting && (
+        <RejectModal
+          userId={d.user_id}
+          name={d.job.name ?? "the customer"}
+          onClose={() => setRejecting(false)}
+          onDone={() => { setRejecting(false); toast("Draft rejected. Gesir is redrafting."); onChanged(); void reload(); }}
+        />
       )}
 
       {confirm && (

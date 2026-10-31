@@ -47,3 +47,14 @@ export function overlaps(a: Interval, b: Interval): boolean {
 export function findConflicts(window: Interval, events: (Interval & { id?: string })[], ignoreId?: string): (Interval & { id?: string })[] {
   return events.filter((e) => e.id !== ignoreId && overlaps(window, e));
 }
+
+export const ORBYTE_LABEL = { staged: "Staged in Orbyte Hub", synced: "Synced to Orbyte CRM" } as const;
+
+/** Drafts waiting for the owner are staged in the Hub. Once the owner approves, the quote is synced to the CRM. */
+export function orbyteState(q: { status: string; orbyte?: "staged" | "synced" | null; revising?: boolean }): "staged" | "synced" | null {
+  if (q.orbyte !== undefined) return q.orbyte;
+  if (q.revising) return null;
+  if (q.status === "pending_approval") return "staged";
+  if (q.status === "approved" || q.status === "completed") return "synced";
+  return null;
+}

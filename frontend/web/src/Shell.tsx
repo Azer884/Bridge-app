@@ -2,7 +2,7 @@ import { NavLink, Outlet } from "react-router-dom";
 import { api, apiMode } from "@shared/api";
 import { useAsync } from "./hooks";
 import { ThemeToggle } from "./ui/ThemeToggle";
-import { IconCalendar, IconChat, IconPipeline, IconPersona, IconQuotes, IconStatus } from "./ui/Icons";
+import { IconCalendar, IconChat, IconPipeline, IconPersona, IconQuotes, IconShield, IconStatus, OrbyteMark } from "./ui/Icons";
 
 export default function Shell() {
   const pending = useAsync(() => api.listQuotes("pending_approval"), [], 20_000);
@@ -54,10 +54,13 @@ export default function Shell() {
             {health.data?.label ?? "Checking models"}
           </span>
           <span>{apiMode() === "mock" ? "Showing sample data" : "Connected to live backend"}</span>
+          <span className="orbyte-by side"><OrbyteMark size={16} /> Powered by Orbyte</span>
         </div>
       </aside>
       <main className="main">
         <div className="topbar">
+          <span className="orbyte-by"><OrbyteMark /> Orbyte Hub</span>
+          <span className="role-chip" title="You can review, edit, approve and reject quotes for your business."><IconShield /> Role: SME Owner</span>
           <ThemeToggle />
         </div>
         <Outlet />

@@ -1,4 +1,4 @@
-﻿import { EXTRA_QUOTES, appendAudit, getDetail, store as detailStore, stubPdf, stubRecalc, stubSlots } from "./mock-detail";
+import { EXTRA_QUOTES, appendAudit, getDetail, store as detailStore, stubPdf, stubRecalc, stubSlots } from "./mock-detail";
 import { fallbackStage } from "./params";
 import type { AuditEntry, Interval, ParamValue, PdfPreview, PipelineRow, QuoteDetail, Recalculation, Slot, Stage } from "./types";
 import type {
@@ -390,6 +390,24 @@ export const mockApi = {
     await wait(500);
     const hours = detailStore[userId]?.duration ?? 2;
     return stubSlots(hours, bookings, busy, userId);
+  },
+
+  async rejectQuote(userId: string, note: string): Promise<{ revising: true }> {
+    await wait(500);
+    const q = quotes.find((x) => x.user_id === userId);
+    if (!q || q.status !== "pending_approval" || !q.quote) throw new MockError(409, "Nothing pending for this customer");
+    if (note.trim().length < 5) throw new MockError(422, "Tell Gesir what to change (at least a few words)");
+    q.revising = true;
+    q.updated_at = new Date().toISOString();
+    appendAudit(userId, "owner", "state_change", `Rejected the draft and asked Gesir to redraft: "${note.trim()}"`);
+    // Demo stand-in for the backend: Gesir redrafts a few seconds later.
+    setTimeout(() => {
+      q.revising = false;
+      q.updated_at = new Date().toISOString();
+      if (q.quote) q.quote.assumptions = [...q.quote.assumptions, `Redrafted with your note: ${note.trim()}`];
+      appendAudit(userId, "ai", "calculation", "Redrafted the quote with the owner's note");
+    }, 4500);
+    return { revising: true };
   },
 
   async confirmFinal(userId: string, total: number): Promise<{ final: true }> {

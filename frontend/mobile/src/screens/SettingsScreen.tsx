@@ -18,6 +18,11 @@ export default function SettingsScreen() {
         <Row left={ic("pulse-outline")} title="Status" subtitle="Models and recent events" onPress={() => nav.navigate("Status")} />
       </Group>
 
+      <Group title="Account" footer="Quotes are staged in Orbyte Hub for your approval, then synced to Orbyte CRM.">
+        <Row left={ic("shield-checkmark-outline")} title="Role" value="SME Owner" chevron={false} />
+        <Row left={ic("cube-outline")} title="Powered by" value="Orbyte" chevron={false} />
+      </Group>
+
       <Group title="Appearance" footer="System follows your phone's setting.">
         <Row title={<Segmented<Pref> value={pref} onChange={setPref} options={[{ id: "system", label: "System" }, { id: "light", label: "Light" }, { id: "dark", label: "Dark" }]} />} chevron={false} />
       </Group>

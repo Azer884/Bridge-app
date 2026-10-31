@@ -417,7 +417,17 @@ h1, h2, h3 { font-weight: 700; }
 a.btn { text-decoration: none; }
 
 /* theme toggle + top bar */
-.topbar { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.topbar { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-bottom: 8px; }
+.orbyte-by { display: inline-flex; align-items: center; gap: 8px; margin-right: auto; font-weight: 700; font-size: 14px; color: var(--ink-2); }
+.orbyte-by.side { margin: 0; font-weight: 600; color: #8fb0ba; }
+.role-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; padding: 6px 12px; border-radius: 99px; background: var(--blue-wash); color: var(--ink); border: 1px solid var(--line); }
+.orbyte-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 99px; white-space: nowrap; }
+.orbyte-chip.staged { background: var(--tape-wash); color: var(--ink); }
+.orbyte-chip.synced { background: var(--ok-wash); color: var(--ok-ink); }
+.orbyte-hex { width: 10px; height: 10px; background: currentColor; clip-path: polygon(50% 0, 100% 25%, 100% 75%, 50% 100%, 0 75%, 0 25%); }
+.chip-stack { display: grid; gap: 6px; justify-items: end; align-self: flex-start; }
+.quick { display: flex; gap: 8px; flex-wrap: wrap; }
+.row-chip .body .orbyte-chip { margin-top: 4px; justify-self: start; }
 .theme-toggle { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; border: 2px solid var(--ink); background: transparent; color: var(--ink); }
 .theme-toggle:hover { background: var(--chip); }
 .theme-toggle svg { width: 20px; height: 20px; }

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { explainError } from "@shared/api";
 import { money, phone, timeAgo } from "@shared/format";
@@ -6,7 +6,7 @@ import type { QuoteStatus } from "@shared/types";
 import { loadAllQuotes } from "../data";
 import { useAsync } from "../hooks";
 import { QuoteDetail } from "../quote/QuoteDetail";
-import { STATUS_COLOR } from "../ui/StatusChip";
+import { OrbyteChip, STATUS_COLOR } from "../ui/StatusChip";
 
 const TABS: { id: QuoteStatus; label: string }[] = [
   { id: "pending_approval", label: "Needs your OK" },
@@ -92,6 +92,7 @@ export default function Quotes() {
                   <span className="body">
                     <b>{q.job.name ?? phone(q.job.phone ?? q.user_id)}</b>
                     <small>{q.job.address ?? "No address yet"}</small>
+                    <OrbyteChip q={q} />
                   </span>
                   <span className="amt num">
                     {q.quote?.total != null ? money(q.quote.total, q.quote.currency) : "Inspect"}
