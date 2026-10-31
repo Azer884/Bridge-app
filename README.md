@@ -1,5 +1,5 @@
 > [!IMPORTANT]
-> **Submission documents** are in [`submission/`](submission/): the Final report, the Technical & Tools Declaration, the Preliminary proposal, and the Replit and RunPod proofs of use.
+> **Submission documents** are in [`submission/`](submission/): the Final report, the Technical & Tools Declaration, and the Replit and RunPod proofs of use.
 
 # Gesir.AI
 
