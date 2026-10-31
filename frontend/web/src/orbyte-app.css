@@ -66,3 +66,278 @@
 .shell.ob .modal, .shell.ob .sheet { background: #fff; border: 1px solid var(--line); border-radius: 12px; color: var(--ink); }
 .shell.ob .link { color: var(--blue); }
 .shell.ob a { color: inherit; }
+
+/* pages shown as tabs inside Organization settings: the tab already names them, so their own title is hidden */
+.ob-embed .page-head h1, .ob-embed .page-head p { display: none; }
+.ob-embed .page-head { margin-bottom: 8px; justify-content: flex-end; }
+.ob-settings-tabs { margin-bottom: 14px; }
+
+/* plain persona cards and chat preview */
+.shell.ob .cards { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.shell.ob .persona-card { border: 1px solid var(--line); border-radius: 12px; box-shadow: inset 4px 0 0 var(--c, var(--blue)); }
+.shell.ob .persona-card[aria-pressed="true"] { border-color: var(--blue); box-shadow: inset 4px 0 0 var(--blue), 0 0 0 3px var(--blue-wash); }
+.shell.ob .persona-card .swatch { height: auto; background: none; color: var(--ink); font-size: 17px; font-weight: 700; letter-spacing: 0; padding: 14px 16px 0; }
+.shell.ob .persona-card .label { padding: 4px 16px 14px; }
+.shell.ob .phone { border-radius: 12px; background: var(--muted); }
+.shell.ob .phone .who { border-radius: 12px 12px 0 0; background: var(--blue); }
+
+/* Job Calendar: the same look as Orbyte's Leave Calendar (Monday to Friday, holidays as blue pills) */
+.ob-cal-page { display: flex; flex-direction: column; }
+.ob-first { order: -1; }
+.shell.ob .nav .item.folder { color: var(--ink-3); padding-left: 24px; cursor: default; font-size: 14px; }
+.ob-cal { padding: 24px; }
+.ob-cal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+.ob-cal-head h1 { font-size: 28px; font-weight: 500; }
+.ob-cal-nav { display: flex; align-items: center; gap: 18px; font-size: 15px; }
+.ob-icon { border: 0; background: none; font-size: 22px; color: var(--ink-3); padding: 0 6px; cursor: pointer; }
+.ob-cal-tools { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+.ob-cal-tools .ob-tabs { margin: 0 auto 0 0; }
+.shell.ob .ob-month { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; border: 0; background: none; }
+.shell.ob .ob-month .dow { background: #f1f3f6; padding: 10px 12px; font-size: 13px; font-weight: 500; color: var(--ink-2); border: 0; text-align: left; }
+.shell.ob .ob-month .dow:first-child { border-radius: 10px 0 0 10px; }
+.shell.ob .ob-month .dow:nth-child(5) { border-radius: 0 10px 10px 0; }
+.shell.ob .ob-month .day { min-height: 110px; background: #fff; border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; align-items: stretch; cursor: pointer; }
+.shell.ob .ob-month .day:nth-child(5n + 5) { border-right: 0; }
+.shell.ob .ob-month .day .d { align-self: flex-start; font-size: 14px; color: var(--ink-3); padding: 0; min-height: 0; cursor: pointer; }
+.shell.ob .ob-month .day.dim, .shell.ob .ob-month .day.holiday { background: #f1f3f6; }
+.shell.ob .ob-month .day.today .d { color: var(--blue); font-weight: 800; }
+.ob-holiday { background: #e5f0ff; border: 1px solid #b9d4fb; color: #1c3d73; border-radius: 6px; padding: 2px 8px; font-size: 11px; line-height: 1.4; }
+.shell.ob .ob-month .ev { border-radius: 6px; font-size: 11px; padding: 2px 8px; }
+
+/* Orbyte settings pattern: underline tabs, a bold section title with a muted line, then a list of rows */
+.ob-utabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line); margin-bottom: 20px; }
+.ob-utabs button { background: none; border: 0; border-bottom: 2px solid transparent; padding: 10px 8px; margin-bottom: -1px; font-weight: 600; font-size: 14px; color: var(--ink); cursor: pointer; }
+.ob-utabs button.on { color: var(--blue); border-bottom-color: var(--blue); }
+.ob-sec-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.ob-sec { font-size: 20px; font-weight: 700; margin: 0; }
+.ob-sec-sub { color: var(--ink-3); font-size: 14px; margin: 2px 0 0; max-width: 70ch; }
+.ob-list { background: #fff; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 16px; overflow: hidden; }
+.ob-item { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-top: 1px solid var(--line); }
+.ob-item:first-child { border-top: 0; }
+.ob-item.picked { background: #f8fbff; }
+.ob-item.empty-row { color: var(--ink-3); justify-content: center; padding: 22px; }
+.ob-ico { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 10px; background: #f4f8ff; color: var(--blue); font-weight: 700; }
+.ob-item-main { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.ob-item-main b { font-size: 15px; }
+.ob-item-main small { flex-basis: 100%; color: var(--ink-3); font-size: 13px; }
+.ob-item-meta { color: var(--ink-3); font-size: 13px; white-space: nowrap; }
+.ob-item-actions { display: flex; gap: 8px; flex: none; }
+.ob-badge { display: inline-block; border: 1px solid var(--line); border-radius: 6px; padding: 0 8px; font-size: 12px; font-weight: 600; color: var(--ink-2); background: #fff; line-height: 20px; }
+.ob-badge.ok { border-color: #5dc58a; color: #1a7f4b; }
+.ob-badge.warn { border-color: #f0b070; color: #b56a12; }
+.ob-badge.bad { border-color: #e88a82; color: #b3261e; }
+.ob-banner { border: 1px solid #5cc8c8; background: #eefafa; color: #1c4f55; border-radius: 8px; padding: 10px 12px; font-size: 14px; margin-bottom: 14px; }
+.ob-banner.warn { border-color: #f0b070; background: #fff8ee; color: #8a5a14; }
+.ob-banner.bad { border-color: #e88a82; background: #fff1ef; color: #8e2412; }
+.ob-check { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+.ob-embed .ob-sec-head { margin-top: 4px; }
+.shell.ob .edit-grid { gap: 16px; }
+.shell.ob .phone { background: #fff; border: 1px solid var(--line); }
+.shell.ob .phone .m { background: #f1f3f6; box-shadow: none; }
+.shell.ob .phone .m.me { background: var(--blue-wash); }
+
+/* WhatsApp row and week/day views */
+.btn.danger-o, .shell.ob .btn.danger-o { background: #fff; color: #b3261e; border: 1px solid #e88a82; box-shadow: none; }
+.btn.danger-o:hover { background: #fff1ef; }
+.ob-item-actions select, .ob-item-actions input { height: 34px; padding: 0 8px; }
+.ob-item-actions input { width: 130px; }
+.shell.ob .nav .grp.leaf .count { margin-left: auto; background: var(--blue); color: #fff; border-radius: 99px; padding: 0 8px; font-size: 12px; font-weight: 700; }
+.shell.ob .nav .grp.leaf { display: flex; align-items: center; }
+.shell.ob .ob-week .day { min-height: 320px; }
+.shell.ob .ob-day { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.shell.ob .ob-day .day { min-height: 360px; border-right: 0; }
+
+/* project (quote) page */
+.shell.ob .main { font-size: 15px; }
+.ob-crumbs { display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--ink-3); margin-bottom: 14px; }
+.ob-crumbs a { color: var(--blue); text-decoration: none; font-weight: 600; }
+.ob-crumbs b { color: var(--ink); font-weight: 600; }
+.shell.ob .detail-head h2 { font-size: 22px; font-weight: 600; }
+.shell.ob .detail-head p { font-size: 14px; margin-top: 2px; }
+.shell.ob .alert.warm, .shell.ob .alert.info, .shell.ob .hint { border: 1px solid #f0b070; background: #fff8ee; color: #8a5a14; border-radius: 8px; padding: 8px 12px; font-size: 14px; box-shadow: none; }
+.shell.ob .alert.info { border-color: #5cc8c8; background: #eefafa; color: #1c4f55; }
+.shell.ob .alert { border-left-width: 1px; }
+.shell.ob .price-row { font-size: 14px; }
+.shell.ob .price-row.total { font-size: 18px; }
+.shell.ob .approve-bar { background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: none; }
+.shell.ob .sendbar { border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px -12px rgba(28, 49, 83, .25); background: #fff; }
+.shell.ob .note { border: 1px solid var(--line); border-left-width: 1px; border-radius: 8px; background: #f8fafc; color: var(--ink-2); padding: 8px 12px; }
+.shell.ob .note.flag { border-color: #f0b070; background: #fff8ee; color: #8a5a14; }
+.shell.ob .note.assume { border-color: var(--line); background: #f8fafc; }
+.shell.ob .total-input { border: 1px solid var(--line) !important; border-radius: 8px; background: #fff; }
+.shell.ob .price-row.total { border-top: 1px solid var(--ink-3); }
+
+/* ---------- sidebar, matched to Orbyte's: white rail, icon rows, chevrons, blue bar on the active row ---------- */
+.shell.ob { grid-template-columns: 300px minmax(0, 1fr); --wall: #f5f8fe; }
+.shell.ob .side { background: #fff !important; border-right: 1px solid var(--line); }
+.shell.ob .brand { gap: 10px; padding: 20px 18px 12px; font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
+.shell.ob .brand-mark { width: 34px; height: 34px; }
+.shell.ob .org { flex-direction: row; align-items: center; gap: 10px; margin: 4px 12px 10px; padding: 9px 10px; border-radius: 10px; cursor: default; }
+.shell.ob .org-ico { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 8px; background: #eef3fb; color: var(--blue); flex: none; }
+.shell.ob .org-ico svg { width: 18px; height: 18px; }
+.shell.ob .org-txt { flex: 1; display: flex; flex-direction: column; line-height: 1.25; }
+.shell.ob .org > svg { color: var(--ink-3); }
+.shell.ob .menu-search { display: flex; align-items: center; gap: 10px; margin: 0 12px 8px; padding: 0 10px; border: 0; border-radius: 10px; background: #f3f6fb; color: var(--ink-3); }
+.shell.ob .menu-search input { flex: 1; border: 0; background: none; padding: 10px 0; font-size: 15px; outline: none; }
+.shell.ob .menu-search:focus-within { box-shadow: 0 0 0 2px var(--blue-wash), 0 0 0 1px var(--blue); }
+.shell.ob .menu-search kbd { font: 600 12px var(--font); color: var(--ink-3); border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; background: #fff; }
+.shell.ob .nav { padding: 4px 12px 8px; }
+.shell.ob .nav-label { font-size: 14px; color: var(--ink-2); margin: 6px 6px 6px; }
+.shell.ob .nav .grp, .shell.ob .nav .item {
+  display: flex; align-items: center; gap: 12px; width: 100%; border: 0; background: none; text-align: left; text-decoration: none;
+  color: var(--ink); border-radius: 8px; cursor: pointer; font: 500 16px var(--font); padding: 10px 12px; margin: 1px 0;
+}
+.shell.ob .nav .grp svg, .shell.ob .nav .item svg { flex: none; color: var(--ink-2); }
+.shell.ob .nav .grp .lbl { flex: 1; }
+.shell.ob .nav .grp > svg:last-child { color: var(--ink-3); }
+.shell.ob .nav .grp:hover, .shell.ob .nav .item:not(.dim):not(.folder):hover { background: #f3f6fb; }
+.shell.ob .nav .grp.on, .shell.ob .nav .item.on { background: var(--blue-wash); color: var(--blue); font-weight: 700; box-shadow: inset 3px 0 0 var(--blue); }
+.shell.ob .nav .grp.on svg, .shell.ob .nav .item.on svg { color: var(--blue); }
+.shell.ob .nav .item { font-size: 15px; padding: 8px 12px 8px 26px; gap: 10px; }
+.shell.ob .nav .item svg { width: 18px; height: 18px; }
+.shell.ob .nav .item.deep { padding-left: 48px; }
+.shell.ob .nav .item.folder { cursor: default; color: var(--ink); font-size: 15px; }
+.shell.ob .nav .item.dim, .shell.ob .nav .grp.dim { color: var(--ink-2); cursor: default; }
+.shell.ob .nav .count { background: var(--blue); color: #fff; border-radius: 99px; padding: 0 8px; font-size: 12px; font-weight: 700; line-height: 20px; }
+.shell.ob .user { padding: 14px 16px; }
+.shell.ob .av { position: relative; width: 38px; height: 38px; }
+.shell.ob .av .online { position: absolute; right: -1px; bottom: -1px; width: 11px; height: 11px; border-radius: 50%; background: #22c55e; border: 2px solid #fff; }
+.shell.ob .user b { font-size: 15px; }
+
+/* page titles as in Orbyte: large, regular weight */
+.shell.ob .page-head h1, .ob-cal-head h1 { font-size: 32px; font-weight: 400; letter-spacing: -.01em; }
+.shell.ob .main { padding: 28px 32px; }
+
+/* ---------- dashboard cards, after Orbyte's "On leave today" and "Pending Actions" ---------- */
+.ob-dcard { background: #fff; border: 1px solid var(--line); border-radius: 12px; margin-bottom: 18px; overflow: hidden; }
+.ob-dcard > header { display: flex; align-items: center; gap: 12px; padding: 14px 16px; }
+.ob-dhead { flex: 1; display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; }
+.ob-dhead b { font-size: 17px; font-weight: 700; }
+.ob-dhead b.big { font-size: 20px; }
+.ob-dhead small { flex-basis: 100%; color: var(--ink-3); font-size: 13px; }
+.ob-dico { width: 40px; height: 40px; flex: none; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 10px; background: #f4f8ff; color: var(--blue); }
+.ob-dico.ok { background: #eafaf1; border-color: #bfe8cf; color: #1a7f4b; }
+.ob-dico.sm { width: 30px; height: 30px; border-radius: 8px; }
+.ob-dico.sm svg { width: 16px; height: 16px; }
+.ob-count { background: #eef2f7; color: var(--ink-2); border-radius: 6px; padding: 0 8px; font-size: 12px; font-weight: 700; line-height: 22px; }
+.btn.ob-outline, .shell.ob .btn.ob-outline { border: 1px solid var(--blue); color: var(--blue); background: #fff; font-weight: 700; gap: 6px; text-decoration: none; }
+.btn.ob-outline:hover { background: var(--blue-wash); }
+.ob-iconbtn { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink-2); cursor: pointer; }
+.ob-drow { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line); text-decoration: none; color: inherit; }
+.ob-drow b { display: block; font-size: 14px; }
+.ob-drow small { color: var(--ink-3); font-size: 13px; }
+.ob-drow.calm { background: #fbfdff; }
+.ob-drow.calm.center { display: block; text-align: center; color: var(--ink-3); padding: 26px; }
+a.ob-drow:hover { background: #f8fbff; }
+.ob-time { font-weight: 700; color: var(--ink-2); min-width: 52px; }
+.ob-dtools { display: flex; align-items: center; gap: 12px; padding: 0 16px 14px; flex-wrap: wrap; }
+.ob-dsearch { flex: 0 1 360px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; color: var(--ink-3); background: #fff; }
+.ob-dsearch input { border: 0 !important; padding: 9px 0 !important; flex: 1; outline: none; }
+.ob-btabs { display: flex; gap: 0; flex: 1; }
+.ob-btabs button { border: 1px solid transparent; background: none; padding: 8px 14px; border-radius: 8px; font-weight: 600; font-size: 14px; color: var(--ink-2); cursor: pointer; }
+.ob-btabs button.on { border-color: var(--blue); background: var(--blue-wash); color: var(--blue); }
+.ob-btabs button.submit { color: #12697a; }
+.ob-btabs button.review { color: #8a5a14; }
+.ob-btabs button.approve { color: #1a7f4b; }
+.ob-dgroup { border-top: 1px solid var(--line); }
+.ob-dgroup-head { display: flex; align-items: center; gap: 10px; width: 100%; padding: 12px 16px; border: 0; background: #fbfcfe; cursor: pointer; text-align: left; color: var(--ink); }
+.ob-dgroup-head b { font-size: 15px; }
+.ob-dgroup-head > svg:last-child { margin-left: auto; color: var(--ink-3); }
+.ob-dnote { color: #12697a; font-size: 13px; font-weight: 600; }
+.ob-drow.item { grid-template-columns: minmax(0, 2.2fr) 1fr auto 1fr auto; }
+.ob-status { display: inline-flex; align-items: center; gap: 6px; border-radius: 6px; padding: 4px 10px; font-size: 12px; font-weight: 700; background: #e6f6f8; color: #12697a; }
+.ob-status.reply { background: #fff3e6; color: #9a5a00; }
+.ob-link { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.ob-dcard .ob-banner { margin: 0 16px 14px; }
+@media (max-width: 900px) { .ob-drow.item { grid-template-columns: 1fr; } }
+
+.shell.ob .ob-link, .shell.ob .ob-crumbs a { color: var(--blue); }
+
+/* ---------- week and day: hour grid ---------- */
+.ob-tg { --hour: 56px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: #fff; }
+.ob-tg-head, .ob-tg-body { display: grid; grid-template-columns: 64px repeat(var(--cols), minmax(0, 1fr)); }
+.ob-tg-head { background: #f1f3f6; border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 3; }
+.ob-tg-day { padding: 8px 12px; display: flex; align-items: baseline; gap: 8px; border-left: 1px solid var(--line); }
+.ob-tg-day span { font-size: 13px; font-weight: 500; color: var(--ink-2); text-transform: uppercase; }
+.ob-tg-day b { font-size: 18px; font-weight: 600; color: var(--ink); }
+.ob-tg-day.today b { background: var(--blue); color: #fff; border-radius: 99px; min-width: 30px; height: 30px; display: inline-grid; place-items: center; font-size: 15px; }
+.ob-tg-day.today span { color: var(--blue); }
+.ob-tg-gutter div { position: relative; border-top: 1px solid transparent; }
+.ob-tg-gutter span { position: absolute; top: -8px; right: 10px; font-size: 12px; color: var(--ink-3); background: #fff; padding: 0 2px; }
+.ob-tg-gutter div:first-child span { top: 4px; }
+.ob-tg-col { position: relative; border-left: 1px solid var(--line); cursor: copy; background-image: linear-gradient(to bottom, transparent calc(var(--hour) / 2 - 1px), #eef1f5 calc(var(--hour) / 2 - 1px), #eef1f5 calc(var(--hour) / 2), transparent calc(var(--hour) / 2)); background-size: 100% var(--hour); }
+.ob-tg-col:hover { background-color: #fbfdff; }
+.ob-tg-line { position: absolute; left: 0; right: 0; height: 1px; background: var(--line); pointer-events: none; }
+.ob-tg-off { position: absolute; left: 0; right: 0; cursor: not-allowed; background: repeating-linear-gradient(-45deg, #f5f7fa 0 6px, #eef1f5 6px 12px); }
+.ob-tg-off span { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 12px; color: var(--ink-3); font-weight: 600; }
+.ob-tg-col.closed { cursor: not-allowed; background: repeating-linear-gradient(-45deg, #f5f7fa 0 6px, #eef1f5 6px 12px); }
+.ob-tg-closed { position: absolute; top: 10px; left: 8px; right: 8px; display: grid; gap: 6px; justify-items: start; }
+.ob-tg-closed small { font-size: 12px; color: var(--ink-3); }
+.ob-tg-ev { position: absolute; left: 3px; right: 3px; z-index: 2; overflow: hidden; text-align: left; cursor: pointer;
+  border: 1px solid #b9d4fb; border-left: 3px solid var(--blue); border-radius: 6px; background: #e8f0fd; color: #12356b; padding: 4px 8px; display: flex; flex-direction: column; gap: 1px; }
+.ob-tg-ev b { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ob-tg-ev small { font-size: 12px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ob-tg-ev:hover { filter: brightness(.97); box-shadow: 0 4px 12px -6px rgba(7, 103, 232, .5); }
+.ob-tg-ev.confirmed { background: #e6f6ee; border-color: #a8dcc0; border-left-color: #1a7f4b; color: #0f5c3b; }
+.ob-tg-ev.tentative { background: #fff6e8; border-color: #f2d3a6; border-left-color: #d98a1e; color: #7a4a0a; }
+.ob-tg-ev.cancelled { background: #f6f7f9; border-color: var(--line); border-left-color: var(--ink-3); color: var(--ink-3); text-decoration: line-through; }
+.ob-tg-ev.google { background: #f1f3f6; border-color: var(--line); border-left-color: #8a96a8; color: var(--ink-2); }
+.ob-tg-ev.suggest { background: #fff; border: 1.5px dashed var(--blue); border-left-width: 1.5px; color: var(--blue); }
+.ob-tg-now { position: absolute; left: 0; right: 0; height: 2px; background: #e5484d; z-index: 3; pointer-events: none; }
+.ob-tg-now::before { content: ""; position: absolute; left: -5px; top: -4px; width: 10px; height: 10px; border-radius: 50%; background: #e5484d; }
+@media (prefers-reduced-motion: no-preference) { .ob-tg-ev { transition: box-shadow .15s, filter .15s; } }
+
+/* ---------- bookings in the Orbyte palette: blue for a fixed booking, teal for one still to confirm ---------- */
+.ob-tg-ev.confirmed { background: #e8f0fd; border-color: #b9d4fb; border-left-color: var(--blue); color: #12356b; }
+.ob-tg-ev.tentative { background: #e6f6f8; border-color: #a9dde3; border-left-color: #12697a; color: #0d4f5c; }
+.shell.ob .ev { border-radius: 6px; border: 1px solid #b9d4fb; border-left: 3px solid var(--blue); background: #e8f0fd; color: #12356b; font-size: 11px; font-weight: 600; text-align: left; padding: 2px 6px; }
+.shell.ob .ev.tentative { border-color: #a9dde3; border-left-color: #12697a; background: #e6f6f8; color: #0d4f5c; }
+.shell.ob .ev.cancelled { background: #f6f7f9; border-color: var(--line); border-left-color: var(--ink-3); color: var(--ink-3); text-decoration: line-through; }
+.shell.ob .ev.google { background: #f1f3f6; border-color: var(--line); border-left-color: #8a96a8; color: var(--ink-2); }
+.shell.ob .ev.suggest { background: #fff; border: 1px dashed var(--blue); color: var(--blue); }
+
+/* suggested times panel: outlined blue cards instead of green */
+.shell.ob .slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px; }
+.shell.ob .slot { border: 1px dashed #9fc2f7; background: #fff; color: var(--ink); border-radius: 10px; padding: 10px 12px; }
+.shell.ob .slot b { color: var(--ink); }
+.shell.ob .slot:hover { border-style: solid; border-color: var(--blue); background: #f8fbff; }
+.shell.ob .slot.best { border: 1px solid var(--blue); background: var(--blue-wash); }
+.shell.ob .slot em { background: var(--blue); color: #fff; border-radius: 6px; font-size: 11px; }
+
+/* ---------- dialogs (book a slot, edit a booking) ---------- */
+.shell.ob .scrim { background: rgba(15, 30, 60, .38); backdrop-filter: blur(2px); }
+.shell.ob .modal { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 0; width: min(100%, 520px); gap: 0; box-shadow: 0 24px 60px -24px rgba(15, 30, 60, .45); }
+.shell.ob .modal-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--line); }
+.shell.ob .modal h2 { font-size: 20px; font-weight: 700; letter-spacing: 0; }
+.shell.ob .modal-x { width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink-2); font-size: 20px; line-height: 1; cursor: pointer; }
+.shell.ob .modal-x:hover { background: #f3f6fb; }
+.shell.ob .modal > :not(.modal-head) { padding-left: 20px; padding-right: 20px; }
+.shell.ob .modal .form, .shell.ob .modal > .field, .shell.ob .modal > p { display: grid; gap: 14px; padding-top: 16px; }
+.shell.ob .modal .field > span { font-size: 13px; font-weight: 700; color: var(--ink); }
+.shell.ob .modal .field small { color: var(--ink-3); font-size: 12px; }
+.shell.ob .modal .input, .shell.ob .modal .select { height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 0 12px; font-size: 14px; background: #fff; box-shadow: none; }
+.shell.ob .modal .input:focus, .shell.ob .modal .select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-wash); }
+.shell.ob .modal-actions { margin-top: 4px; padding: 14px 20px !important; border-top: 1px solid var(--line); background: #fbfcfe; justify-content: flex-end; gap: 8px; border-radius: 0 0 14px 14px; }
+.shell.ob .modal .chip-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.shell.ob .modal .hint { margin: 0; }
+.shell.ob .guard { border: 1px solid #e88a82; background: #fff1ef; color: #8e2412; border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+.shell.ob .guard .btn { margin-top: 4px; }
+.shell.ob .modal .alert { border: 1px solid #e88a82; background: #fff1ef; color: #8e2412; border-radius: 8px; }
+.shell.ob .btn.danger { background: #fff; color: #b3261e; border: 1px solid #e88a82; }
+.shell.ob .btn.danger:hover { background: #fff1ef; }
+.shell.ob .modal { width: min(100%, 600px); }
+.shell.ob .modal .form { padding-bottom: 18px; }
+.shell.ob .modal-actions { flex-wrap: wrap; }
+.shell.ob .modal-actions .btn.danger { margin-right: auto; }
+.shell.ob .modal .status-chip { border: 1px solid var(--line); background: #fff; color: var(--ink-2); border-radius: 6px; padding: 0 8px; line-height: 20px; }
+.shell.ob .modal .status-chip.tentative, .shell.ob .modal .status-chip.pending_approval { border-color: #a9dde3; color: #12697a; }
+.shell.ob .modal .status-chip.confirmed, .shell.ob .modal .status-chip.approved { border-color: #5dc58a; color: #1a7f4b; }
+.shell.ob .modal .status-chip.cancelled, .shell.ob .modal .status-chip.rejected { border-color: #e88a82; color: #b3261e; }
+
+.shell.ob .ob-endnote { margin: 0; font-size: 13px; color: var(--ink-3); }
+.shell.ob .ob-endnote b { color: var(--ink); }
+.shell.ob .modal .ob-banner { margin: 0; }
+
+/* the two parts of a job split by lunch */
+.ob-tg-ev.part1 { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-style: dashed; }
+.ob-tg-ev.part2 { border-top-left-radius: 0; border-top-right-radius: 0; border-top-style: dashed; }

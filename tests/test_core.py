@@ -21,6 +21,35 @@ def reply(text="Thanks, noted.", fields=None, missing=None, status="collecting_i
                        "missing_fields": missing or [], "status": status})
 
 
+
+class TradeRulesTests(unittest.TestCase):
+    """The global rules stay the same for every trade; each trade only adds its own file."""
+
+    def test_painting_is_the_default_and_carries_its_own_rules(self):
+        from src.prompt import trade_of
+        rules = load_system_prompt(trade_of({}))
+        self.assertIn("== OUTPUT FORMAT ==", rules)
+        self.assertIn("== TRADE: PAINTING ==", rules)
+        self.assertIn("siling", rules)
+
+    def test_another_trade_gets_the_same_global_rules_and_not_the_painting_ones(self):
+        from src.prompt import trade_of
+        rules = load_system_prompt(trade_of({"pricing": {"trade_type": "aircon"}}))
+        self.assertIn("== H. SCOPE AND SECURITY ==", rules)
+        self.assertIn("== TRADE: AIR-CONDITIONING SERVICING ==", rules)
+        self.assertNotIn("siling", rules)
+
+    def test_the_global_rules_name_no_trade(self):
+        from src.prompt import PROMPT_PATH
+        text = PROMPT_PATH.read_text(encoding="utf-8").lower()
+        for word in ("paint", "siling", "dinding", "aircon"):
+            self.assertNotIn(word, text)
+
+    def test_a_trade_without_rules_says_which_file_to_add(self):
+        with self.assertRaises(FileNotFoundError) as err:
+            load_system_prompt("plumbing")
+        self.assertIn("plumbing.txt", str(err.exception))
+
 class FakeClient:
     def __init__(self, *outputs):
         self.outputs, self.calls = list(outputs), []

@@ -12,6 +12,9 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+from src.prompt import load_system_prompt  # noqa: E402  (after the path is set)
 
 
 def load_env(path):
@@ -56,7 +59,7 @@ def main():
         sys.exit("Set RUNPOD_API_KEY and RUNPOD_ENDPOINT_ID in .env")
 
     message = sys.argv[1] if len(sys.argv) > 1 else "I want to paint my bedroom"
-    system_prompt = (ROOT / "prompts" / "painting_assistant.txt").read_text(encoding="utf-8")
+    system_prompt = load_system_prompt()
     url = f"https://api.runpod.ai/v2/{endpoint}/runsync"
     sampling = {"temperature": 0.2, "max_tokens": 300}
 

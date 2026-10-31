@@ -166,9 +166,9 @@ function Loaded({ d, reload, onChanged }: { d: Detail; reload: () => Promise<voi
           <span className={`stage-chip s-${d.stage}`} title={stage?.hint}>{stage?.label}</span>
         </div>
         {d.job.preferred_datetime && <p className="hint" style={{ marginTop: 14 }}>Customer asked for: <b>{d.job.preferred_datetime}</b></p>}
-        <div className="tabs" role="tablist" aria-label="Quote sections" style={{ marginTop: 16 }}>
+        <div className="ob-utabs" role="tablist" aria-label="Quote sections" style={{ marginTop: 16, marginBottom: 0 }}>
           {([["quote", "Quote"], ["chat", `Chat and photos (${d.photos.length})`], ["activity", `Activity (${d.audit.length})`]] as [Tab, string][]).map(([id, label]) => (
-            <button key={id} role="tab" className="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>
+            <button key={id} role="tab" className={tab === id ? "on" : ""} aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>
           ))}
         </div>
       </section>

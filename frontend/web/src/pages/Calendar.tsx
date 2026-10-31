@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, explainError } from "@shared/api";
 import { googleCalendarUrl } from "@shared/gcal";
@@ -8,13 +8,14 @@ import type { Booking, Interval, QuoteItem, Slot } from "@shared/types";
 import { loadAllQuotes } from "../data";
 import { gList, gRemove, gSync, useGoogle } from "../google";
 import { useAsync } from "../hooks";
+import { holidaysOn } from "@shared/holidays";
 import { Modal } from "../ui/Modal";
 import { StatusChip } from "../ui/StatusChip";
 import { useToast } from "../ui/Toast";
 
 type View = "month" | "week" | "day";
 const H0 = 8;
-const H1 = 20;
+const H1 = 19;
 const HOUR_PX = 56;
 
 const addDays = (d: Date, n: number) => {
@@ -67,7 +68,7 @@ type FetchSlots = (userId: string) => Promise<Slot[]>;
 export default function Calendar() {
   const toast = useToast();
   const [params, setParams] = useSearchParams();
-  const [view, setView] = useState<View>("week");
+  const [view, setView] = useState<View>("month");
   const [anchor, setAnchor] = useState(() => new Date());
   const [creating, setCreating] = useState<Draft | null>(null);
   const [editing, setEditing] = useState<Booking | null>(null);
@@ -128,15 +129,16 @@ export default function Calendar() {
   const today = new Date();
   const picked = (quotes.data ?? []).find((q) => q.user_id === suggestFor);
 
+  // Orbyte's leave calendar shows Monday to Friday only, and only the weeks of the month
+  const weekdays = r.days.filter((d) => d.getDay() % 6 !== 0);
+  const monthCells = view === "month"
+    ? weekdays.filter((_, i) => weekdays.slice(Math.floor(i / 5) * 5, Math.floor(i / 5) * 5 + 5).some((x) => x.getMonth() === anchor.getMonth()))
+    : [];
+  const cells = monthCells;
+  const cols = 5;
+
   return (
-    <>
-      <div className="page-head">
-        <div>
-          <h1>Calendar</h1>
-          <p>Click an empty slot to book, or a job to move or cancel it. Bookings stay in this browser until the backend adds a bookings service.</p>
-        </div>
-        <button className="btn dark" onClick={() => setCreating({ date: dateInput(anchor), time: "09:00" })}>New booking</button>
-      </div>
+    <div className="ob-cal-page">
 
       <section className="panel suggest" aria-label="Suggested times">
         <div className="panel-title">
@@ -198,37 +200,43 @@ export default function Calendar() {
         )}
       </section>
 
-      <div className="cal-bar">
-        <div className="cal-nav">
-          <button className="btn small" onClick={() => shift(-1)} aria-label="Previous">‹</button>
-          <button className="btn small" onClick={() => setAnchor(new Date())}>Today</button>
-          <button className="btn small" onClick={() => shift(1)} aria-label="Next">›</button>
-          <span className="cal-title">{title(view, anchor)}</span>
+      <section className="ob-cal ob-card ob-first">
+      <div className="ob-cal-head">
+        <h1>Job Calendar</h1>
+        <div className="ob-cal-nav">
+          <button className="ob-icon" onClick={() => shift(-1)} aria-label="Previous">‹</button>
+          <b>{title(view, anchor)}</b>
+          <button className="ob-icon" onClick={() => shift(1)} aria-label="Next">›</button>
         </div>
-        <div className="tabs" role="tablist" aria-label="Calendar view">
+      </div>
+      <div className="ob-cal-tools">
+        <div className="ob-tabs" role="tablist" aria-label="Calendar view">
           {(["month", "week", "day"] as View[]).map((v) => (
-            <button key={v} role="tab" className="tab" aria-selected={view === v} onClick={() => setView(v)}>
+            <button key={v} role="tab" aria-selected={view === v} className={`ob-tab${view === v ? " on" : ""}`} onClick={() => setView(v)}>
               {v[0].toUpperCase() + v.slice(1)}
             </button>
           ))}
         </div>
+        <button className="btn small" onClick={() => setAnchor(new Date())}>Today</button>
+        <button className="btn small primary" onClick={() => setCreating({ date: dateInput(anchor), time: "09:00" })}>New booking</button>
       </div>
 
       {bookings.error != null && !bookings.data && <div className="alert">{explainError(bookings.error)}</div>}
 
       {view === "month" ? (
-        <div className="grid-month">
-          {r.days.slice(0, 7).map((d) => (
-            <div className="dow" key={d.getDay()}>{d.toLocaleDateString("en-MY", { weekday: "short" })}</div>
+        <div className={`grid-month ob-month ob-${view}`} style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
+          {weekdays.slice(0, 5).map((d) => (
+            <div className="dow" key={d.getDay()}>{d.toLocaleDateString("en-GB", { weekday: "short" }).toUpperCase()}</div>
           ))}
-          {r.days.map((d) => {
+          {cells.map((d) => {
+            const hols = holidaysOn(dateInput(d));
             const evs = list.filter((b) => sameDay(new Date(b.start), d)).sort((a, b) => a.start.localeCompare(b.start));
             const sug = (slots.data ?? []).filter((s) => sameDay(new Date(s.start), d));
             return (
               <div
                 key={d.toISOString()}
-                className={`day${d.getMonth() !== anchor.getMonth() ? " dim" : ""}${sameDay(d, today) ? " today" : ""}`}
-                onClick={() => setCreating({ date: dateInput(d), time: "09:00" })}
+                className={`day${d.getMonth() !== anchor.getMonth() ? " dim" : ""}${sameDay(d, today) ? " today" : ""}${hols.length ? " holiday" : ""}`}
+                onClick={() => !hols.length && setCreating({ date: dateInput(d), time: "09:00" })}
               >
                 <button
                   className="d"
@@ -238,80 +246,35 @@ export default function Calendar() {
                 >
                   {d.getDate()}
                 </button>
+                {hols.map((h) => (
+                  <span key={h.country + h.name} className="ob-holiday" title="Public holiday: no jobs are booked">{h.country} • {h.name}</span>
+                ))}
                 {sug.map((s) => (
                   <button key={s.start} className="ev suggest" onClick={(e) => { e.stopPropagation(); openSlot(s); }}>
                     AI {timeInput(new Date(s.start))}
                   </button>
                 ))}
-                {evs.slice(0, 3).map((b) => (
+                {evs.slice(0, view === "month" ? 3 : 20).map((b) => (
                   <button key={b.id} className={`ev ${b.source ?? b.status}`} onClick={(e) => { e.stopPropagation(); setEditing(b); }}>
                     {timeInput(new Date(b.start))} {b.customer}
                   </button>
                 ))}
-                {evs.length > 3 && <span className="more">+{evs.length - 3} more</span>}
+                {view === "month" && evs.length > 3 && <span className="more">+{evs.length - 3} more</span>}
               </div>
             );
           })}
         </div>
       ) : (
-        <div className="timegrid">
-          <div style={{ minWidth: view === "week" ? 720 : 0 }}>
-            <div className="tg-head" style={{ gridTemplateColumns: `56px repeat(${r.days.length}, 1fr)` }}>
-              <div />
-              {r.days.map((d) => (
-                <div key={d.toISOString()} className={sameDay(d, today) ? "today" : ""}>
-                  {d.toLocaleDateString("en-MY", { weekday: "short", day: "numeric" })}
-                </div>
-              ))}
-            </div>
-            <div className="tg-body" style={{ gridTemplateColumns: `56px repeat(${r.days.length}, 1fr)` }}>
-              <div className="tg-hours">
-                {Array.from({ length: H1 - H0 }, (_, i) => (
-                  <div key={i}>{new Date(2000, 0, 1, H0 + i).toLocaleTimeString("en-MY", { hour: "numeric", hour12: true })}</div>
-                ))}
-              </div>
-              {r.days.map((d) => (
-                <div className="tg-col" key={d.toISOString()}>
-                  {Array.from({ length: H1 - H0 }, (_, i) => (
-                    <button
-                      key={i}
-                      className="tg-cell"
-                      aria-label={`Book ${d.toDateString()} ${H0 + i}:00`}
-                      onClick={() => setCreating({ date: dateInput(d), time: `${pad(H0 + i)}:00` })}
-                    />
-                  ))}
-                  {(slots.data ?? [])
-                    .filter((s) => sameDay(new Date(s.start), d))
-                    .map((s) => {
-                      const st = new Date(s.start);
-                      const top = Math.max(0, (st.getHours() + st.getMinutes() / 60 - H0) * HOUR_PX);
-                      return (
-                        <button key={s.start} className="tg-ev suggest" style={{ top, height: Math.max(28, hoursOf(s) * HOUR_PX - 2) }} onClick={() => openSlot(s)}>
-                          <b>AI suggests</b>
-                          {slotLabel(s.start, s.end)}
-                        </button>
-                      );
-                    })}
-                  {list
-                    .filter((b) => sameDay(new Date(b.start), d))
-                    .map((b) => {
-                      const s = new Date(b.start);
-                      const e = new Date(b.end);
-                      const top = Math.max(0, (s.getHours() + s.getMinutes() / 60 - H0) * HOUR_PX);
-                      const h = Math.max(28, ((e.getTime() - s.getTime()) / 3_600_000) * HOUR_PX - 2);
-                      return (
-                        <button key={b.id} className={`tg-ev ${b.source ?? b.status}`} style={{ top, height: h }} onClick={() => setEditing(b)}>
-                          <b>{b.customer}</b>
-                          {slotLabel(b.start, b.end)}
-                        </button>
-                      );
-                    })}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+        <TimeGrid
+          days={view === "week" ? weekdays : r.days}
+          events={list}
+          suggestions={slots.data ?? []}
+          onSlot={(d, time) => setCreating({ date: dateInput(d), time })}
+          onEvent={setEditing}
+          onSuggest={openSlot}
+        />
       )}
+      </section>
 
       {creating && (
         <CreateDialog
@@ -342,12 +305,77 @@ export default function Calendar() {
           }}
         />
       )}
-    </>
+    </div>
   );
 }
 
-const DURATIONS = [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12];
+// One booking is one working day at most: 9 am to 6 pm with lunch from 1 to 2 pm (as in src/calendar_scheduler.py).
+// A longer job gets one booking per day.
+const DURATIONS = [1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 7, 8];
 const hoursLabel = (h: number) => `${h} ${h === 1 ? "hour" : "hours"}`;
+const DAY_START = 9, LUNCH_START = 13, LUNCH_END = 14, DAY_END = 18;
+const hourOf = (time: string) => { const [h, m] = time.split(":").map(Number); return h + (m || 0) / 60; };
+const clockOf = (h: number) => `${h % 12 === 0 ? 12 : Math.floor(h % 12)}${h % 1 ? `:${pad(Math.round((h % 1) * 60))}` : ""} ${h < 12 ? "am" : "pm"}`;
+
+/** When a job of `hours` working hours that starts at `start` ends on the clock: the lunch hour is skipped, not worked.
+ * null when it does not fit in the working day. */
+function endOf(start: number, hours: number): number | null {
+  if (start < DAY_START || start >= DAY_END || (start >= LUNCH_START && start < LUNCH_END)) return null;
+  let end = start + hours;
+  if (start < LUNCH_START && end > LUNCH_START) end += LUNCH_END - LUNCH_START;
+  return end <= DAY_END ? end : null;
+}
+const fits = (time: string) => DURATIONS.filter((h) => endOf(hourOf(time), h) != null);
+
+/** Why this day and start cannot be booked, in plain words; null when they can. */
+function workProblem(date: string, time: string, hours: number): string | null {
+  const day = combine(date, "12:00");
+  if (Number.isNaN(day.getTime()) || !time) return null;
+  if (day.getDay() % 6 === 0) return "The crew does not work at weekends. Pick a weekday.";
+  const hol = holidaysOn(date)[0];
+  if (hol) return `${hol.name} is a public holiday. Pick another day.`;
+  const start = hourOf(time);
+  if (start < DAY_START || start >= DAY_END) return "Start between 9 am and 6 pm.";
+  if (start >= LUNCH_START && start < LUNCH_END) return "1 pm to 2 pm is lunch. Start before 1 pm or from 2 pm.";
+  if (endOf(start, hours) == null) {
+    const longest = fits(time).pop();
+    return longest ? `That runs past 6 pm. From this start the longest job is ${hoursLabel(longest)}.` : "There is no time left in the day from this start.";
+  }
+  return null;
+}
+
+/** The clock end of the booking, with lunch skipped. */
+function endAt(date: string, time: string, hours: number): Date {
+  const start = hourOf(time);
+  const end = endOf(start, hours) ?? start + hours;
+  return combine(date, `${pad(Math.floor(end))}:${pad(Math.round((end % 1) * 60))}`);
+}
+
+/** Working hours of a booking already saved: its clock length minus the lunch hour when it spans lunch. */
+function workHours(b: Interval): number {
+  const s = new Date(b.start), e = new Date(b.end);
+  const a = s.getHours() + s.getMinutes() / 60, z = e.getHours() + e.getMinutes() / 60;
+  const lunch = a < LUNCH_START && z >= LUNCH_END ? LUNCH_END - LUNCH_START : 0;
+  return Math.max(0.5, Math.round((hoursOf(b) - lunch) * 2) / 2);
+}
+
+function EndNote({ date, time, hours }: { date: string; time: string; hours: number }) {
+  const start = hourOf(time);
+  const end = endOf(start, hours);
+  if (end == null || !date) return null;
+  const lunch = start < LUNCH_START && end > LUNCH_START;
+  return <p className="ob-endnote">Ends at <b>{clockOf(end)}</b>{lunch ? ". The lunch hour, 1 to 2 pm, is not counted." : "."}</p>;
+}
+
+function LengthSelect({ time, hours, onChange }: { time: string; hours: number; onChange: (h: number) => void }) {
+  const ok = fits(time);
+  const options = [...new Set([...(ok.length ? ok : DURATIONS), hours])].sort((a, b) => a - b);
+  return (
+    <select className="select" value={hours} onChange={(e) => onChange(Number(e.target.value))}>
+      {options.map((h) => <option key={h} value={h} disabled={ok.length > 0 && !ok.includes(h)}>{hoursLabel(h)}</option>)}
+    </select>
+  );
+}
 
 /** Events that clash with the chosen window. Loads the chosen day itself, so any date is covered. */
 function useConflicts(date: string, time: string, hours: number, fetchEvents: FetchEvents, ignoreId?: string) {
@@ -362,7 +390,7 @@ function useConflicts(date: string, time: string, hours: number, fetchEvents: Fe
   }, [date]);
   const start = combine(date, time);
   if (Number.isNaN(start.getTime())) return [];
-  const win = { start: start.toISOString(), end: new Date(start.getTime() + hours * 3_600_000).toISOString() };
+  const win = { start: start.toISOString(), end: endAt(date, time, hours).toISOString() };
   return findConflicts(win, events.filter((e) => e.status !== "cancelled"), ignoreId) as Booking[];
 }
 
@@ -408,7 +436,7 @@ function CreateDialog({ draft, quotes, fetchEvents, fetchSlots, onClose, onSaved
     fetchSlots(uid).then((s) => {
       if (!live) return;
       setSug(s);
-      if (!touched && s[0]) setHours(hoursOf(s[0]));
+      if (!touched && s[0]) setHours(workHours(s[0]));
     }).catch(() => live && setSug([]));
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -417,10 +445,11 @@ function CreateDialog({ draft, quotes, fetchEvents, fetchSlots, onClose, onSaved
   const use = (s: Slot) => {
     setDate(dateInput(new Date(s.start)));
     setTime(timeInput(new Date(s.start)));
-    setHours(hoursOf(s));
+    setHours(workHours(s));
     setTouched(true);
   };
-  const next = sug.find((s) => findConflicts({ start: s.start, end: s.end }, [{ start: combine(date, time).toISOString(), end: new Date(combine(date, time).getTime() + hours * 3_600_000).toISOString() }]).length === 0) ?? sug[0];
+  const next = sug.find((s) => findConflicts({ start: s.start, end: s.end }, [{ start: combine(date, time).toISOString(), end: endAt(date, time, hours).toISOString() }]).length === 0) ?? sug[0];
+  const problem = workProblem(date, time, hours);
 
   async function save() {
     setBusy(true);
@@ -433,7 +462,7 @@ function CreateDialog({ draft, quotes, fetchEvents, fetchSlots, onClose, onSaved
         phone: q?.job.phone,
         address: addr,
         start: s.toISOString(),
-        end: new Date(s.getTime() + hours * 3_600_000).toISOString(),
+        end: endAt(date, time, hours).toISOString(),
       });
       onSaved(created);
     } catch (e) {
@@ -481,16 +510,15 @@ function CreateDialog({ draft, quotes, fetchEvents, fetchSlots, onClose, onSaved
         </div>
         <label className="field">
           <span>Length</span>
-          <select className="select" value={hours} onChange={(e) => { setHours(Number(e.target.value)); setTouched(true); }}>
-            {[...new Set([...DURATIONS, hours])].sort((a, b) => a - b).map((h) => <option key={h} value={h}>{hoursLabel(h)}</option>)}
-          </select>
+          <LengthSelect time={time} hours={hours} onChange={(h) => { setHours(h); setTouched(true); }} />
         </label>
+        {problem ? <div className="ob-banner warn" role="alert">{problem}</div> : <EndNote date={date} time={time} hours={hours} />}
         <Guard conflicts={conflicts} onNext={next ? () => use(next) : undefined} />
         {err != null && <div className="alert">{explainError(err)}</div>}
       </div>
       <div className="modal-actions">
         <button className="btn" onClick={onClose}>Cancel</button>
-        <button className="btn primary" disabled={busy || conflicts.length > 0 || !customer.trim() || !date || !time} onClick={save}>
+        <button className="btn primary" disabled={busy || !!problem || conflicts.length > 0 || !customer.trim() || !date || !time} onClick={save}>
           {busy ? "Saving…" : conflicts.length ? "Time is taken" : "Confirm booking"}
         </button>
       </div>
@@ -502,13 +530,14 @@ function EditDialog({ b, synced, fetchEvents, onClose, onSaved }: {
   b: Booking; synced: boolean; fetchEvents: FetchEvents; onClose: () => void; onSaved: (msg: string, b?: Booking, remove?: boolean) => void;
 }) {
   const s0 = new Date(b.start);
-  const hours0 = Math.max(0.5, Math.round(hoursOf(b) * 2) / 2);
+  const hours0 = workHours(b);
   const [date, setDate] = useState(dateInput(s0));
   const [time, setTime] = useState(timeInput(s0));
   const [hours, setHours] = useState(hours0);
   const [err, setErr] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   const conflicts = useConflicts(date, time, hours, fetchEvents, b.id);
+  const problem = workProblem(date, time, hours);
 
   async function run(fn: () => Promise<unknown>, msg: string, remove = false) {
     setBusy(true);
@@ -554,10 +583,9 @@ function EditDialog({ b, synced, fetchEvents, onClose, onSaved }: {
             </div>
             <label className="field">
               <span>Length</span>
-              <select className="select" value={hours} onChange={(e) => setHours(Number(e.target.value))}>
-                {[...new Set([...DURATIONS, hours0])].sort((a, c) => a - c).map((h) => <option key={h} value={h}>{hoursLabel(h)}</option>)}
-              </select>
+              <LengthSelect time={time} hours={hours} onChange={setHours} />
             </label>
+            {problem ? <div className="ob-banner warn" role="alert">{problem}</div> : <EndNote date={date} time={time} hours={hours} />}
             <Guard conflicts={conflicts} />
           </>
         )}
@@ -584,11 +612,11 @@ function EditDialog({ b, synced, fetchEvents, onClose, onSaved }: {
             </button>
             <button
               className="btn primary"
-              disabled={busy || conflicts.length > 0}
+              disabled={busy || !!problem || conflicts.length > 0}
               onClick={() => {
                 const s = combine(date, time);
                 run(
-                  () => api.updateBooking(b.id, { start: s.toISOString(), end: new Date(s.getTime() + hours * 3_600_000).toISOString() }),
+                  () => api.updateBooking(b.id, { start: s.toISOString(), end: endAt(date, time, hours).toISOString() }),
                   "Booking moved",
                 );
               }}
@@ -599,5 +627,112 @@ function EditDialog({ b, synced, fetchEvents, onClose, onSaved }: {
         )}
       </div>
     </Modal>
+  );
+}
+
+/** Week and day views: an hour grid in the Orbyte style. Bookings sit at their real time and length; hours the crew does
+ * not work (before 9, lunch, after 6), weekends and public holidays are hatched and cannot be booked. */
+function TimeGrid({ days, events, suggestions, onSlot, onEvent, onSuggest }: {
+  days: Date[];
+  events: Booking[];
+  suggestions: Slot[];
+  onSlot: (d: Date, time: string) => void;
+  onEvent: (b: Booking) => void;
+  onSuggest: (s: Slot) => void;
+}) {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  const hours = Array.from({ length: H1 - H0 }, (_, i) => H0 + i);
+  const at = (d: Date) => (d.getHours() + d.getMinutes() / 60 - H0) * HOUR_PX;
+  const span = (a: string, b: string) => Math.max(((new Date(b).getTime() - new Date(a).getTime()) / 3_600_000) * HOUR_PX, 26);
+  const label = (h: number) => `${h % 12 || 12} ${h < 12 ? "am" : "pm"}`;
+  const off: [number, number][] = [[H0, 9], [13, 14], [18, H1]];       // before work, lunch, after work
+
+  function pick(e: React.MouseEvent<HTMLDivElement>, d: Date) {
+    const y = e.clientY - e.currentTarget.getBoundingClientRect().top;
+    const mins = H0 * 60 + Math.floor((y / HOUR_PX) * 2) * 30;      // to the half hour
+    onSlot(d, `${pad(Math.floor(mins / 60))}:${pad(mins % 60)}`);
+  }
+
+  return (
+    <div className="ob-tg" style={{ "--cols": days.length } as React.CSSProperties}>
+      <div className="ob-tg-head">
+        <div className="ob-tg-corner" />
+        {days.map((d) => (
+          <div key={d.toISOString()} className={`ob-tg-day${sameDay(d, now) ? " today" : ""}`}>
+            <span>{d.toLocaleDateString("en-GB", { weekday: days.length === 1 ? "long" : "short" })}</span>
+            <b>{d.getDate()}</b>
+          </div>
+        ))}
+      </div>
+      <div className="ob-tg-body">
+        <div className="ob-tg-gutter">
+          {hours.map((h) => <div key={h} style={{ height: HOUR_PX }}><span>{label(h)}</span></div>)}
+        </div>
+        {days.map((d) => {
+          const hols = holidaysOn(dateInput(d));
+          const closed = hols.length > 0 || d.getDay() % 6 === 0;
+          const evs = events.filter((b) => sameDay(new Date(b.start), d)).sort((a, b) => a.start.localeCompare(b.start));
+          // side by side when two bookings overlap
+          // a job that runs through lunch is drawn in two parts, so the lunch hour stays visible between them
+          const l0 = new Date(d.getFullYear(), d.getMonth(), d.getDate(), LUNCH_START).getTime();
+          const l1 = new Date(d.getFullYear(), d.getMonth(), d.getDate(), LUNCH_END).getTime();
+          const parts = evs.flatMap((b) => {
+            const s = new Date(b.start).getTime(), e = new Date(b.end).getTime();
+            return s < l0 && e > l1
+              ? [{ b, s, e: l0, part: 1 }, { b, s: l1, e, part: 2 }]
+              : [{ b, s, e, part: 0 }];
+          }).sort((x, y) => x.s - y.s);
+          const lanes: number[] = [];
+          const placed = parts.map((p) => {
+            let lane = lanes.findIndex((end) => end <= p.s);
+            if (lane < 0) lane = lanes.push(0) - 1;
+            lanes[lane] = p.e;
+            return { ...p, lane };
+          });
+          const width = 100 / Math.max(lanes.length, 1);
+          return (
+            <div key={d.toISOString()} className={`ob-tg-col${closed ? " closed" : ""}`} style={{ height: (H1 - H0) * HOUR_PX }}
+              onClick={(e) => !closed && pick(e, d)} title={closed ? undefined : "Click to book this time"}>
+              {hours.map((h) => <i key={h} className="ob-tg-line" style={{ top: (h - H0) * HOUR_PX }} />)}
+              {!closed && off.map(([a, b]) => (
+                <div key={a} className="ob-tg-off" style={{ top: (a - H0) * HOUR_PX, height: (b - a) * HOUR_PX }} onClick={(e) => e.stopPropagation()}>
+                  {a === 13 && <span>Lunch</span>}
+                </div>
+              ))}
+              {closed && (
+                <div className="ob-tg-closed">
+                  {hols.length ? hols.map((h) => <span key={h.name} className="ob-holiday">{h.country} • {h.name}</span>) : <span className="ob-holiday">Weekend</span>}
+                  <small>No jobs are booked on this day.</small>
+                </div>
+              )}
+              {!closed && suggestions.filter((s) => sameDay(new Date(s.start), d)).map((s) => (
+                <button key={s.start} className="ob-tg-ev suggest" style={{ top: at(new Date(s.start)), height: span(s.start, s.end) }}
+                  onClick={(e) => { e.stopPropagation(); onSuggest(s); }}>
+                  <b>Suggested time</b><small>{slotLabel(s.start, s.end)}</small>
+                </button>
+              ))}
+              {placed.map(({ b, s, e, part, lane }) => (
+                <button key={`${b.id}-${part}`} className={`ob-tg-ev ${b.source ?? b.status}${part ? ` part${part}` : ""}`}
+                  style={{ top: at(new Date(s)), height: span(new Date(s).toISOString(), new Date(e).toISOString()), left: `calc(${lane * width}% + 3px)`, width: `calc(${width}% - 6px)` }}
+                  onClick={(ev) => { ev.stopPropagation(); onEvent(b); }}
+                  aria-label={part === 2 ? `${b.customer}, after lunch` : undefined}>
+                  <b>{b.customer}{part === 2 ? " (after lunch)" : ""}</b>
+                  <small>
+                    {part === 0
+                      ? `${timeInput(new Date(b.start))} to ${timeInput(new Date(b.end))}${b.address ? `, ${b.address}` : ""}`
+                      : `${timeInput(new Date(s))} to ${timeInput(new Date(e))}${part === 1 && b.address ? `, ${b.address}` : ""}`}
+                  </small>
+                </button>
+              ))}
+              {sameDay(d, now) && now.getHours() >= H0 && now.getHours() < H1 && <i className="ob-tg-now" style={{ top: at(now) }} />}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }

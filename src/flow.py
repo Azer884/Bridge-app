@@ -258,8 +258,27 @@ _TOMORROW = re.compile(r"\b(tomorrow|esok)\b", re.I)
 _TODAY = re.compile(r"\b(today|tonight|hari ini)\b", re.I)
 
 
+def holiday_dates():
+    """Dated days off from config/holidays.json (read again when the file changes)."""
+    import json
+    from pathlib import Path
+    path = Path(__file__).resolve().parent.parent / "config" / "holidays.json"
+    try:
+        stamp = path.stat().st_mtime
+        if _HOLIDAY_CACHE.get("stamp") != stamp:
+            rows = json.loads(path.read_text(encoding="utf-8")).get("holidays", [])
+            _HOLIDAY_CACHE.update(stamp=stamp, dates={row["date"] for row in rows})
+        return _HOLIDAY_CACHE["dates"]
+    except (OSError, ValueError, KeyError, TypeError):
+        return set()
+
+
+_HOLIDAY_CACHE = {}
+
+
 def _closed_day(day, working_days):
-    return day.weekday() not in working_days or (day.month, day.day) in _FIXED_HOLIDAYS
+    return (day.weekday() not in working_days or (day.month, day.day) in _FIXED_HOLIDAYS
+            or day.isoformat() in holiday_dates())
 
 
 # "Jalan Raya", "Taman Merdeka" and "Masjid India" are street and place names, not holidays or foreign places

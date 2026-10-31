@@ -1,0 +1,11 @@
+{
+  "_note": "Days the crew does not work, besides weekends. From the Orbyte leave calendar for this organization (October to December 2026); the same list is in frontend/shared/holidays.ts for the calendar screen. Add rows to add days.",
+  "holidays": [
+    {"date": "2026-10-29", "name": "Sultan of Kelantan Birthday", "country": "MY"},
+    {"date": "2026-10-30", "name": "Sultan of Kelantan Birthday", "country": "MY"},
+    {"date": "2026-11-06", "name": "Sultan of Perak Birthday", "country": "MY"},
+    {"date": "2026-12-11", "name": "Sultan of Selangor Birthday", "country": "MY"},
+    {"date": "2026-12-24", "name": "Christmas Eve", "country": "MY"},
+    {"date": "2026-12-25", "name": "Christmas Day", "country": "MY"}
+  ]
+}

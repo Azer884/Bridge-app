@@ -60,6 +60,8 @@ class WeekendHolidayAndPlaceTests(unittest.TestCase):
         self.assertEqual(flow.date_problem("7 Nov 10am", self.TUESDAY), "date_closed")          # a Saturday
         self.assertIsNone(flow.date_problem("9 Nov 10am", self.TUESDAY))                        # a Monday
         self.assertEqual(flow.date_problem("25 Dec 10am", self.TUESDAY), "date_closed")         # Christmas, a Friday
+        self.assertEqual(flow.date_problem("6 Nov 10am", self.TUESDAY), "date_closed")          # Sultan of Perak Birthday, on the Orbyte calendar
+        self.assertEqual(flow.date_problem("29 Oct 2027 10am", self.TUESDAY), None)             # only the listed year
 
 
 class ChatTests(unittest.TestCase):

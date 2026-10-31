@@ -388,10 +388,13 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         return {"ok": True}
 
     @app.get("/", include_in_schema=False)
-    def home():
-        """The landing page when the dashboard is built; otherwise a plain 200 for the host's health check."""
+    def home(request: Request):
+        """No landing page: a signed-in owner goes straight to the app, anyone else gets the sign-in page (a 200, so the
+        host's health check still passes). Without a built dashboard it stays a plain 200."""
         if (site / "index.html").is_file():
-            return FileResponse(site / "index.html", headers={"Cache-Control": "no-cache"})
+            if has_session(request):
+                return RedirectResponse("/app", status_code=303)
+            return HTMLResponse(webauth.login_page("/app", enabled=bool(dashboard_password)))
         return {"ok": True}
 
     @app.get("/webhook")

@@ -1,11 +1,13 @@
-"""Builds the chat messages: global rules + trusted context + history + customer message."""
+"""Builds the chat messages: global rules + trade rules + trusted context + history + customer message."""
 import json
 from pathlib import Path
 
 from .persona import prompt_section
 from .schema import FIELDS
 
-PROMPT_PATH = Path(__file__).resolve().parent.parent / "prompts" / "painting_assistant.txt"
+PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
+PROMPT_PATH = PROMPTS / "global.txt"          # rules for every trade
+TRADES = PROMPTS / "trades"                    # one file per trade: what to collect, inspection cases, trade words
 
 
 # With a persona and no history the model has no earlier JSON turn to imitate and sometimes
@@ -25,8 +27,20 @@ PRIMER_MS = [
 ]
 
 
-def load_system_prompt(path=PROMPT_PATH):
-    return Path(path).read_text(encoding="utf-8")
+def trade_of(config):
+    """The trade a business config is for: "trade_type" at the top or in its pricing; painting when neither says."""
+    config = config or {}
+    trade = config.get("trade_type") or (config.get("pricing") or {}).get("trade_type") or "painting"
+    return str(trade).strip().lower()
+
+
+def load_system_prompt(trade="painting", path=PROMPT_PATH):
+    """The global rules followed by the rules of one trade. Adding a trade is adding prompts/trades/<trade>.txt."""
+    rules = Path(path).read_text(encoding="utf-8")
+    trade_file = TRADES / f"{trade}.txt"
+    if not trade_file.is_file():
+        raise FileNotFoundError(f"no rules for the trade '{trade}': add {trade_file}")
+    return rules.rstrip() + "\n\n" + trade_file.read_text(encoding="utf-8")
 
 
 def build_context(config, state):
@@ -68,7 +82,7 @@ def build_context(config, state):
 
 
 def build_messages(config, state, latest_message, rejection=None, system_prompt=None):
-    system = (system_prompt or load_system_prompt()) + "\n\n" + build_context(config, state)
+    system = (system_prompt or load_system_prompt(trade_of(config))) + "\n\n" + build_context(config, state)
     if rejection:
         system += ("\n\nYOUR PREVIOUS ANSWER WAS REJECTED. Problems:\n- " + "\n- ".join(rejection) +
                    '\nReturn one corrected JSON object with exactly these four keys: "reply", '

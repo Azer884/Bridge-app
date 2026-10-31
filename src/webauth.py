@@ -63,15 +63,18 @@ def login_page(next_path="/app", error="", enabled=True):
     return f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sign in</title>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-:root {{ --bg:#f6f7f9; --card:#fff; --ink:#15171a; --muted:#5b6370; --line:#d9dde3; --brand:#0f6fff; --bad:#b3261e; }}
-@media (prefers-color-scheme: dark) {{ :root {{ --bg:#0f1115; --card:#181b21; --ink:#f2f4f7; --muted:#9aa3b2; --line:#2a2f38; --brand:#5b9bff; --bad:#ff8a80; }} }}
+:root {{ --bg:#f5f8fe; --card:#fff; --ink:#1c3153; --muted:#64748b; --line:#e2e8f0; --brand:#0767e8; --bad:#b3261e; }}
 * {{ box-sizing:border-box }} body {{ margin:0; min-height:100vh; display:grid; place-items:center; background:var(--bg); color:var(--ink);
-font:16px/1.4 system-ui, sans-serif; padding:16px }}
-form {{ background:var(--card); border:1px solid var(--line); border-radius:12px; padding:28px; width:100%; max-width:360px; display:grid; gap:12px }}
-h1 {{ margin:0 0 4px; font-size:20px }} p {{ margin:0; color:var(--muted); font-size:14px }} .err {{ color:var(--bad) }}
-input,button {{ font:inherit; padding:11px 12px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--ink) }}
-button {{ background:var(--brand); color:#fff; border:0; cursor:pointer; font-weight:600 }}
+font:15px/1.45 "Public Sans", system-ui, sans-serif; padding:16px }}
+form {{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:28px; width:100%; max-width:380px; display:grid; gap:12px;
+box-shadow:0 24px 60px -32px rgba(15,30,60,.35) }}
+h1 {{ margin:0 0 2px; font-size:24px; font-weight:600 }} p {{ margin:0; color:var(--muted); font-size:14px }} .err {{ color:var(--bad) }}
+input,button {{ font:inherit; padding:10px 12px; border-radius:8px; border:1px solid var(--line); background:#fff; color:var(--ink) }}
+input:focus {{ outline:none; border-color:var(--brand); box-shadow:0 0 0 3px #e8f0fd }}
+button {{ background:var(--brand); color:#fff; border:0; cursor:pointer; font-weight:700 }}
+button:hover {{ background:#0555c0 }}
 </style></head><body>
 <form method="post" action="/login">
 <h1>Gesir dashboard</h1><p>Sign in to review quotes and manage the calendar.</p>

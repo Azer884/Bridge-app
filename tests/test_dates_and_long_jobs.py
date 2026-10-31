@@ -25,7 +25,7 @@ class ExplicitDateTests(unittest.TestCase):
         self.assertEqual(flow.date_problem("20 Oct", TODAY), "date_past_year")
         self.assertEqual(flow.date_problem("can you come on 5 oct?", TODAY), "date_past_year")
         self.assertIsNone(flow.date_problem("20 Oct 2027", TODAY))        # the year makes it clear
-        self.assertIsNone(flow.date_problem("30 Oct", TODAY))             # today is not past
+        self.assertNotIn(flow.date_problem("30 Oct", TODAY), ("date_past", "date_past_year"))   # today is not past (it is a listed holiday, so closed)
         self.assertIsNone(flow.date_problem("5 Nov", TODAY))
         self.assertEqual(flow.date_problem("yesterday", TODAY), "date_past")
 

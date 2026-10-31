@@ -63,8 +63,15 @@ class SiteTests(unittest.TestCase):
         return (api or self.api).post("/login", content=f"password={password}&next={next}".replace(" ", "+"),
                                       headers={"content-type": "application/x-www-form-urlencoded"})
 
-    def test_landing_and_assets_are_public(self):
-        self.assertIn("dashboard shell", self.api.get("/").text)
+    def test_the_root_is_the_sign_in_page_then_the_app(self):
+        page = self.api.get("/")
+        self.assertEqual(page.status_code, 200)                                      # the host's health check
+        self.assertIn('name="next" value="/app"', page.text)
+        self.login(next="/app")
+        res = self.api.get("/")
+        self.assertEqual((res.status_code, res.headers["location"]), (303, "/app"))
+
+    def test_assets_are_public(self):
         asset = self.api.get("/assets/app.js")
         self.assertEqual(asset.text, "console.log(1)")
         self.assertIn("immutable", asset.headers["cache-control"])

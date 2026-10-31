@@ -14,7 +14,7 @@ from . import rooms as rooms_module
 from .answers import CONDITION_STRONG, address_in, condition_clause, explicit_name, fix_typos, is_condition, plausible
 from .i18n import COLOUR_WORDS, STRINGS, TIER_WORDS, detect, metres, requested_language, t, us_spelling
 from .persona import greeting_line, render, text as persona_text
-from .prompt import build_messages, load_system_prompt
+from .prompt import build_messages, load_system_prompt, trade_of
 from .runpod_client import RunPodError
 from .schema import FIELDS, Status, ask_for, single_wall
 from .validation import validate_response
@@ -270,7 +270,7 @@ def _handle(state, message, config, client, max_retries=MAX_RETRIES):
         pending["asked"] = True
         return _finish(state, message, t("ask_unit", state.lang, a=pending["values"][0], b=pending["values"][1]),
                        Status.COLLECTING.value, record=False)
-    system_prompt = load_system_prompt()
+    system_prompt = load_system_prompt(trade_of(config))
     if persona and changed:
         return _backend_turn(state, message, config, client, changed, system_prompt,
                              estimated=len(state.estimated) > len(before_estimated), asked=asked)
