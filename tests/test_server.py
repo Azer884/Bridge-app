@@ -383,6 +383,40 @@ class CrossSiteTests(unittest.TestCase):
         self.assertEqual(res.status_code, 429)
 
 
+class DashboardRoleTests(unittest.TestCase):
+    """The signed-in dashboard acts as the role the person chose; the server enforces it and counts credits."""
+    def setUp(self):
+        from src import webauth
+        self.sender = SentRecorder()
+        self.service = ServiceTests().quoting_service()
+        self.service.handle(IncomingEvent("m1", "60123456789", text="yes"))
+        env = {**ENV, "SESSION_SECRET": "s3cret", "DASHBOARD_PASSWORD": "pw"}
+        self.api = TestClient(create_app(self.service, self.sender, env))
+        self.api.cookies.set(webauth.COOKIE, webauth.make_cookie(b"s3cret"))
+
+    def test_a_reviewer_cannot_approve_even_when_signed_in(self):
+        res = self.api.post("/api/quotes/60123456789/approve", headers={"x-orbyte-role": "reviewer", "x-orbyte-user": "Mei Lin"})
+        self.assertEqual(res.status_code, 403)
+        self.assertEqual(self.sender.sent, [])
+
+    def test_an_approver_can_and_one_credit_is_used(self):
+        self.assertEqual(self.api.get("/api/wallet").json()["credits"], 100)
+        res = self.api.post("/api/quotes/60123456789/approve", headers={"x-orbyte-role": "approver", "x-orbyte-user": "Aisha Rahman"})
+        self.assertTrue(res.json()["approved"])
+        wallet = self.api.get("/api/wallet").json()
+        self.assertEqual(wallet["credits"], 99)
+        self.assertIn("Aisha Rahman", wallet["transactions"][0]["details"])
+
+    def test_users_come_with_their_gesir_role(self):
+        users = {u["id"]: u["module_role"] for u in self.api.get("/api/hub/users").json()["users"]}
+        self.assertEqual(users, {"azer": "admin", "aisha": "approver", "mei": "reviewer"})
+
+    def test_users_and_wallet_need_a_sign_in(self):
+        bare = TestClient(create_app(self.service, self.sender, ENV))
+        self.assertEqual(bare.get("/api/hub/users").status_code, 401)
+        self.assertEqual(bare.get("/api/wallet").status_code, 401)
+
+
 class ModelApiTests(unittest.TestCase):
     def client(self, text=None, vision=None):
         self.text, self.vision = text or FakeModel("hello there"), vision or FakeModel()

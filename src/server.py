@@ -253,8 +253,9 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
 
     def who(request):
         """(role, name) of the caller: the dashboard's login is admin; an API-key caller (the hub) names its role."""
-        if has_session(request):
-            return "admin", "dashboard"
+        if has_session(request):            # the signed-in owner may act as any role (the dashboard's role switcher)
+            role, name = orbyte.acting(request.headers.get("x-orbyte-role"), request.headers.get("x-orbyte-user"))
+            return role, name or "dashboard"
         return orbyte.acting(request.headers.get("x-orbyte-role"), request.headers.get("x-orbyte-user"))
 
     def require_decider(request):
@@ -502,6 +503,16 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         require_key(request)
         return {"quotes": service.quotes(status)}
 
+    @app.get("/api/hub/users")
+    def hub_users(request: Request):
+        require_key(request)
+        return {"users": orbyte.users()}
+
+    @app.get("/api/wallet")
+    def hub_wallet(request: Request):
+        require_key(request)
+        return orbyte.wallet(service.store)
+
     @app.post("/api/quotes/{user_id}/approve")
     def approve_quote(user_id: str, request: Request, body: ApproveRequest = None):
         role, name = require_decider(request)
@@ -518,6 +529,7 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         if not sent:
             raise HTTPException(502, "could not send the quotation to the customer")
         emitter.emit("quote.approved", {"user_id": user_id, "by": name or role, "role": role})
+        orbyte.charge_estimate(service.store, user_id, name or role)
         return {"approved": True, "slots": service.slots(user_id)[:3]}      # the best times to offer next
 
     @app.post("/api/quotes/{user_id}/reject")

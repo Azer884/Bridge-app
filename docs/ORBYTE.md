@@ -1,7 +1,7 @@
 # Orbyte link (assumed interface)
 
 Orbyte has no public API or sandbox, so this is the interface Gesir assumes. It is what a hub like Orbyte would call, and
-it is implemented and tested in this repository. `scripts/mock_orbyte.py` plays the hub on a developer's machine.
+it is implemented and tested in this repository. The Gesir dashboard itself has the Orbyte layout, so there is no separate hub app.
 
 ## Mapping
 
@@ -55,42 +55,33 @@ Set `ORBYTE_ORIGIN` to the hub's address (for example `https://hub.example.com`)
 cookie becomes `SameSite=None` so it is sent inside the frame. Over plain http the cookie stays `SameSite=Lax`, which is
 enough for the local mock hub because localhost on two ports is the same site.
 
-## The mock hub (`scripts/mock_orbyte.py`)
+## The Orbyte-style dashboard (served by Gesir at `/app`)
 
-It follows the real Orbyte as seen in a signed-in account (October 2026) and shows only what Orbyte has. It uses no Orbyte code,
-logo or images, and is labelled "simulated".
+Gesir's own dashboard follows the real Orbyte as seen in a signed-in account (October 2026). It uses no Orbyte code, logo or
+images and is labelled "on Orbyte". There is no second app: everything runs in the one Gesir deployment.
 
 | Screen | Copied from the real Orbyte | Assumed (Orbyte does not publish it) |
 | ------ | --------------------------- | ------------------------------------ |
-| Layout, organization switcher, menu search, signed-in user at the bottom | Yes | |
-| Dashboard, Pending Actions with All, Submit, Review, Approve tabs | Yes | Gesir estimates appear as Approve items |
-| Clients, Project List (Search, Status, Source, Sync all) | Yes | Customers become Clients and quotes become Projects with Source "Gesir" |
-| Users, Settings & Notifications (Role, Approver, Reviewer, Notification recipients, Status) | Yes | Company Admin and Approver may approve; Reviewer and Member may only read |
-| Wallet (balance, Recent activity, Transactions) | Yes | One credit is used per approved estimate |
-| Organization Settings, Integrations | Tab exists (Qwen key, Documenso) | A "Gesir" card and the signed events it sends |
-| "Gesir Quotes" item and "Open in Gesir" | | The module opens in a frame |
+| Layout, organization box, menu search, signed-in user at the bottom | Yes | |
+| Dashboard with Pending Actions and All, Submit, Review, Approve tabs | Yes | Gesir estimates appear as Approve items; customers who need a person appear under Review |
+| Organization: Clients, Projects | Yes | Customers become Clients and quotes become Projects |
+| Users (Role, Approver, Reviewer) | Yes | Company Admin and Approver may approve; Reviewer and Member may only read |
+| Wallet (balance, Transactions) | Yes | One credit is used per approved estimate (`GET /api/wallet`) |
+| Organization Settings, Integrations | Tab exists | A "Gesir" card and the recent activity list |
+| Workspace: Quotes, Calendar, WhatsApp, Personas, Status | | The Gesir functions, as menu items |
 
-Not copied, because they would be invented: the Leave Calendar (it is for leave and public holidays, so Gesir jobs do not belong in it; the job calendar is in the Gesir module itself), leave requests, tasks, e-sign, top-up payments, Email Broadcast, reports. They show
-as greyed menu items or are left out. Users (Azer, Aisha, Mei) and their roles are simulated; the hub, not the browser, decides
-which role goes to the module.
+Choosing a person at the bottom left ("Act as") sends their role with every request (`x-orbyte-role`, `x-orbyte-user`). The
+signed-in owner may pick any role, and the server enforces it: a Reviewer gets 403 on approve and reject. Users and credits are
+simulated and kept in the store (`GET /api/hub/users`, `GET /api/wallet`). Not copied, because they would be invented: the Leave
+Calendar, leave requests, tasks, e-sign, top-up payments, Email Broadcast and reports. They show as greyed menu items.
 
-## Hosting the hub with a hosted Gesir (Replit)
+## A real hub
 
-The local hub cannot work with a hosted Gesir as it is: the hosted app cannot send webhooks to `localhost`, and a login cookie from
-another site is not sent inside a frame. Run the hub on its own https address instead:
-
-1. Create a second Replit app from the same repository. Both apps use the same `.replit`, whose run command is `python scripts/start.py`. In the hub app only, add the secret `ORBYTE_HUB` = `1`: that makes `start.py` run the hub instead of Gesir. Never edit `.replit` or run Sync from one app to fix the other.
-2. Secrets on the hub: `HUB_TENANTS` (for example `[{"id":"hrissa","name":"Hrissa","url":"https://gesir-ai.replit.app"}]`),
-   `INCOMING_API_KEY` (the Gesir app's key) and `ORBYTE_SHARED_SECRET` (any long random string).
-3. Secrets on the Gesir app: `ORBYTE_ORIGIN` (the hub's https address), `ORBYTE_SHARED_SECRET` (the same string) and
-   `ORBYTE_WEBHOOK_URL` (`https://<hub address>/hub/webhook/hrissa`, the last part is the organization id). Republish it.
-4. Open the hub, choose Gesir Quotes, and sign in to the dashboard once inside the frame.
-
-Warning: approving in the hub sends a real WhatsApp message through the hosted Gesir. Use it with the test customers only,
-or point `HUB_TENANTS` at a separate demo deployment of Gesir with seeded data.
-The wallet and the list of events are kept in memory, so they reset when the hub restarts.
+A real Orbyte hub can still call Gesir with the API key and the role headers (the table above), receive the signed events, and embed
+the dashboard with `ORBYTE_ORIGIN`. Set `ORBYTE_WEBHOOK_URL` and `ORBYTE_SHARED_SECRET` on the Gesir app for the events. Approving
+sends a real WhatsApp message, so use test customers only.
 
 ## Not done yet
 
 - A different trade (not painting): pricing, schema and prompts are not config-only yet. A second business of the same trade is a config change (`config/business_config.second.example.json`).
-- The real Orbyte site has no public API or embed settings, so the mock hub (`scripts/mock_orbyte.py`) stays as the demo stand-in until Orbyte publishes one.
+- The real Orbyte site has no public API or embed settings, so the Orbyte-style dashboard in Gesir stays as the demo stand-in until Orbyte publishes one.

@@ -88,3 +88,39 @@ class Emitter:
                 log.warning("orbyte event %s not delivered: %s", event["type"], last)
                 if self.store:
                     self.store.log_event("orbyte_send_failed", f"{event['type']}: {last}")
+
+
+# People and credits the Orbyte-style dashboard shows. Orbyte publishes neither, so both are assumptions (docs/ORBYTE.md).
+USERS = [
+    {"id": "azer", "name": "Azer Hamdaoui", "email": "azer@example.com", "role": "Company Admin", "approver": False, "reviewer": False},
+    {"id": "aisha", "name": "Aisha Rahman", "email": "aisha@example.com", "role": "Member", "approver": True, "reviewer": False},
+    {"id": "mei", "name": "Mei Lin", "email": "mei@example.com", "role": "Member", "approver": False, "reviewer": True},
+]
+OPENING_CREDITS = 100
+CREDITS_PER_ESTIMATE = 1
+WALLET_KEY = "wallet"
+
+
+def module_role(user):
+    """The role a person has in Gesir: a Company Admin is admin, a Member marked Approver approves, anyone else reads."""
+    if user["role"] == "Company Admin":
+        return "admin"
+    return "approver" if user["approver"] else "reviewer"
+
+
+def users():
+    return [{**u, "module_role": module_role(u)} for u in USERS]
+
+
+def wallet(store):
+    return store.get_setting(WALLET_KEY, None) or {"credits": OPENING_CREDITS, "transactions": []}
+
+
+def charge_estimate(store, user_id, name):
+    """One credit per estimate a person approves. Kept in the store, so it survives a restart."""
+    box = wallet(store)
+    box["credits"] -= CREDITS_PER_ESTIMATE
+    box["transactions"] = ([{"at": time.time(), "type": "Usage", "change": -CREDITS_PER_ESTIMATE, "balance": box["credits"],
+                             "details": f"Estimate approved for {user_id} by {name or 'someone'}"}] + box["transactions"])[:100]
+    store.set_setting(WALLET_KEY, box)
+    return box

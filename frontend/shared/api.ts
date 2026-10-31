@@ -34,6 +34,30 @@ export function apiMode(): "mock" | "live" {
   return config.mock ? "mock" : "live";
 }
 
+/** Who is acting in the Orbyte-style dashboard. The role goes to the backend, which decides what it may do. */
+export interface HubUser {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  approver: boolean;
+  reviewer: boolean;
+  module_role: "admin" | "approver" | "reviewer";
+}
+export interface WalletInfo {
+  credits: number;
+  transactions: { at: number; type: string; change: number; balance: number; details: string }[];
+}
+let actor: { role: string; name: string } | null = null;
+export function setActor(next: { role: string; name: string } | null) {
+  actor = next;
+}
+const SAMPLE_USERS: HubUser[] = [
+  { id: "azer", name: "Azer Hamdaoui", email: "azer@example.com", role: "Company Admin", approver: false, reviewer: false, module_role: "admin" },
+  { id: "aisha", name: "Aisha Rahman", email: "aisha@example.com", role: "Member", approver: true, reviewer: false, module_role: "approver" },
+  { id: "mei", name: "Mei Lin", email: "mei@example.com", role: "Member", approver: false, reviewer: true, module_role: "reviewer" },
+];
+
 /** Where to load a customer photo from. The backend gives "/api/media/<id>", which the web dashboard loads with its
  * session cookie; the mobile app needs the full server address and its API key on the image request. */
 export function mediaSource(url: string): { uri: string; headers?: Record<string, string> } {
@@ -75,6 +99,10 @@ export function explainError(e: unknown): string {
 async function http<T>(method: string, path: string, body?: unknown): Promise<T> {
   const headers: Record<string, string> = {};
   if (config.apiKey) headers["x-api-key"] = config.apiKey;
+  if (actor) {
+    headers["x-orbyte-role"] = actor.role;
+    headers["x-orbyte-user"] = actor.name;
+  }
   if (body !== undefined) headers["content-type"] = "application/json";
   let res: Response;
   try {
@@ -155,6 +183,16 @@ export const api = {
   setActivePersona(id: string): Promise<unknown> {
     if (config.mock) return guard(() => mockApi.setActivePersona(id));
     return http("POST", "/api/personas/active", { id });
+  },
+
+  async hubUsers(): Promise<HubUser[]> {
+    if (config.mock) return SAMPLE_USERS;
+    return toArray<HubUser>(await http<unknown>("GET", "/api/hub/users"), "users");
+  },
+
+  async wallet(): Promise<WalletInfo> {
+    if (config.mock) return { credits: 100, transactions: [] };
+    return http<WalletInfo>("GET", "/api/wallet");
   },
 
   async listEvents(limit = 50): Promise<AppEvent[]> {
