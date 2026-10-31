@@ -29,7 +29,7 @@ The first version is built for Malaysian painting businesses.
 | Replit Project    | https://replit.com/@AzerHamdaoui/Bridge-app    |
 | Live Demo         | https://gesir-ai.replit.app (the dashboard is at `/app`; create an account at `/signup`, choosing painting or aircon; both trades work for every account) |
 | RunPod Endpoints  | text model `ose8agxpb9p1mr`, vision model `m3a8r7m8ebibba`, speech-to-text (Faster Whisper) `nvnrh39cdxgymr` (`https://api.runpod.ai/v2/<id>/runsync`) |
-| Slide Deck        | https://canva.link/gesir-ai                    |
+| Slide Deck        | [`submission/SDC2026_HRISSA_Slides.pdf`](submission/SDC2026_HRISSA_Slides.pdf) (also `.pptx`) |
 | Demo Video        | https://youtu.be/tXOuRwmwh6g              |
 
 ---
