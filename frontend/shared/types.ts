@@ -1,4 +1,4 @@
-﻿export type QuoteStatus = "pending_approval" | "approved" | "needs_inspection" | "collecting" | "completed" | "rejected";
+export type QuoteStatus = "pending_approval" | "approved" | "needs_inspection" | "collecting" | "completed" | "rejected";
 
 /** Pipeline stage shown on the Pipeline page. Derived by the backend (or by stageOf in shared/calc.ts). */
 export type Stage = "pending_extraction" | "requires_approval" | "quote_sent" | "scheduled" | "completed" | "rejected";
@@ -244,6 +244,8 @@ export interface BookingInput {
   address: string;
   start: string;
   end: string;
+  /** Working hours chosen in the dashboard; the lunch hour is not counted. */
+  hours?: number;
 }
 
 

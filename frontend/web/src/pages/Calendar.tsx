@@ -285,7 +285,9 @@ export default function Calendar() {
           onClose={() => setCreating(null)}
           onSaved={async (b) => {
             setCreating(null);
-            toast("Booking saved");
+            toast((b as Booking & { notified?: boolean }).notified
+              ? "Booking saved. The customer was asked on WhatsApp to confirm."
+              : "Booking saved");
             await bookings.reload();
             await mirror(b);
           }}
@@ -463,6 +465,7 @@ function CreateDialog({ draft, quotes, fetchEvents, fetchSlots, onClose, onSaved
         address: addr,
         start: s.toISOString(),
         end: endAt(date, time, hours).toISOString(),
+        hours,
       });
       onSaved(created);
     } catch (e) {
@@ -616,7 +619,7 @@ function EditDialog({ b, synced, fetchEvents, onClose, onSaved }: {
               onClick={() => {
                 const s = combine(date, time);
                 run(
-                  () => api.updateBooking(b.id, { start: s.toISOString(), end: endAt(date, time, hours).toISOString() }),
+                  () => api.updateBooking(b.id, { start: s.toISOString(), end: endAt(date, time, hours).toISOString(), hours }),
                   "Booking moved",
                 );
               }}

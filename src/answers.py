@@ -162,7 +162,11 @@ _NAME_INTRO = re.compile(
     r"(?=\s*(?:$|[.,!]|and\b|dan\b|from\b|my\b|calling\b))", re.I)
 _NOT_AN_INTRO = {"looking", "interested", "trying", "planning", "wanting", "thinking", "ready", "just", "not", "here",
                  "new", "sorry", "sure", "happy", "also", "still", "going", "having", "moving", "want", "need", "nak",
-                 "mahu", "cari", "ingin", "at", "in", "from", "a", "an", "the"}
+                 "mahu", "cari", "ingin", "at", "in", "from", "a", "an", "the",
+                 # "yes I'm doctor", "I'm busy": a job or a state, not a name
+                 "doctor", "engineer", "teacher", "nurse", "lawyer", "student", "manager", "owner", "tenant", "landlord",
+                 "contractor", "driver", "retired", "busy", "free", "fine", "good", "ok", "okay", "done", "back", "home",
+                 "out", "away", "outside", "working", "available", "interested", "confused", "lost", "late", "early"}
 
 
 def explicit_name(message):

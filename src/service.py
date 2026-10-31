@@ -329,12 +329,22 @@ class IncomingService:
                 removed += 1
         return removed
 
-    def create_booking(self, user_id, start, end, send):
+    def create_booking(self, user_id, start, end, send, hours=None, customer="", phone="", address=""):
         """Offer a slot to the customer: stored as tentative, asked on WhatsApp, confirmed on their yes.
+        `hours` is the working time the owner chose (lunch is not counted); without it the job's own length is used.
+        A booking for someone who never chatted (user_id "manual_...") is the owner's own entry: stored as confirmed,
+        with the name and address typed in the dashboard, and nobody is messaged.
         Returns (booking view, whether the customer was messaged). Raises ValueError on a clash."""
+        if user_id.startswith("manual_"):
+            hours = hours or max((scheduling.parse_time(end) - scheduling.parse_time(start)).total_seconds() / 3600, 1.0)
+            if scheduling.conflicts(self.store.bookings(), start, hours, address):
+                raise ValueError("that time overlaps another job")
+            booking = scheduling.new_booking(user_id, customer, phone, address, start, hours, "confirmed")
+            self.store.save_booking(booking)
+            return views.booking_view(booking, self.store.load(user_id)), False
         with self.store.lock(user_id):
             state = self.store.load(user_id)
-            hours = self._job_hours(state, fallback=max(
+            hours = hours or self._job_hours(state, fallback=max(
                 (scheduling.parse_time(end) - scheduling.parse_time(start)).total_seconds() / 3600, 1.0))
             address = state.verified.get("address", "")
             location = state.verified.get("location")
@@ -368,13 +378,14 @@ class IncomingService:
             state = self.store.load(user_id)
             booking = self.store.get_booking(booking_id)
             message = None
-            if patch.get("start") and scheduling.parse_time(patch["start"]) != scheduling.parse_time(booking["start"]):
-                if scheduling.conflicts(self.store.bookings(), patch["start"], booking["hours"], booking["address"],
-                                        ignore_id=booking_id):
+            start = patch.get("start") or booking["start"]
+            hours = float(patch.get("hours") or booking["hours"])
+            if scheduling.parse_time(start) != scheduling.parse_time(booking["start"]) or hours != float(booking["hours"]):
+                if scheduling.conflicts(self.store.bookings(), start, hours, booking["address"], ignore_id=booking_id):
                     raise ValueError("that time overlaps another job")
                 moved = scheduling.new_booking(user_id, booking["customer"], booking["phone"], booking["address"],
-                                               patch["start"], booking["hours"], booking["status"])
-                booking.update(start=moved["start"], end=moved["end"])
+                                               start, hours, booking["status"])
+                booking.update(start=moved["start"], end=moved["end"], hours=hours)
                 if booking["status"] == "confirmed":
                     message = t("booking_moved", state.lang, when=scheduling.describe_when(booking["start"], state.lang))
             status = patch.get("status")

@@ -130,11 +130,13 @@ class BookingIn(BaseModel):
     address: str = ""
     start: str
     end: str
+    hours: float | None = Field(None, gt=0, le=40)      # working hours chosen in the dashboard; lunch not counted
 
 
 class BookingPatch(BaseModel):
     start: str | None = None
     end: str | None = None
+    hours: float | None = Field(None, gt=0, le=40)
     status: Literal["confirmed", "tentative", "cancelled"] | None = None
 
 
@@ -607,7 +609,9 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
     def create_booking(body: BookingIn, request: Request):
         require_key(request)
         try:
-            booking, notified = service.create_booking(body.user_id, body.start, body.end, notifier(body.user_id))
+            booking, notified = service.create_booking(body.user_id, body.start, body.end, notifier(body.user_id),
+                                                       hours=body.hours, customer=body.customer, phone=body.phone,
+                                                       address=body.address)
         except ValueError as err:
             raise HTTPException(409, str(err))
         return {**booking, "notified": notified}

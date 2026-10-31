@@ -304,7 +304,7 @@ export const api = {
     return guard(() => mockApi.createBooking(input));
   },
 
-  updateBooking(id: string, patch: Partial<Pick<Booking, "start" | "end" | "status">>): Promise<Booking> {
+  updateBooking(id: string, patch: Partial<Pick<Booking, "start" | "end" | "status">> & { hours?: number }): Promise<Booking> {
     if (!config.mock && config.bookingsLive) return http("PATCH", `/api/bookings/${id}`, patch);
     return guard(() => mockApi.updateBooking(id, patch));
   },

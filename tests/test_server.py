@@ -417,6 +417,30 @@ class DashboardRoleTests(unittest.TestCase):
         self.assertEqual(bare.get("/api/wallet").status_code, 401)
 
 
+class BookingApiTests(unittest.TestCase):
+    """The calendar books real slots: the chosen length is kept, and an entry for someone who never chatted messages nobody."""
+    def setUp(self):
+        self.sender = SentRecorder()
+        self.service = ServiceTests().quoting_service()
+        self.api = TestClient(create_app(self.service, self.sender, ENV))
+
+    def test_a_manual_entry_is_confirmed_and_nobody_is_messaged(self):
+        res = self.api.post("/api/bookings", headers=KEY, json={
+            "user_id": "manual_1", "customer": "Walk-in Ali", "address": "5 Jalan Ampang",
+            "start": "2026-11-02T11:00:00+08:00", "end": "2026-11-02T16:00:00+08:00", "hours": 4}).json()
+        self.assertEqual((res["customer"], res["status"], res["notified"]), ("Walk-in Ali", "confirmed", False))
+        self.assertEqual(self.sender.sent, [])
+
+    def test_the_chosen_hours_are_kept_and_lunch_is_skipped(self):
+        res = self.api.post("/api/bookings", headers=KEY, json={
+            "user_id": "60123456789", "start": "2026-11-03T11:00:00+08:00", "end": "2026-11-03T16:00:00+08:00",
+            "hours": 4}).json()
+        self.assertTrue(res["end"].startswith("2026-11-03T16:00"))            # 11 to 1, lunch, 2 to 4
+        self.assertTrue(res["notified"])                                       # the customer is asked to confirm
+        moved = self.api.patch(f"/api/bookings/{res['id']}", headers=KEY, json={"hours": 2}).json()
+        self.assertTrue(moved["end"].startswith("2026-11-03T13:00"))
+
+
 class ModelApiTests(unittest.TestCase):
     def client(self, text=None, vision=None):
         self.text, self.vision = text or FakeModel("hello there"), vision or FakeModel()

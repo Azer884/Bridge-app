@@ -230,3 +230,14 @@ class WrapUpTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NameIsNotAJobTests(unittest.TestCase):
+    """A real chat: "Yes. I'm doctor." at the contact step turned the customer's name into "Doctor"."""
+    def test_a_job_or_a_state_after_i_am_is_not_a_name(self):
+        from src import answers, contact
+        for text in ("Yes. I'm doctor.", "yes I'm busy", "I'm free"):
+            self.assertIsNone(contact.find_name(text, True), text)
+            self.assertIsNone(answers.explicit_name(text), text)
+        self.assertEqual(contact.find_name("I'm Aisha", True), "Aisha")
+        self.assertEqual(answers.explicit_name("Hi, I'm Dr Ahmad"), "Dr Ahmad")

@@ -83,7 +83,8 @@ def find_name(message, allow_bare):
     if not candidate:
         return None
     words = candidate.split()
-    if words[0].lower() in _NOT_NAMES or len(candidate) > 40:
+    from .answers import _NOT_AN_INTRO          # "yes I'm doctor", "I'm busy": a job or a state, not a name
+    if words[0].lower() in _NOT_NAMES or words[0].lower() in _NOT_AN_INTRO or len(candidate) > 40:
         return None
     if (_ABUSIVE | _CHATTER) & set(_words(candidate)):
         return None
