@@ -242,18 +242,53 @@ def passed_this_year(message, today=None):
 
 
 _SUNDAY = re.compile(r"\b(sunday|sun|ahad)\b", re.I)
-_CLOCK = re.compile(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b|\b([01]?\d|2[0-3]):([0-5]\d)\b", re.I)
+_SATURDAY = re.compile(r"\b(saturday|sabtu)\b", re.I)
+_WEEKEND = re.compile(r"\b(weekends?|hujung minggu)\b", re.I)
+_NUMBER_WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9,
+                 "ten": 10, "eleven": 11, "twelve": 12}
+_CLOCK = re.compile(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b|\b([01]?\d|2[0-3]):([0-5]\d)\b|"
+                    rf"\b({'|'.join(_NUMBER_WORDS)})\s*(am|pm)\b", re.I)       # "3 am", "15:00", "three AM"
+# Public holidays: named ones (their dates move every year) and the fixed-date federal ones as (month, day).
+_HOLIDAY_NAMES = re.compile(
+    r"(?<!after )(?<!before )(?<!selepas )(?<!sebelum )\b(hari raya|raya|aidilfitri|aidiladha|deepavali|diwali|"
+    r"chinese new year|cny|christmas|thaipusam|wesak|vesak|merdeka|malaysia day|labou?r day|new year'?s? day|"
+    r"awal muharram|maulidur rasul|nuzul quran|agong'?s? birthday|public holiday|cuti umum)\b", re.I)
+_FIXED_HOLIDAYS = {(1, 1), (5, 1), (8, 31), (9, 16), (12, 25)}
+_TOMORROW = re.compile(r"\b(tomorrow|esok)\b", re.I)
+_TODAY = re.compile(r"\b(today|tonight|hari ini)\b", re.I)
 
 
-def outside_working_time(message):
-    """True when the customer asks for a day or hour the crew does not work: Sunday, or a clock time before 9 am or from
-    6 pm ("3 am Sunday"). The hours come from the calendar's working rules."""
+def _closed_day(day, working_days):
+    return day.weekday() not in working_days or (day.month, day.day) in _FIXED_HOLIDAYS
+
+
+def outside_working_time(message, today=None):
+    """True when the customer asks for a day or hour the crew does not work: a weekend, a public holiday, or a clock
+    time before 9 am or from 6 pm ("3 am", "three AM"). Dates ("31 Oct", "tomorrow") are checked by their weekday.
+    The days and hours come from the calendar's working rules."""
+    from datetime import date as _date, timedelta
     from .calendar_scheduler import RULES
-    if _SUNDAY.search(message) and not _NEGATED_DATE.search(message) and 6 not in RULES.working_days:
-        return True
+    today = today or _date.today()
+    if not _NEGATED_DATE.search(message):
+        days = RULES.working_days
+        if (_SUNDAY.search(message) and 6 not in days) or (_SATURDAY.search(message) and 5 not in days) \
+                or (_WEEKEND.search(message) and 5 not in days) or _HOLIDAY_NAMES.search(message):
+            return True
+        found = explicit_date(message)
+        if found:
+            try:
+                if _closed_day(_date(found[2] or today.year, found[1], found[0]), days):
+                    return True
+            except ValueError:
+                pass
+        if (_TOMORROW.search(message) and _closed_day(today + timedelta(days=1), days)) \
+                or (_TODAY.search(message) and _closed_day(today, days)):
+            return True
     for found in _CLOCK.finditer(message):
         if found.group(3):
             hour = int(found.group(1)) % 12 + (12 if found.group(3).lower() == "pm" else 0)
+        elif found.group(6):
+            hour = _NUMBER_WORDS[found.group(6).lower()] % 12 + (12 if found.group(7).lower() == "pm" else 0)
         else:
             hour = int(found.group(4))
         if hour < RULES.day_start.hour or hour >= RULES.day_end.hour:
@@ -263,12 +298,12 @@ def outside_working_time(message):
 
 def date_problem(message, today=None):
     """A date answer that cannot be booked: 'date_past' (yesterday), 'date_past_year' ("20 Oct" when that day has gone
-    by), 'date_closed' (Sunday, or 3 am) or 'date_need_day' ("after Raya"), else None."""
+    by), 'date_closed' (weekend, public holiday, or 3 am) or 'date_need_day' ("after Raya"), else None."""
     if _PAST_DATE.search(message):
         return "date_past"
     if passed_this_year(message, today):
         return "date_past_year"
-    if outside_working_time(message):
+    if outside_working_time(message, today):
         return "date_closed"
     if _DATE_NEEDS_DAY.search(message) and not _DATE_WORDS.search(message):
         return "date_need_day"

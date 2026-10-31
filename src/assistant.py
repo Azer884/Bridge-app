@@ -5,7 +5,7 @@ import re
 import time
 from types import SimpleNamespace
 
-from . import contact, flow
+from . import contact, flow, geo
 from .grounding import (HEDGES, ONES, UNIT_FACTORS, GroundingError, cued_sizes, estimate_in, ground_field,
                         _bare_number, ground_measurement, numbers_in, sizes_in, sizes_metric, spoken_decimals,
                         unit_factors_in)
@@ -157,7 +157,21 @@ def _handle(state, message, config, client, max_retries=MAX_RETRIES):
         if faq:                         # a side question: answer it, then ask for the confirmation again
             return _finish(state, message, f"{faq} {t('wrap_ok', state.lang)}", Status.COLLECTING.value,
                            record=False)
+        problem = flow.date_problem(message)
+        if problem and flow.when_in(message, strict=True):      # a weekend, a holiday or 3 am: never accepted
+            return _finish(state, message, t(problem, state.lang), Status.COLLECTING.value, record=False)
+        if flow.asks_recap(message) and state.verified:
+            return _finish(state, message, f"{t('recap_intro', state.lang)}\n{flow.recap(state)}\n\n{t('wrap_ok', state.lang)}",
+                           Status.COLLECTING.value, record=False)
+        if ("?" in message or flow._QUESTION_START.match(message)) and not sizes_in(message, loose=True) \
+                and not cued_sizes(message):
+            owner = (config.get("owner") or {}).get("name") or ("pasukan kami" if state.lang == "ms" else "our team")
+            return _finish(state, message, f"{t('faq_other', state.lang, owner=owner)} {t('wrap_ok', state.lang)}",
+                           Status.COLLECTING.value, record=False)         # a question we cannot answer is not a "yes"
         state.stage = "job"             # a correction: it goes through the normal flow below
+
+    if persona and geo.foreign_place(message):      # a job outside Malaysia is never quoted, and never stored
+        return _finish(state, message, t("location_outside", state.lang), Status.COLLECTING.value, record=False)
 
     lowered = message.lower()
     if any(k in lowered for k in config.get("inspection_keywords", [])):
@@ -491,7 +505,16 @@ def _accept(state, message, config, result, attempt, changed=True):
         # Job details complete: the backend (not the model) now confirms the booking contact.
         if config.get("persona") and state.contact_confirmed:
             state.stage = "wrapup"      # contact already confirmed: recap again after a correction
-            reply = flow.wrapup_reply(state, config) if changed else t("wrap_nochange", state.lang)
+            if changed:
+                state.reasks["wrap_nochange"] = 0
+                reply = flow.wrapup_reply(state, config)
+            else:                       # the same line again would be a loop: the second time say what is needed
+                state.reasks["wrap_nochange"] = state.reasks.get("wrap_nochange", 0) + 1
+                if state.reasks["wrap_nochange"] == 1:
+                    reply = t("wrap_nochange", state.lang)
+                else:
+                    state.attention = True
+                    reply = t("wrap_stuck", state.lang, owner=flow._owner_for(config, state.lang))
         elif config.get("persona"):
             reply = flow.contact_intro(state)
         else:

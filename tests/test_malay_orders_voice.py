@@ -514,7 +514,7 @@ class ChatLogRegressionTests(unittest.TestCase):
         del state.verified["address"]
         state.verified["location"] = {"lat": 2.83, "lon": 101.7, "name": "", "address": ""}
         state.verified.pop("preferred_datetime")
-        handle_message(state, "tomorrow morning", CONFIG, FakeClient(reply("x?")))
+        handle_message(state, "next Tuesday morning", CONFIG, FakeClient(reply("x?")))
         self.assertIn("Pinned location", state.verified["address"])
 
     def test_photo_caption_is_read_as_a_message(self):

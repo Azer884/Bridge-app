@@ -81,8 +81,8 @@ class GreetingTests(unittest.TestCase):
 class EndOfConversationTests(unittest.TestCase):
     def finish_job(self):
         state, client = nearly_done_state(), FakeClient(
-            reply("Great!", fields={"preferred_datetime": "next Saturday morning"}, status="ready_for_estimate"))
-        out = handle_message(state, "next Saturday morning", PERSONA_CONFIG, client)
+            reply("Great!", fields={"preferred_datetime": "next Monday morning"}, status="ready_for_estimate"))
+        out = handle_message(state, "next Monday morning", PERSONA_CONFIG, client)
         return state, out
 
     def test_contact_details_are_asked_after_the_job_with_a_natural_lead_in(self):
@@ -102,6 +102,22 @@ class EndOfConversationTests(unittest.TestCase):
         done = handle_message(state, "yes that's right", PERSONA_CONFIG, FakeClient())
         self.assertEqual((state.stage, done.status), ("done", "ready_for_estimate"))
         self.assertIn("our team", done.reply)
+
+    def test_questions_at_wrapup_are_not_answered_with_the_same_line(self):
+        state, _ = self.finish_job()
+        handle_message(state, "yes", PERSONA_CONFIG, FakeClient())
+        out = handle_message(state, "Which phone exactly?", PERSONA_CONFIG, FakeClient())
+        self.assertEqual(state.stage, "wrapup")
+        self.assertNotIn("Is there anything you'd like to change", out.reply)
+        self.assertIn("Is everything correct?", out.reply)
+
+    def test_a_weekend_or_3am_at_wrapup_is_refused(self):
+        state, _ = self.finish_job()
+        handle_message(state, "yes", PERSONA_CONFIG, FakeClient())
+        before = state.verified["preferred_datetime"]
+        out = handle_message(state, "ok how about Saturday at three AM", PERSONA_CONFIG, FakeClient())
+        self.assertIn("not on weekends or public holidays", out.reply)
+        self.assertEqual(state.verified["preferred_datetime"], before)
 
     def test_a_correction_at_wrapup_goes_back_through_the_job_flow_and_skips_contact(self):
         state, _ = self.finish_job()

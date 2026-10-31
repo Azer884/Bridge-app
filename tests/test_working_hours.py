@@ -21,23 +21,30 @@ def job(**extra):
 class WorkingTimeTests(unittest.TestCase):
     def test_what_is_outside_the_crews_hours(self):
         for text in ("Actually can you do 3 Am sunday", "I'm free Sunday afternoon if you guys are working then",
-                     "monday 6pm", "7am tomorrow", "Ahad pagi"):
+                     "monday 6pm", "Ahad pagi", "Saturday 10am", "weekends are good for me", "three AM on Monday",
+                     "hari raya", "25 Dec", "Sabtu pagi", "I'll be three three AM"):
             self.assertEqual(flow.date_problem(text), "date_closed", text)
 
     def test_what_is_inside_them(self):
-        for text in ("tomorrow 10am", "saturday 2pm", "5:30pm monday", "any day except sunday", "3 meters", "9am"):
+        for text in ("monday 10am", "5:30pm monday", "any day except sunday", "3 meters", "9am"):
             self.assertIsNone(flow.date_problem(text), text)
 
     def test_the_hours_are_said_from_the_calendar_rules(self):
-        self.assertEqual(scheduling.working_hours_text("en"), "Monday to Friday 9 am to 6 pm and Saturday 9 am to 1 pm")
+        self.assertEqual(scheduling.working_hours_text("en"), "Monday to Friday 9 am to 6 pm")
         self.assertIn("Isnin hingga Jumaat", scheduling.working_hours_text("ms"))
 
 
 class ChatTests(unittest.TestCase):
+    def test_a_job_in_another_country_is_refused_and_not_stored(self):
+        service = job(surface_condition="no damage", preferred_datetime="monday 10am")
+        out = service.handle(IncomingEvent("a", "u", text="the house is in Jakarta, Indonesia"))
+        self.assertIn("not in Malaysia", out[0])
+        self.assertNotIn("address", service.store.load("u").verified)
+
     def test_a_closed_time_gets_the_hours_and_is_not_stored(self):
         service = job(surface_condition="no damage", address="12 Jalan Ampang Kuala Lumpur")      # only the date is still open
         out = service.handle(IncomingEvent("a", "u", text="I'm free Sunday afternoon if you guys are working then"))
-        self.assertIn("Our crew works Monday to Friday 9 am to 6 pm and Saturday 9 am to 1 pm", out[0])
+        self.assertIn("Our crew works Monday to Friday 9 am to 6 pm, and not on weekends or public holidays", out[0])
         self.assertNotIn("preferred_datetime", service.store.load("u").verified)
 
     def test_a_new_time_is_not_read_as_a_new_size(self):

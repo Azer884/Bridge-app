@@ -3,6 +3,7 @@
 The outlines are coarse (about 10 to 20 km of margin) and built into the code, so no outside service sees a customer's
 location. A pin on a coast can fall either side; a pin in the sea, in another country or on another continent never passes.
 """
+import re
 
 # (longitude, latitude) outlines, clockwise
 PENINSULA = [(100.12, 6.50), (100.65, 6.50), (101.10, 6.30), (102.10, 6.30), (102.40, 6.00), (102.95, 5.65), (103.25, 5.20),
@@ -39,3 +40,15 @@ def in_malaysia(lat, lon):
     if _inside(lon, lat, SINGAPORE):
         return False
     return any(_inside(lon, lat, shape) for shape in (PENINSULA, BORNEO, LANGKAWI))
+
+
+_FOREIGN = re.compile(
+    r"\b(indonesia|jakarta|bandung|surabaya|medan|batam|bali|yogyakarta|singapore|singapura|thailand|bangkok|brunei|"
+    r"philippines|manila|vietnam|hanoi|cambodia|myanmar|india|china|hong kong|japan|korea|australia|"
+    r"united kingdom|london|usa|united states|new york|dubai)\b", re.I)
+
+
+def foreign_place(text):
+    """True when typed text puts the job in another country ("Jakarta", "Singapore"). A pin is checked by
+    in_malaysia; this covers an address typed in words."""
+    return bool(_FOREIGN.search(text or ""))

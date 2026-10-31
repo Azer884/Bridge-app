@@ -54,7 +54,7 @@ except Exception:
 class WorkingRules:
     day_start: time = time(9, 0)
     day_end: time = time(18, 0)
-    working_days: tuple = (0, 1, 2, 3, 4, 5)  # Mon=0 .. Sat=5 (Mon-Sat)
+    working_days: tuple = (0, 1, 2, 3, 4)  # Mon=0 .. Fri=4; weekends are closed
     step_minutes: int = 30       # search granularity (every 30 mins)
     buffer_minutes: int = 0      # gap required around events
     search_days: int = 14        # how many days ahead to search

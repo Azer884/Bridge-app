@@ -116,7 +116,7 @@ class WorkingDayTests(unittest.TestCase):
             per_day[start.date()] = per_day.get(start.date(), 0) + (end - start).total_seconds() / 3600
         self.assertTrue(all(h <= 8 for h in per_day.values()))
         self.assertEqual(len(days), 3)                                       # 8 + 8 + 4
-        self.assertEqual(scheduling.work_windows(datetime(2026, 10, 31).date())[-1][1].hour, 13)   # Saturday half day
+        self.assertEqual(scheduling.work_windows(datetime(2026, 10, 31).date()), [])              # Saturday off
         self.assertEqual(scheduling.work_windows(datetime(2026, 11, 1).date()), [])               # Sunday off
 
     def test_a_long_booking_shows_one_entry_per_day(self):
