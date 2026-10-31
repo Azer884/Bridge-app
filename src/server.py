@@ -314,6 +314,18 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
     window = float(env.get("MESSAGE_WINDOW_SECONDS") or 2.0)    # messages this close together are read as one
     inbox, running, inbox_lock = {}, set(), threading.Lock()
     live_calls, call_outbox, call_lock = {}, {}, threading.Lock()      # callers on the phone right now, and what to tell them
+    call_callers = {}                                  # call id -> the caller's number, to know who a "terminate" is about
+    CALL_LIVE_SECONDS = 60       # the voice agent asks every second or two while a call lasts, so a minute without it means it is over
+
+    def mark_live(user_id):
+        with call_lock:
+            live_calls[user_id] = time.time() + CALL_LIVE_SECONDS
+
+    def call_ended(user_id):
+        """The call is over (or its agent died): chat answers go back to WhatsApp at once, nothing waits for a dead call."""
+        with call_lock:
+            live_calls.pop(user_id, None)
+            call_outbox.pop(user_id, None)
 
     def on_call(user_id):
         with call_lock:
@@ -373,6 +385,12 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
         key = f"{call['id']}:{call['event']}"
         if not service.store.claim_call_event(key):
             return
+        if call.get("caller"):
+            call_callers[call["id"]] = call["caller"]
+        if call["event"] == "terminate":
+            ended = call.get("caller") or call_callers.pop(call["id"], None)
+            if ended:
+                call_ended(ended)
         flag = str(env.get("WHATSAPP_CALLING_ENABLED") or "").lower()
         keys = ("LIVEKIT_URL", "LIVEKIT_API_KEY", "LIVEKIT_API_SECRET")
         # Calls switch themselves on once LiveKit is configured; WHATSAPP_CALLING_ENABLED=false keeps them off.
@@ -440,8 +458,7 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
             raise HTTPException(422, str(err))
         before = service.store.load(event.user_id).stage
         if event.channel == "voice":
-            with call_lock:
-                live_calls[event.user_id] = time.time() + 900       # a call is going on: chat answers go to it
+            mark_live(event.user_id)                                # a call is going on: chat answers go to it
         replies = service.handle(event)
         state = service.store.load(event.user_id)
         # the voice agent hangs up after this answer: the job was just completed, or the caller said goodbye
@@ -458,7 +475,7 @@ def create_app(service=None, sender=None, env=None, text_client=None, vision_cli
             if end:
                 live_calls.pop(user_id, None)
             else:
-                live_calls[user_id] = time.time() + 900
+                live_calls[user_id] = time.time() + CALL_LIVE_SECONDS
             texts = call_outbox.pop(user_id, [])
             if end:
                 call_outbox.pop(user_id, None)

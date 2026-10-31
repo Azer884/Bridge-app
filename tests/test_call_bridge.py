@@ -77,6 +77,23 @@ class ChatDuringCallTests(unittest.TestCase):
         self.chat("anything", "wamid.d")
         self.assertEqual(self.sender.sent, [])
 
+    def test_a_call_whose_agent_died_does_not_swallow_the_chat(self):
+        from unittest import mock
+        import time as real_time
+        self.pending()                                   # the agent polled once, then crashed: nothing asks again
+        later = real_time.time() + 61
+        with mock.patch("src.server.time.time", return_value=later):
+            self.chat("hello", "wamid.dead")
+        self.assertEqual(len(self.sender.sent), 1)       # a minute of silence means the call is over
+
+    def test_hanging_up_sends_the_next_message_to_whatsapp_at_once(self):
+        from tests.test_calls import CONNECT, TERMINATE, calls_payload, signed_post
+        signed_post(self.client, calls_payload(CONNECT))
+        self.pending()
+        signed_post(self.client, calls_payload(TERMINATE))
+        self.chat("hello", "wamid.hangup")
+        self.assertEqual(len(self.sender.sent), 1)
+
     def test_the_pending_route_needs_the_key(self):
         self.assertEqual(self.client.get("/api/voice/pending", params={"user_id": "x"}).status_code, 401)
 
