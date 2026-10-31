@@ -94,3 +94,26 @@ class HangUpTests(unittest.TestCase):
         self.assertFalse(client.post("/incoming", json=body, headers=KEY).json()["end_call"])
         body.update(message_id="w1", text="bye", channel="whatsapp")
         self.assertFalse(client.post("/incoming", json=body, headers=KEY).json()["end_call"])   # chat: no call to end
+
+
+class SpeechVocabularyTests(unittest.TestCase):
+    """The word list travels in the request that opens the speech connection; a long one is refused and every call drops."""
+
+    def test_the_list_is_short_enough_for_the_speech_service(self):
+        from voice_worker.backend import MAX_KEYTERM_CHARS, MAX_KEYTERMS, keyterms
+        terms = keyterms()
+        self.assertLessEqual(len(terms), MAX_KEYTERMS)
+        self.assertLessEqual(sum(len(t) + 1 for t in terms), MAX_KEYTERM_CHARS)
+        self.assertEqual(len(terms), len(set(terms)))
+
+    def test_extra_words_cannot_make_it_too_long(self):
+        import os
+        from unittest import mock
+        from voice_worker.backend import MAX_KEYTERMS, keyterms
+        with mock.patch.dict(os.environ, {"VOICE_STT_KEYTERMS": ",".join(f"word{i}" for i in range(200))}):
+            self.assertLessEqual(len(keyterms()), MAX_KEYTERMS)
+
+    def test_the_words_that_matter_stay_in(self):
+        from voice_worker.backend import keyterms
+        for word in ("walls", "ceiling", "aircon", "chemical wash", "Jalan"):
+            self.assertIn(word, keyterms())

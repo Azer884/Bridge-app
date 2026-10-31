@@ -17,23 +17,28 @@ MAX_SPOKEN_CHARS = 1000
 
 
 
-# Words the speech model should favour; callers have accents and phone lines are noisy. Extend with VOICE_STT_KEYTERMS.
-KEYTERMS = ["sitting room", "living room", "master bedroom", "bedroom", "bathroom", "kitchen", "dining room",
-            "ceiling", "skirting", "wall", "walls", "repaint", "meters", "feet", "Jotun", "Nippon Paint", "Dulux",
-            "economy", "standard", "premium", "ruang tamu", "bilik tidur", "dinding", "siling", "cat", "kali",
-            # aircon servicing
-            "aircon", "air conditioner", "aircond", "chemical wash", "chemical overhaul", "general service", "gas top-up",
-            "horsepower", "HP", "wall-mounted", "cassette", "compressor", "servis", "cuci kimia", "kuasa kuda",
-            # Malaysian places and street words: callers say these quickly and with their own accent
-            "Jalan", "Lorong", "Taman", "Kuala Lumpur", "Petaling Jaya", "Shah Alam", "Subang Jaya", "Cheras", "Ampang",
-            "Klang", "Kajang", "Puchong", "Bangsar", "Mont Kiara", "Damansara", "Setapak", "Seri Kembangan", "Bukit Jalil",
-            "Sri Petaling", "Cyberjaya", "Putrajaya", "Selangor", "Johor Bahru", "Penang", "Ipoh",
-            "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "tomorrow", "Isnin", "Selasa", "Rabu", "Khamis", "Jumaat", "esok"]
+# Words the speech model should favour; callers have accents and phone lines are noisy. The list travels in the request that
+# opens the speech connection, so it is kept short: a long one is refused (Deepgram answered "400 bad handshake" to 78
+# terms and every call dropped; 26 worked). Extend with VOICE_STT_KEYTERMS; the most useful words come first and the rest are cut.
+KEYTERMS = ["sitting room", "living room", "master bedroom", "bedroom", "bathroom", "kitchen", "ceiling", "walls", "repaint", "meters",
+            "Jotun", "Nippon Paint", "Dulux", "economy", "standard", "premium", "ruang tamu", "bilik tidur", "dinding", "siling",
+            "aircon", "aircond", "chemical wash", "horsepower", "servis", "Jalan", "Taman", "Kuala Lumpur"]
+MAX_KEYTERMS = 28
+MAX_KEYTERM_CHARS = 280
 
 
 def keyterms():
+    """The words to favour, within a count and a length the speech service accepts; extras from VOICE_STT_KEYTERMS go last."""
     extra = [w.strip() for w in os.environ.get("VOICE_STT_KEYTERMS", "").split(",") if w.strip()]
-    return KEYTERMS + extra
+    out, size = [], 0
+    for term in KEYTERMS + extra:
+        if term in out:
+            continue
+        if len(out) >= MAX_KEYTERMS or size + len(term) + 1 > MAX_KEYTERM_CHARS:
+            break
+        out.append(term)
+        size += len(term) + 1
+    return out
 
 
 _HYPE = re.compile(r"(?:(?<=[.?!])|^)\s*(?:perfect|great|wonderful|awesome|fantastic|excellent|brilliant|lovely|"
