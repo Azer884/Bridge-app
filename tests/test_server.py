@@ -395,21 +395,21 @@ class DashboardRoleTests(unittest.TestCase):
         self.api.cookies.set(webauth.COOKIE, webauth.make_cookie(b"s3cret"))
 
     def test_a_reviewer_cannot_approve_even_when_signed_in(self):
-        res = self.api.post("/api/quotes/60123456789/approve", headers={"x-orbyte-role": "reviewer", "x-orbyte-user": "Mei Lin"})
+        res = self.api.post("/api/quotes/60123456789/approve", headers={"x-orbyte-role": "reviewer", "x-orbyte-user": "Tarek Ben Slimen"})
         self.assertEqual(res.status_code, 403)
         self.assertEqual(self.sender.sent, [])
 
     def test_an_approver_can_and_one_credit_is_used(self):
         self.assertEqual(self.api.get("/api/wallet").json()["credits"], 100)
-        res = self.api.post("/api/quotes/60123456789/approve", headers={"x-orbyte-role": "approver", "x-orbyte-user": "Aisha Rahman"})
+        res = self.api.post("/api/quotes/60123456789/approve", headers={"x-orbyte-role": "approver", "x-orbyte-user": "Omar Bouhlel"})
         self.assertTrue(res.json()["approved"])
         wallet = self.api.get("/api/wallet").json()
         self.assertEqual(wallet["credits"], 99)
-        self.assertIn("Aisha Rahman", wallet["transactions"][0]["details"])
+        self.assertIn("Omar Bouhlel", wallet["transactions"][0]["details"])
 
     def test_users_come_with_their_gesir_role(self):
         users = {u["id"]: u["module_role"] for u in self.api.get("/api/hub/users").json()["users"]}
-        self.assertEqual(users, {"azer": "admin", "aisha": "approver", "mei": "reviewer"})
+        self.assertEqual(users, {"azer": "admin", "omar": "approver", "tarek": "reviewer"})
 
     def test_users_and_wallet_need_a_sign_in(self):
         bare = TestClient(create_app(self.service, self.sender, ENV))

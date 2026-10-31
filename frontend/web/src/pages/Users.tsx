@@ -19,7 +19,7 @@ export default function Users() {
             {users.map((u) => (
               <tr key={u.id}>
                 <td><b>{u.name}</b></td>
-                <td>{u.email}</td>
+                <td>{u.email || "-"}</td>
                 <td>{u.role}</td>
                 <td>{u.approver ? "Yes" : "No"}</td>
                 <td>{u.reviewer ? "Yes" : "No"}</td>
@@ -36,7 +36,7 @@ export default function Users() {
           </tbody>
         </table>
         <p className="note">
-          These people and roles are simulated. The server checks the role on every approve and reject, so a Reviewer is refused even if the button is used.
+          Logins are simulated: the team members act as these roles for the demo. The server checks the role on every approve and reject, so a Reviewer is refused even if the button is used.
         </p>
       </section>
     </>

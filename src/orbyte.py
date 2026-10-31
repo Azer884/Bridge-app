@@ -92,9 +92,9 @@ class Emitter:
 
 # People and credits the Orbyte-style dashboard shows. Orbyte publishes neither, so both are assumptions (docs/ORBYTE.md).
 USERS = [
-    {"id": "azer", "name": "Azer Hamdaoui", "email": "azer@example.com", "role": "Company Admin", "approver": False, "reviewer": False},
-    {"id": "aisha", "name": "Aisha Rahman", "email": "aisha@example.com", "role": "Member", "approver": True, "reviewer": False},
-    {"id": "mei", "name": "Mei Lin", "email": "mei@example.com", "role": "Member", "approver": False, "reviewer": True},
+    {"id": "azer", "name": "Azer Hamdaoui", "email": "", "role": "Company Admin", "approver": False, "reviewer": False},
+    {"id": "omar", "name": "Omar Bouhlel", "email": "", "role": "Member", "approver": True, "reviewer": False},
+    {"id": "tarek", "name": "Tarek Ben Slimen", "email": "", "role": "Member", "approver": False, "reviewer": True},
 ]
 OPENING_CREDITS = 100
 CREDITS_PER_ESTIMATE = 1

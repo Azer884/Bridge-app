@@ -134,7 +134,7 @@ export default function Shell() {
             <div className="av">{initials}<i className="online" /></div>
             <div title={me ? `${me.role}, acts as ${me.module_role}` : ""}>
               <b>{me?.name ?? "Signed in"}</b>
-              <small>{me?.email ?? ""}</small>
+              <small>{me ? me.email || `${me.role}${me.approver ? ", Approver" : me.reviewer ? ", Reviewer" : ""}` : ""}</small>
             </div>
             {picker && (
               <div className="pop" onClick={(e) => e.stopPropagation()}>

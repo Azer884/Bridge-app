@@ -1,6 +1,5 @@
 import { Link, useSearchParams } from "react-router-dom";
 import { api, explainError } from "@shared/api";
-import { timeAgo } from "@shared/format";
 import { useAsync } from "../hooks";
 import { useState } from "react";
 import { COUNTRIES, DEFAULT_COUNTRY, countryByIso, toE164, validNational } from "@shared/countries";
@@ -48,40 +47,28 @@ export default function OrgSettings() {
   );
 }
 
+/** The services this business is connected to. Recent activity lives in the Status tab only. */
 function Integrations() {
-  const events = useAsync(() => api.listEvents(30), [], 10_000);
   return (
     <>
-      <section className="panel ob-card">
-        <div className="ob-row">
-          <span>
+      <div className="ob-sec-head">
+        <div>
+          <h2 className="ob-sec">Integrations</h2>
+          <p className="ob-sec-sub">Connect services used by your organization.</p>
+        </div>
+      </div>
+      <div className="ob-list">
+        <div className="ob-item">
+          <span className="ob-ico">G</span>
+          <span className="ob-item-main">
             <b>Gesir: quotes and customer chat</b>
+            <span className="ob-badge ok">Built in</span>
             <small>Prepares price estimates from WhatsApp chats and asks an approver before anything is sent.</small>
           </span>
-          <span className="ob-pill ok">Built in</span>
-          <Link className="ob-link" to="/app/pipeline">Open projects ↗</Link>
+          <Link className="btn ob-outline" to="/app/pipeline">Open projects</Link>
         </div>
-      </section>
+      </div>
       <WhatsAppRow />
-      <section className="panel ob-card">
-        <h2>Recent activity</h2>
-        {events.error != null && <div className="alert">{explainError(events.error)}</div>}
-        {events.data && events.data.length === 0 && (
-          <div className="empty">
-            <b>Nothing yet</b>Messages, approvals and errors show here.
-          </div>
-        )}
-        {(events.data ?? []).slice(0, 15).map((e, i) => (
-          <div key={i} className="ob-row">
-            <span>
-              <b>{e.kind}</b>
-              <small>{e.detail}</small>
-            </span>
-            <span className={`ob-pill ${e.ok ? "ok" : "bad"}`}>{e.ok ? "OK" : "Failed"}</span>
-            <span className="mute">{timeAgo(e.ts)}</span>
-          </div>
-        ))}
-      </section>
     </>
   );
 }

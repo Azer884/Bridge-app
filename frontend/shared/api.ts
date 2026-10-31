@@ -53,9 +53,9 @@ export function setActor(next: { role: string; name: string } | null) {
   actor = next;
 }
 const SAMPLE_USERS: HubUser[] = [
-  { id: "azer", name: "Azer Hamdaoui", email: "azer@example.com", role: "Company Admin", approver: false, reviewer: false, module_role: "admin" },
-  { id: "aisha", name: "Aisha Rahman", email: "aisha@example.com", role: "Member", approver: true, reviewer: false, module_role: "approver" },
-  { id: "mei", name: "Mei Lin", email: "mei@example.com", role: "Member", approver: false, reviewer: true, module_role: "reviewer" },
+  { id: "azer", name: "Azer Hamdaoui", email: "", role: "Company Admin", approver: false, reviewer: false, module_role: "admin" },
+  { id: "omar", name: "Omar Bouhlel", email: "", role: "Member", approver: true, reviewer: false, module_role: "approver" },
+  { id: "tarek", name: "Tarek Ben Slimen", email: "", role: "Member", approver: false, reviewer: true, module_role: "reviewer" },
 ];
 
 /** Where to load a customer photo from. The backend gives "/api/media/<id>", which the web dashboard loads with its
