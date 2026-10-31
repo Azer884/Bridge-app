@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> **Submission documents** are in [`submission/`](submission/): the Final report, the Technical & Tools Declaration, the Preliminary proposal, and the Replit and RunPod proofs of use.
+
 # Gesir.AI
 
 > A WhatsApp AI assistant for service SMEs. It talks to customers on the owner's behalf, collects the job details, prepares a price estimate and a schedule, and asks the owner's permission before anything is sent.
@@ -224,7 +227,7 @@ git clone https://github.com/Azer884/Bridge-app.git
 cd Bridge-app
 python -m venv venv
 source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install fastapi uvicorn              # add faster-whisper "av<19" and "psycopg[binary,pool]" for voice notes and PostgreSQL
+pip install -r requirements.txt
 pip install httpx                        # only needed to run the tests
 cp .env.example .env            # then fill in your values
 uvicorn src.server:create_app --factory --port 8000
